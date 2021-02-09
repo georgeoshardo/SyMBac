@@ -35,6 +35,12 @@ def on_draw():
 def update(dt):
     space.step(dt)
 
+
+
+
+
 if __name__ == "__main__":
     pyglet.clock.schedule_interval(update, 1/60)
     pyglet.app.run()
+
+

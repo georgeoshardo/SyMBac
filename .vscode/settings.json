@@ -1,3 +1,4 @@
 {
-    "python.pythonPath": "/home/georgeos/anaconda3/envs/SYMPTOMM2/bin/python"
+    "python.pythonPath": "/home/georgeos/anaconda3/envs/SYMPTOMM2/bin/python",
+    "jupyter.jupyterServerType": "local"
 }
