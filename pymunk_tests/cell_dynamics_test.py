@@ -12,7 +12,7 @@ window = pyglet.window.Window(1280, 720, "Pymunk Tester", resizable=False)
 options = DrawOptions()
 
 space = pymunk.Space()
-space.gravity = 0.01,0.01
+space.gravity = 0.0,0.0
 
 #%%
 def create_cell(length, width, resolution, angle, position):
@@ -44,10 +44,10 @@ def update(dt):
     global angle2
     global cell_length, cell_length2, cell_width, cell_width2, position1, position2
     if a == 0:
-        cell_length = 20
-        cell_length2 = 20
-        cell_width = 10
-        cell_width2 = 10
+        cell_length = 40
+        cell_length2 = 40
+        cell_width = 20
+        cell_width2 = 20
         position1 = (200,320)
         position2 = (250,300)
         angle1 = 0.11
@@ -61,11 +61,11 @@ def update(dt):
 
     cell_body, cell_shape, cell_length, cell_width, cell_resolution, angle1 = create_cell(cell_length, cell_width, 20, angle1, position1)
     cell_length = cell_length + 1   
-    cell_width = cell_width + 0.24
+    #cell_width = cell_width + 0.24
     
-    cell_body2, cell_shape2, cell_length2, cell_width2, cell_resolution2, angle2 = create_cell(cell_length, cell_width2, 40, angle2, position2)
+    cell_body2, cell_shape2, cell_length2, cell_width2, cell_resolution2, angle2 = create_cell(cell_length, cell_width2, 20, angle2, position2)
     cell_length2 = cell_length2 + 1  
-    cell_width2 = cell_width2 + 0.1
+    #cell_width2 = cell_width2 + 0.1
     space.add(cell_body, cell_shape,cell_body2, cell_shape2)
 
 
@@ -81,7 +81,7 @@ def update(dt):
     if a > 0:
         position1 = cell_body.position
         position2 = cell_body2.position
-    if a%5 == 0:
+    if a%10 == 0:
         vertices11 = []
         for v in cell_shape.get_vertices():
             x,y = v.rotated(cell_shape.body.angle) + cell_shape.body.position
@@ -108,8 +108,8 @@ def update(dt):
         plt.clf()
 
  
-        space.reindex_shapes_for_body(cell_body)
-        space.reindex_shapes_for_body(cell_body2)
+        #space.reindex_shapes_for_body(cell_body)
+        #space.reindex_shapes_for_body(cell_body2)
     a = a + 1
 
 

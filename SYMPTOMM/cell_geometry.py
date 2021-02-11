@@ -55,10 +55,3 @@ def rotate(origin, point, angle):
     qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
     qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
     return qx, qy
-
-if __name__ == "__main__":
-    vertices = get_vertices(20, 10, 1, 20)
-    vertices = np.array(vertices)
-    plt.plot(vertices[:,0], vertices[:,1])
-    plt.show()
-    print(centroid(vertices))

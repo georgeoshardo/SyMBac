@@ -14,6 +14,8 @@ poly = pymunk.Poly.create_box(body)
 
 space.add(body,poly)
 
+pymunk.Poly.create_box(bod)
+
 @window.event
 def on_draw():
     window.clear()

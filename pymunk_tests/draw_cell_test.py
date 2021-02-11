@@ -5,6 +5,10 @@ from SYMPTOMM import cell_geometry
 
 window = pyglet.window.Window(1280, 720, "Pymunk Tester", resizable=False)
 options = DrawOptions()
+@window.event
+def on_draw():
+    window.clear()
+    space.debug_draw(options)
 
 space = pymunk.Space()
 space.gravity = 0, 0
@@ -27,10 +31,6 @@ cell_body2.position = 270,200
 
 space.add(cell_body, cell_shape,cell_body2, cell_shape2)
 
-@window.event
-def on_draw():
-    window.clear()
-    space.debug_draw(options)
 
 def update(dt):
     space.step(dt)
