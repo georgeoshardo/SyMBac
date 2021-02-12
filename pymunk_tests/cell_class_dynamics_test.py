@@ -22,7 +22,9 @@ cell1 = Cell(
     angle = 0.11, 
     space = space,
     dt = 1/60,
-    growth_rate_constant = 1
+    growth_rate_constant = 1,
+    max_length_mean = 80,
+    max_length_var = 1
 )
 
 cell2 = Cell(
@@ -33,7 +35,9 @@ cell2 = Cell(
     angle = np.pi/4.2,
     space = space,
     dt = 1/60,
-    growth_rate_constant = 1
+    growth_rate_constant = 1,
+    max_length_mean = 80,
+    max_length_var = 1
 )
 #%%
 
@@ -71,19 +75,13 @@ def step_and_update(dt, cells, space, phys_iters):
 
 
 def plot_scene(a, cells):
-    if a%10 == 0:
+    if a%3 == 0:
         for cell in cells:
             vertices = cell.get_vertex_list()
             vertices = np.array(vertices)
             plt.plot(vertices[:,0], vertices[:,1])
             centroid = cell.position
             plt.scatter(centroid[0],centroid[1],s=100)
-        #vertices11 = cell1.get_vertex_list()
-        #vertices22 = cell2.get_vertex_list()
-        #vertices11 = np.array(vertices11)
-        #vertices22 = np.array(vertices22)
-        #plt.plot(vertices11[:,0], vertices11[:,1])
-        #plt.plot(vertices22[:,0], vertices22[:,1])
         plt.ylim(0,720)
         plt.xlim(0,720)
         plt.savefig("/home/georgeos/Documents/GitHub/SYMPTOMM2/figures/{}.png".format(a))
@@ -94,6 +92,6 @@ def plot_scene(a, cells):
 # %%
 for x in range(1000):
     plot_scene(x, cells)
-    step_and_update(1/60, cells, space, 50)
+    step_and_update(dt, cells, space, 50)
     print(cells[1].position)
 # %%

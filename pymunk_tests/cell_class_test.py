@@ -14,7 +14,9 @@ class Cell:
         angle,
         space,
         dt,
-        growth_rate_constant
+        growth_rate_constant,
+        max_length_mean,
+        max_length_var
     ):
         self.length = length
         self.width = width
@@ -22,25 +24,38 @@ class Cell:
         self.angle = angle
         self.position = position
         self.space = space
+        self.max_length_mean = max_length_mean
+        self.max_length_var = max_length_var
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.dt = dt
         self.growth_rate_constant = growth_rate_constant
 
+
     def create_pm_cell(self):
-        cell_vertices = self.calculate_vertex_list()
-        cell_shape = pymunk.Poly(None, cell_vertices)
-        self.shape = cell_shape
-        cell_moment = 1
-        cell_mass = 0.00001
-        cell_body = pymunk.Body(cell_mass,cell_moment)
-        cell_shape.body = cell_body
-        self.body = cell_body
-        cell_body.position = self.position
-        cell_body.angle = self.angle
-        cell_shape.friction=1000
-        self.space.add(cell_body, cell_shape)
-        return cell_body, cell_shape
+        if self.is_dividing() == False:
+            cell_vertices = self.calculate_vertex_list()
+            cell_shape = pymunk.Poly(None, cell_vertices)
+            self.shape = cell_shape
+            cell_moment = 1
+            cell_mass = 0.00001
+            cell_body = pymunk.Body(cell_mass,cell_moment)
+            cell_shape.body = cell_body
+            self.body = cell_body
+            cell_body.position = self.position
+            cell_body.angle = self.angle
+            cell_shape.friction=1000
+            self.space.add(cell_body, cell_shape)
+            return cell_body, cell_shape
+        if self.is_dividing() == True:
+            
+
+    def is_dividing(self):
+        if self.length > np.random.normal(self.max_length_mean, self.max_length_var):
+            return True
+        else:
+            return False
+
 
     def update_length(self):
         self.length = self.length + self.growth_rate_constant*self.dt*self.length
