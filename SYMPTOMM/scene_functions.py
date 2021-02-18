@@ -11,40 +11,6 @@ from cell_class_test import Cell
 import time
 space = pymunk.Space()
 
-dt = 1/60
-cells = []
-#%%
-# Initialise space
-cell1 = Cell(
-    length = 40, 
-    width = 20, 
-    resolution = 20, 
-    position = (720/2,720/2), 
-    angle = np.pi/3, 
-    space = space,
-    dt = 1/60,
-    growth_rate_constant = 1,
-    max_length_mean = 80,
-    max_length_var = 0,
-)
-
-cell2 = Cell(
-    length = 40,
-    width = 18,
-    resolution = 20,
-    position = (250,300),
-    angle = 3,
-    space = space,
-    dt = 1/60,
-    growth_rate_constant = 1,
-    max_length_mean = 80,
-    max_length_var = 1,
-)
-
-cells = [cell1]
-
-
-#%%
 
 def update_cell_lengths(cells):
     for cell in cells:
@@ -86,8 +52,6 @@ def step_and_update(dt, cells, space, phys_iters):
     update_cell_positions(cells)
 
 
-
-savedir = "/home/georgeos/Documents/GitHub/SYMPTOMM2/figures"
 def plot_scene(a, cells, savedir):
     if a%1 == 0:
         for cell in cells:
@@ -100,14 +64,3 @@ def plot_scene(a, cells, savedir):
         plt.xlim(0,720)
         plt.savefig(savedir+"/image_{}.png".format(str(a).zfill(3)))
         plt.clf()
-
-
-
-# %%
-for x in range(400):
-    plot_scene(x, cells)
-    step_and_update(dt, cells, space, 5)
-    #print(cells[0].position)
-    #print(cells[0].get_angle())
-    
-# %%

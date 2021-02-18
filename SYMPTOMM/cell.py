@@ -16,7 +16,7 @@ class Cell:
         dt,
         growth_rate_constant,
         max_length_mean,
-        max_length_var
+        max_length_var,
     ):
         self.length = length
         self.width = width
@@ -33,7 +33,38 @@ class Cell:
 
 
     def create_pm_cell(self):
-        if self.is_dividing() == False:
+        if self.is_dividing() == True:
+            new_length = self.length/2
+            daughter_length = self.length - new_length
+            self.length = new_length
+            cell_vertices = self.calculate_vertex_list()
+            cell_shape = pymunk.Poly(None, cell_vertices)
+            self.shape = cell_shape
+            cell_moment = 1
+            cell_mass = 0.00001
+            cell_body = pymunk.Body(cell_mass,cell_moment)
+            cell_shape.body = cell_body
+            self.body = cell_body
+            new_x = self.position[0] + self.length/2 * np.cos(self.angle*2)
+            new_y = self.position[1] + self.length/2 * np.sin(self.angle*2)
+            self.body.position = [new_x, new_y]
+            cell_body.angle = self.angle
+            cell_shape.friction=1000
+            self.space.add(cell_body, cell_shape)
+            daughter_details = {
+                "length": daughter_length,
+                "width": self.width,
+                "resolution": self.resolution,
+                "position": [self.position[0] - self.length/2 * np.cos(self.angle*2), self.position[1] - self.length/2 * np.sin(self.angle*2)],
+                "angle": self.angle*np.random.uniform(0.85,1.15),
+                "space": self.space,
+                "dt": self.dt,
+                "growth_rate_constant": self.growth_rate_constant,
+                "max_length_mean": self.max_length_mean,
+                "max_length_var": self.max_length_var
+            }
+            return daughter_details
+        else:
             cell_vertices = self.calculate_vertex_list()
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
@@ -47,10 +78,8 @@ class Cell:
             cell_shape.friction=1000
             self.space.add(cell_body, cell_shape)
             return cell_body, cell_shape
-        if self.is_dividing() == True:
-            
 
-    def is_dividing(self):
+    def is_dividing(self): # This needs to be made constant or a cell can divide in one frame and not another frame
         if self.length > np.random.normal(self.max_length_mean, self.max_length_var):
             return True
         else:
@@ -58,7 +87,7 @@ class Cell:
 
 
     def update_length(self):
-        self.length = self.length + self.growth_rate_constant*self.dt*self.length
+        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.01,2)
 
     def update_position(self):
         self.position = self.body.position
@@ -77,7 +106,7 @@ class Cell:
     def get_vertex_list(self):
         vertices = []
         for v in self.shape.get_vertices():
-            x,y = v.rotated(self.shape.body.angle) + self.shape.body.position
+            x,y = v.rotated(self.shape.body.angle) + self.shape.body.position #.rotated(self.shape.body.angle)
             vertices.append((x,y))
         return vertices
 
