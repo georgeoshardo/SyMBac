@@ -4,7 +4,7 @@ def segment_creator(local_xy1, local_xy2,global_xy):
     segment_body = pymunk.Body(mass=2, moment=3,body_type=pymunk.Body.STATIC)
     segment_shape = pymunk.Segment(segment_body, local_xy1,local_xy2,20)
     segment_body.position = global_xy
-    segment_shape.friction = 0
+    segment_shape.friction = 1000
     return segment_body, segment_shape
 
 

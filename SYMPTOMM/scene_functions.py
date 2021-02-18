@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from SYMPTOMM.cell import Cell
 import time
-
+from copy import deepcopy
 def create_space():
     return pymunk.Space()
 
@@ -42,22 +42,27 @@ def wipe_space(space):
 def step_and_update(dt, cells, space, phys_iters):
 
 
-    new_cells = [cell for cell in cells if cell.body.position[1] > 500 or cell.body.position[1] < 0]
-    cells = new_cells
-    print(len(cells))
-    for body, poly in zip(space.bodies, space.shapes):
-        if body.body_type == 0:
-            if body.position[1] > 500 or body.position[1] < 0:
-                space.remove(body)
-                space.remove(poly) 
-    wipe_space(space)        
+
+    wipe_space(space)
+
     update_cell_lengths(cells)
     update_pm_cells(cells)
+    for shape in space.shapes:
+        if shape.body.position.y < 0 or shape.body.position.y > 500:
+            space.remove(shape.body, shape)
     
     for _ in range(phys_iters):
         space.step(dt)
     update_cell_positions(cells)
-
+    new_cells = []
+    for cell in cells:
+        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > 500:
+            pass
+        else:
+            new_cells.append(cell)
+    cells = deepcopy(new_cells)
+    print(len(space.shapes))
+    print(len(cells))
 def plot_scene(a, cells, savedir):
     if a%1 == 0:
         for cell in cells:

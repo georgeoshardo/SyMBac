@@ -16,7 +16,7 @@ window = pyglet.window.Window(1280, 720, "Pymunk Tester", resizable=False)
 options = DrawOptions()
 space = create_space()
 
-space.gravity = 0, 0
+space.gravity = 0, -1
 dt = 1/40
 
 
@@ -28,7 +28,7 @@ cell1 = Cell(
     length = 40, 
     width = 20, 
     resolution = 20, 
-    position = (100,100), 
+    position = (400,150), 
     angle = np.pi/3, 
     space = space,
     dt = 1/60,
@@ -55,5 +55,5 @@ def on_draw():
 
 
 if __name__ == "__main__":
-    pyglet.clock.schedule_interval(step_and_update, dt, cells, space, 100)
+    pyglet.clock.schedule_interval(step_and_update, dt, cells, space, 30)
     pyglet.app.run()

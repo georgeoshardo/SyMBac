@@ -41,7 +41,7 @@ class Cell:
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
             cell_moment = 1
-            cell_mass = 1
+            cell_mass = 0.0001
             cell_body = pymunk.Body(cell_mass,cell_moment)
             cell_shape.body = cell_body
             self.body = cell_body
@@ -69,7 +69,7 @@ class Cell:
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
             cell_moment = 1
-            cell_mass = 0.00001
+            cell_mass = 0.0001
             cell_body = pymunk.Body(cell_mass,cell_moment)
             cell_shape.body = cell_body
             self.body = cell_body
@@ -87,7 +87,7 @@ class Cell:
 
 
     def update_length(self):
-        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.5,1)
+        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.01,1)
 
     def update_position(self):
         self.position = self.body.position
