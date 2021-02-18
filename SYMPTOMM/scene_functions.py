@@ -7,7 +7,7 @@ sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
 from SYMPTOMM import cell_geometry
 import matplotlib.pyplot as plt
 import numpy as np
-from cell_class_test import Cell
+from SYMPTOMM.cell import Cell
 import time
 space = pymunk.Space()
 

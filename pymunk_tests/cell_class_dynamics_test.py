@@ -105,7 +105,7 @@ def plot_scene(a, cells, savedir):
 
 # %%
 for x in range(400):
-    plot_scene(x, cells)
+    plot_scene(x, cells, savedir)
     step_and_update(dt, cells, space, 5)
     #print(cells[0].position)
     #print(cells[0].get_angle())
