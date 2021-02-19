@@ -12,23 +12,20 @@ import pyglet
 import pymunk
 from pymunk.pyglet_util import DrawOptions
 
-window = pyglet.window.Window(1280, 720, "Pymunk Tester", resizable=False)
+window = pyglet.window.Window(1280, 720, "MM Trench test", resizable=False)
 options = DrawOptions()
 space = create_space()
 
-space.gravity = 0, -1
+space.gravity = 0, -10
 dt = 1/40
 
-
-
-
-trench_creator(45,600,(400,100), space)
+trench_creator(40,600,(0,0), space)
 
 cell1 = Cell(
     length = 40, 
     width = 20, 
     resolution = 20, 
-    position = (400,150), 
+    position = (20,100), 
     angle = np.pi/3, 
     space = space,
     dt = 1/60,

@@ -41,26 +41,27 @@ def wipe_space(space):
   
 def step_and_update(dt, cells, space, phys_iters):
 
-
+    for shape in space.shapes:
+        if shape.body.position.y < 0 or shape.body.position.y > 500:
+            space.remove(shape.body, shape)
+    #new_cells = []
+    for cell in cells:
+        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > 500:
+            cells.remove(cell)
+        else:
+            pass
+            #new_cells.append(cell)
+    #cells = deepcopy(new_cells)
 
     wipe_space(space)
 
     update_cell_lengths(cells)
     update_pm_cells(cells)
-    for shape in space.shapes:
-        if shape.body.position.y < 0 or shape.body.position.y > 500:
-            space.remove(shape.body, shape)
-    
+
     for _ in range(phys_iters):
         space.step(dt)
     update_cell_positions(cells)
-    new_cells = []
-    for cell in cells:
-        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > 500:
-            pass
-        else:
-            new_cells.append(cell)
-    cells = deepcopy(new_cells)
+
     print(len(space.shapes))
     print(len(cells))
 def plot_scene(a, cells, savedir):
