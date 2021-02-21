@@ -56,7 +56,7 @@ class Cell:
                 "width": self.width,
                 "resolution": self.resolution,
                 "position": [self.position[0] - self.length/2 * np.cos(self.angle*2), self.position[1] - self.length/2 * np.sin(self.angle*2)],
-                "angle": self.angle*np.random.uniform(0.85,1.15),
+                "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
                 "growth_rate_constant": self.growth_rate_constant,
@@ -87,7 +87,7 @@ class Cell:
 
 
     def update_length(self):
-        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.01,1)
+        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.01,1.1)
 
     def update_position(self):
         self.position = self.body.position
