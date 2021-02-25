@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_scene(a, cells, savedir):
+def matplot_scene(a, cells, savedir):
     if a%1 == 0:
         for cell in cells:
             vertices = cell.get_vertex_list()
@@ -13,3 +13,4 @@ def plot_scene(a, cells, savedir):
         plt.xlim(0,720)
         plt.savefig(savedir+"/image_{}.png".format(str(a).zfill(3)))
         plt.clf()
+
