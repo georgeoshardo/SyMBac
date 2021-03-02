@@ -39,14 +39,14 @@ def wipe_space(space):
 
 
   
-def step_and_update(dt, cells, space, phys_iters):
+def step_and_update(dt, cells, space, phys_iters, ylim):
 
     for shape in space.shapes:
-        if shape.body.position.y < 0 or shape.body.position.y > 500:
+        if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
     #new_cells = []
     for cell in cells:
-        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > 500:
+        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
             cells.remove(cell)
         else:
             pass
