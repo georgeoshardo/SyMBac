@@ -62,17 +62,5 @@ def step_and_update(dt, cells, space, phys_iters, ylim):
         space.step(dt)
     update_cell_positions(cells)
 
-    print(len(space.shapes))
-    print(len(cells))
-def plot_scene(a, cells, savedir):
-    if a%1 == 0:
-        for cell in cells:
-            vertices = cell.get_vertex_list()
-            vertices = np.array(vertices)
-            plt.plot(vertices[:,0], vertices[:,1])
-            centroid = cell.position
-            plt.scatter(centroid[0],centroid[1],s=100)
-        plt.ylim(0,720)
-        plt.xlim(0,720)
-        plt.savefig(savedir+"/image_{}.png".format(str(a).zfill(3)))
-        plt.clf()
+    print(str(len(cells))+" cells")
+    return (cells)

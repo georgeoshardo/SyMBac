@@ -9,8 +9,8 @@ def matplot_scene(a, cells, savedir):
             plt.plot(vertices[:,0], vertices[:,1])
             centroid = cell.position
             plt.scatter(centroid[0],centroid[1],s=100)
-        plt.ylim(0,720)
-        plt.xlim(0,720)
+        plt.ylim(-100,720)
+        plt.xlim(-100,720)
         plt.savefig(savedir+"/image_{}.png".format(str(a).zfill(3)))
         plt.clf()
 

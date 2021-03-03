@@ -52,7 +52,7 @@ class Cell:
             cell_shape.friction=1000
             self.space.add(cell_body, cell_shape)
             daughter_details = {
-                "length": daughter_length,
+                "length": daughter_length*0.9,
                 "width": self.width,
                 "resolution": self.resolution,
                 "position": [self.position[0] - self.length/2 * np.cos(self.angle*2), self.position[1] - self.length/2 * np.sin(self.angle*2)],

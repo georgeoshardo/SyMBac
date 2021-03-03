@@ -12,7 +12,8 @@ import pyglet
 import pymunk
 from pymunk.pyglet_util import DrawOptions
 import pickle
-window = pyglet.window.Window(180, 700, "MM Trench test", resizable=False)
+from copy import deepcopy
+window = pyglet.window.Window(700, 700, "MM Trench test", resizable=False)
 options = DrawOptions()
 
 space = create_space()
@@ -20,26 +21,29 @@ space.gravity = 0, -10
 dt = 1/100
 
 
-trench_length = 200
+trench_length = 600
 
-trench_creator(20,trench_length,(0,0),space)
+trench_creator(35,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
     length = 40, 
-    width = 20, 
-    resolution = 20, 
-    position = (10,10), 
-    angle = np.pi/3, 
+    width = 25, 
+    resolution = 60, 
+    position = (40,40), 
+    angle = np.pi/2, 
     space = space,
     dt = 1/60,
     growth_rate_constant = 1,
     max_length_mean = 80,
-    max_length_var = 0,
+    max_length_var = 0
 )
 
 cells = [cell1]
 
-
+#body = pymunk.Body(1,1666,pymunk.Body.KINEMATIC)
+#body.position = 120,100
+#poly = pymunk.Poly.create_box(body,size=(40,40))
+#space.add(body,poly)
 
 @window.event
 def on_draw():
@@ -48,19 +52,27 @@ def on_draw():
 
       
 
-pyglet_draw = True
+pyglet_draw = False
+matplot_draw = False
+
+phys_iters = 30
 
 if pyglet_draw == True:
     if __name__ == "__main__":
-        pyglet.clock.schedule_interval(step_and_update, dt, cells, space, 30,ylim=trench_length)
+        pyglet.clock.schedule_interval(step_and_update, dt, cells, space, phys_iters,ylim=trench_length)
         pyglet.app.run()
+elif matplot_draw:
+    for x in range(700):
+        step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
+        matplot_scene(x,cells, "/home/georgeos/Documents/GitHub/SYMPTOMM2/figures")
 else:
     cell_timeseries = []
-    for x in range(10000):
-        step_and_update(dt=dt, cells=cells, space=space, phys_iters=300,ylim=trench_length)
-        cell_timeseries.append(cells)
+    for x in range(350):
+        cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
+        cell_timeseries.append(deepcopy(cells))
     with open("output_pickles/cell_timeseries.p", "wb") as f:
         pickle.dump(cell_timeseries, f)
     with open("output_pickles/space.p", "wb") as f:
         pickle.dump(space, f)
+
 
