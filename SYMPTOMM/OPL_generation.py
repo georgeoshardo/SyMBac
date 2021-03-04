@@ -86,7 +86,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists):
         body, shape = (cell.body, cell.shape)
         vertices = []
         for v in shape.get_vertices():
-            x,y = v.rotated(shape.body.angle) + shape.body.position 
+            x,y = v.rotated(shape.body.angle) + shape.body.position #.rotated(self.shape.body.angle)
             vertices.append((x,y))
         vertices = np.array(vertices)
 
