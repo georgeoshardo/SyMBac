@@ -17,19 +17,19 @@ window = pyglet.window.Window(700, 700, "MM Trench test", resizable=False)
 options = DrawOptions()
 
 space = create_space()
-space.gravity = 0, -10
+space.gravity = 0, 0
 dt = 1/100
 
 
 trench_length = 600
 
-trench_creator(35,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(25,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
     length = 40, 
-    width = 25, 
+    width = 20, 
     resolution = 60, 
-    position = (40,40), 
+    position = (30,40), 
     angle = np.pi/2, 
     space = space,
     dt = 1/60,
@@ -55,7 +55,7 @@ def on_draw():
 pyglet_draw = False
 matplot_draw = False
 
-phys_iters = 30
+phys_iters = 75
 
 if pyglet_draw == True:
     if __name__ == "__main__":
@@ -67,7 +67,7 @@ elif matplot_draw:
         matplot_scene(x,cells, "/home/georgeos/Documents/GitHub/SYMPTOMM2/figures")
 else:
     cell_timeseries = []
-    for x in range(350):
+    for x in range(400):
         cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
         cell_timeseries.append(deepcopy(cells))
     with open("output_pickles/cell_timeseries.p", "wb") as f:
