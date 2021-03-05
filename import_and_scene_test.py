@@ -23,19 +23,23 @@ dt = 1/100
 
 trench_length = 600
 
-trench_creator(25,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(30,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
+scale_factor = 5
 
 cell1 = Cell(
-    length = 40, 
-    width = 20, 
+    length = 15*scale_factor, 
+    width = 5*scale_factor, 
     resolution = 60, 
-    position = (30,40), 
-    angle = np.pi/2, 
+    position = (20,40), 
+    angle = 0.8, 
     space = space,
     dt = 1/60,
     growth_rate_constant = 1,
-    max_length_mean = 80,
-    max_length_var = 0
+    max_length = 30*scale_factor,
+    max_length_mean = 30*scale_factor,
+    max_length_var = 10*np.sqrt(scale_factor),
+    width_var = 0.5*np.sqrt(scale_factor),
+    width_mean = 5*scale_factor
 )
 
 cells = [cell1]
@@ -52,7 +56,7 @@ def on_draw():
 
       
 
-pyglet_draw = False
+pyglet_draw = True
 matplot_draw = False
 
 phys_iters = 75

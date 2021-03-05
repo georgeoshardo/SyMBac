@@ -15,8 +15,11 @@ class Cell:
         space,
         dt,
         growth_rate_constant,
+        max_length,
         max_length_mean,
         max_length_var,
+        width_var,
+        width_mean
     ):
         self.length = length
         self.width = width
@@ -24,13 +27,15 @@ class Cell:
         self.angle = angle
         self.position = position
         self.space = space
+        self.max_length = max_length
         self.max_length_mean = max_length_mean
         self.max_length_var = max_length_var
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.dt = dt
         self.growth_rate_constant = growth_rate_constant
-
+        self.width_var = width_var
+        self.width_mean = width_mean
 
     def create_pm_cell(self):
         if self.is_dividing() == True:
@@ -53,15 +58,18 @@ class Cell:
             self.space.add(cell_body, cell_shape)
             daughter_details = {
                 "length": daughter_length*0.9,
-                "width": self.width,
+                "width": np.random.normal(self.width_mean,self.width_var),
                 "resolution": self.resolution,
                 "position": [self.position[0] - self.length/2 * np.cos(self.angle*2), self.position[1] - self.length/2 * np.sin(self.angle*2)],
                 "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
                 "growth_rate_constant": self.growth_rate_constant,
+                "max_length": np.random.normal(self.max_length_mean,self.max_length_var),
                 "max_length_mean": self.max_length_mean,
-                "max_length_var": self.max_length_var
+                "max_length_var": self.max_length_var,
+                "width_var": self.width_var,
+                "width_mean": self.width_mean
             }
             return daughter_details
         else:
@@ -80,7 +88,7 @@ class Cell:
             return cell_body, cell_shape
 
     def is_dividing(self): # This needs to be made constant or a cell can divide in one frame and not another frame
-        if self.length > np.random.normal(self.max_length_mean, self.max_length_var):
+        if self.length > (self.max_length):
             return True
         else:
             return False
