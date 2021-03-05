@@ -31,13 +31,13 @@ def get_phase_contrast_kernel(R,W,radius,scale,F,resolution):
     return kernel
 
 if __name__ == "__main__":
-    F = 5
+    F = 2
     W = 0.8
     R = 5
-    resolution = 2
+    resolution = 1
     scale = 0.11
-    radius = 30
+    radius = 15
     kernel = get_phase_contrast_kernel(R,W,radius,scale,F,resolution)
-    plt.imshow(kernel,cmap="flag")
+    plt.imshow(kernel)
     plt.show()
-
+    np.savetxt("/home/georgeos/kernel.txt",kernel)
