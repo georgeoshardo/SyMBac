@@ -21,7 +21,11 @@ class Cell:
         width_var,
         width_mean
     ):
+        self.dt = dt
+        self.growth_rate_constant = growth_rate_constant
         self.length = length
+        self.width_mean = width_mean
+        self.width_var = width_var
         self.width = width
         self.resolution = resolution
         self.angle = angle
@@ -32,10 +36,11 @@ class Cell:
         self.max_length_var = max_length_var
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
-        self.dt = dt
-        self.growth_rate_constant = growth_rate_constant
-        self.width_var = width_var
-        self.width_mean = width_mean
+        self.ID = np.random.randint(0,100_000_000)
+        
+        
+        
+        
 
     def create_pm_cell(self):
         if self.is_dividing() == True:
@@ -95,7 +100,7 @@ class Cell:
 
 
     def update_length(self):
-        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.01,1.1)
+        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.7,1.3)
 
     def update_position(self):
         self.position = self.body.position
