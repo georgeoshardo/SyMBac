@@ -23,7 +23,7 @@ dt = 1/100
 
 trench_length = 600
 
-trench_creator(30,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(35,trench_length,(0,0),space) # Coordinates of bottom left corner of the trench
 scale_factor = 5
 
 cell1 = Cell(
@@ -56,7 +56,7 @@ def on_draw():
 
       
 
-pyglet_draw = True
+pyglet_draw = False
 matplot_draw = False
 
 phys_iters = 75
@@ -71,7 +71,7 @@ elif matplot_draw:
         matplot_scene(x,cells, "/home/georgeos/Documents/GitHub/SYMPTOMM2/figures")
 else:
     cell_timeseries = []
-    for x in range(400):
+    for x in range(500):
         cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
         cell_timeseries.append(deepcopy(cells))
     with open("output_pickles/cell_timeseries.p", "wb") as f:
