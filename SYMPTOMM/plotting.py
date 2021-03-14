@@ -6,11 +6,13 @@ def matplot_scene(a, cells, savedir):
         for cell in cells:
             vertices = cell.get_vertex_list()
             vertices = np.array(vertices)
-            plt.plot(vertices[:,0], vertices[:,1])
-            centroid = cell.position
-            plt.scatter(centroid[0],centroid[1],s=100)
-        plt.ylim(-100,720)
-        plt.xlim(-100,720)
-        plt.savefig(savedir+"/image_{}.png".format(str(a).zfill(3)))
+            plt.plot(vertices[:,0], vertices[:,1],c="k")
+            #centroid = cell.position
+            #plt.scatter(centroid[0],centroid[1],s=100)
+        plt.ylim(0,800)
+        plt.xlim(0,800)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(savedir+"/image_{}.pdf".format(str(a).zfill(3)),dpi=100)
         plt.clf()
 
