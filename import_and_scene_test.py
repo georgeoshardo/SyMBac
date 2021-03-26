@@ -25,6 +25,8 @@ trench_length = 600
 
 trench_creator(35,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
 scale_factor = 5
+trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
     length = 15*scale_factor, 
@@ -42,9 +44,39 @@ cell1 = Cell(
     width_mean = 5*scale_factor
 )
 
+cell2 = Cell(
+    length = 15*scale_factor, 
+    width = 5*scale_factor, 
+    resolution = 60, 
+    position = (20+35*3,40), 
+    angle = 0.8, 
+    space = space,
+    dt = 1/60,
+    growth_rate_constant = 1,
+    max_length = 30*scale_factor,
+    max_length_mean = 30*scale_factor,
+    max_length_var = 10*np.sqrt(scale_factor),
+    width_var = 0.5*np.sqrt(scale_factor),
+    width_mean = 5*scale_factor
+)
 
+cell3 = Cell(
+    length = 15*scale_factor, 
+    width = 5*scale_factor, 
+    resolution = 60, 
+    position = (20+35*5,40), 
+    angle = 0.8, 
+    space = space,
+    dt = 1/60,
+    growth_rate_constant = 1,
+    max_length = 30*scale_factor,
+    max_length_mean = 30*scale_factor,
+    max_length_var = 10*np.sqrt(scale_factor),
+    width_var = 0.5*np.sqrt(scale_factor),
+    width_mean = 5*scale_factor
+)
 
-cells = [cell1]
+cells = [cell1,cell2,cell3]
 
 #body = pymunk.Body(1,1666,pymunk.Body.KINEMATIC)
 #body.position = 120,100
