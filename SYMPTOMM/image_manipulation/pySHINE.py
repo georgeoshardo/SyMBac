@@ -29,7 +29,7 @@ def sfMatch(images,rescaling=0,tarmag=None):
         fftim1 = fft.fftshift(fft.fft2(im1))
         angs[:,:,x], mags[:,:,x] = cart2pol(np.real(fftim1),np.imag(fftim1))
 
-    if tarmag == None:
+    if type(tarmag) == type(None):
         tarmag = np.mean(mags,2)
 
     xt, yt = tarmag.shape
@@ -161,5 +161,5 @@ def lumMatch(images, mask = None, lum = None):
                     im1[m==1] = (im1[m==1] - np.mean(im1[m==1]))/np.std(im1[m==1])*S + M
                 else:
                     im1[m==1] = M
-            output_images.append(im1.astype(np.uint8))
+            output_images.append(im1)
     return output_images
