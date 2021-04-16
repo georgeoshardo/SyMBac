@@ -59,7 +59,7 @@ class Cell:
             new_y = self.position[1] + self.length/2 * np.sin(self.angle*2)
             self.body.position = [new_x, new_y]
             cell_body.angle = self.angle
-            cell_shape.friction=1000
+            cell_shape.friction=10000
             self.space.add(cell_body, cell_shape)
             daughter_details = {
                 "length": daughter_length*0.9,
@@ -105,6 +105,7 @@ class Cell:
     def update_position(self):
         self.position = self.body.position
         self.angle = self.body.angle
+
     def get_angle(self):
         return self.body.angle
     

@@ -1,0 +1,11 @@
+name: bioformats_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=2.7.*
+  - opencv
+  - spyder
+  - pip
+  - pip:
+    - python-bioformats

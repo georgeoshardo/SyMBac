@@ -13,70 +13,41 @@ import pymunk
 from pymunk.pyglet_util import DrawOptions
 import pickle
 from copy import deepcopy
-window = pyglet.window.Window(700, 700, "MM Trench test", resizable=False)
+window = pyglet.window.Window(700, 1100, "MM Trench test", resizable=False)
 options = DrawOptions()
 
 space = create_space()
-space.gravity = 0, 0
+space.gravity = 0, -0.3
 dt = 1/100
 
 
-trench_length = 600
+pix_mic_conv = 10
+scale_factor = 3 * pix_mic_conv
 
-trench_creator(35,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
-scale_factor = 5
-trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
-trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
+trench_length = 25*scale_factor
+
+trench_creator(1.5*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
+#trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
+#trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
-    length = 15*scale_factor, 
-    width = 5*scale_factor, 
+    length = 3.5*scale_factor, 
+    width = 0.95*scale_factor, 
     resolution = 60, 
     position = (20+35,40), 
     angle = 0.8, 
     space = space,
     dt = 1/60,
     growth_rate_constant = 1,
-    max_length = 30*scale_factor,
-    max_length_mean = 30*scale_factor,
-    max_length_var = 10*np.sqrt(scale_factor),
-    width_var = 0.5*np.sqrt(scale_factor),
-    width_mean = 5*scale_factor
+    max_length = 3.5*scale_factor,
+    max_length_mean =3.5*scale_factor,
+    max_length_var = 0.1*np.sqrt(scale_factor),
+    width_var = 0.03*np.sqrt(scale_factor),
+    width_mean = 0.95*scale_factor
 )
 
-cell2 = Cell(
-    length = 15*scale_factor, 
-    width = 5*scale_factor, 
-    resolution = 60, 
-    position = (20+35*3,40), 
-    angle = 0.8, 
-    space = space,
-    dt = 1/60,
-    growth_rate_constant = 1,
-    max_length = 30*scale_factor,
-    max_length_mean = 30*scale_factor,
-    max_length_var = 10*np.sqrt(scale_factor),
-    width_var = 0.5*np.sqrt(scale_factor),
-    width_mean = 5*scale_factor
-)
 
-cell3 = Cell(
-    length = 15*scale_factor, 
-    width = 5*scale_factor, 
-    resolution = 60, 
-    position = (20+35*5,40), 
-    angle = 0.8, 
-    space = space,
-    dt = 1/60,
-    growth_rate_constant = 1,
-    max_length = 30*scale_factor,
-    max_length_mean = 30*scale_factor,
-    max_length_var = 10*np.sqrt(scale_factor),
-    width_var = 0.5*np.sqrt(scale_factor),
-    width_mean = 5*scale_factor
-)
-
-cells = [cell1,cell2,cell3]
+cells = [cell1]
 
 #body = pymunk.Body(1,1666,pymunk.Body.KINEMATIC)
 #body.position = 120,100
@@ -90,25 +61,26 @@ def on_draw():
 
       
 
-pyglet_draw = True
+pyglet_draw = False
 matplot_draw = False
 
-phys_iters = 50
+phys_iters = 200
 
 if pyglet_draw == True:
     if __name__ == "__main__":
         pyglet.clock.schedule_interval(step_and_update, dt, cells, space, phys_iters,ylim=trench_length)
         pyglet.app.run()
 elif matplot_draw:
-    for x in range(700):
+    for x in range(200):
         step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
         matplot_scene(x,cells, "/home/georgeos/Documents/GitHub/SYMPTOMM2/figures")
 else:
     cell_timeseries = []
-    for x in range(500):
+    for x in range(650):
         cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
-        cell_timeseries.append(deepcopy(cells))
-    with open("output_pickles/cell_timeseries.p", "wb") as f:
+        if x > 250:
+            cell_timeseries.append(deepcopy(cells))
+    with open("output_pickles/cell_timeseries_medium.p", "wb") as f:
         pickle.dump(cell_timeseries, f)
-    with open("output_pickles/space.p", "wb") as f:
+    with open("output_pickles/space_medium.p", "wb") as f:
         pickle.dump(space, f)
