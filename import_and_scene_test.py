@@ -1,6 +1,5 @@
 import sys
 sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
-import pymunk
 import matplotlib.pyplot as plt
 import numpy as np
 from SYMPTOMM import cell_geometry
@@ -31,7 +30,7 @@ trench_creator(1.5*scale_factor,trench_length,(35,0),space) # Coordinates of bot
 #trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
-    length = 3.5*scale_factor, 
+    length = 3.5*scale_factor,  
     width = 0.95*scale_factor, 
     resolution = 60, 
     position = (20+35,40), 

@@ -10,7 +10,7 @@ def somb(x):
     z[idx] = 2*jv(1,np.pi*x[idx])/(np.pi*x[idx])
     return z
 
-def get_phase_contrast_kernel(R,W,radius,scale,F,resolution):
+def get_phase_contrast_kernel(R,W,radius,scale,F):
     scale1 = 1000 # micron per millimeter
     F = F * scale1 # to microm
     Lambda = 0.55 # in micron % wavelength of light
@@ -18,7 +18,7 @@ def get_phase_contrast_kernel(R,W,radius,scale,F,resolution):
     W = W * scale1 # to microm
     #The corresponding point spread kernel function for the negative phase contrast 
 
-    meshgrid_arrange = np.arange(-radius,radius + 1/resolution,1/resolution)
+    meshgrid_arrange = np.arange(-radius,radius + 1,1)
     [xx,yy] = np.meshgrid(meshgrid_arrange,meshgrid_arrange)
     rr = np.sqrt(xx**2 + yy**2)*scale
     rr_dl = rr*(1/F)*(1/Lambda); # scaling with F and Lambda for dimension correction
@@ -26,9 +26,9 @@ def get_phase_contrast_kernel(R,W,radius,scale,F,resolution):
     kernel2 = np.pi*(R-W)**2*somb(2*(R-W)*rr_dl)
 
 
-    kernel = kernel1 - 0.5*kernel2
-    #kernel = kernel/np.max(kernel)
-    kernel[radius*resolution,radius*resolution] = kernel[radius*resolution,radius*resolution] + 1
+    kernel = kernel1 - 0.25*kernel2
+    kernel = kernel/np.max(kernel)
+    kernel[radius,radius] = kernel[radius,radius] + 1
     kernel = -kernel/np.sum(kernel)
     return kernel
 
@@ -55,13 +55,24 @@ def get_phase_contrast_kernel_yin(R,W,radius,scale,F,resolution):
     kernel = -kernel/np.sum(kernel)
     return kernel
 
-def get_fluorescence_kernel(Lambda,NA,n,radius,resolution,scale):
-    r = np.linspace(-radius,radius,int(radius *resolution)) 
-    kaw = NA/n * 2 * np.pi/Lambda
-    xx,yy = np.meshgrid(r,r) 
-    rr = np.sqrt(xx**2+yy**2) * kaw *  scale 
+#This is the old definition. The new definition doesnt take the resolution parameter. Instead we scale the pixel size directly as this is easier to understand
+#def get_fluorescence_kernel(Lambda,NA,n,radius,resolution,scale):
+#    r = np.linspace(-radius,radius,int(radius *resolution)) 
+#    kaw = NA/n * 2 * np.pi/Lambda
+#    xx,yy = np.meshgrid(r,r) 
+#    rr = np.sqrt(xx**2+yy**2) * kaw *  scale 
+#    PSF = (2*jv(1,rr)/(rr))**2
+#    return PSF, rr
+
+def get_fluorescence_kernel(Lambda,NA,n,radius,scale):
+    r = np.arange(-radius,radius+1)
+    kaw = 2* NA/n * np.pi/Lambda
+    xx,yy = np.meshgrid(r,r)
+    xx, yy = xx*scale, yy*scale
+    rr = np.sqrt(xx**2+yy**2) * kaw 
     PSF = (2*jv(1,rr)/(rr))**2
-    return PSF, rr
+    PSF[radius,radius] = 1
+    return PSF, np.sqrt(xx**2+yy**2)
 
 if __name__ == "__main__":
     kernel_type = "none"
