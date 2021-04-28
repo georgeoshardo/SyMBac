@@ -25,7 +25,7 @@ scale_factor = 3 * pix_mic_conv
 
 trench_length = 17*scale_factor
 
-trench_creator(1.2*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(1.1*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
 #trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
 #trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
@@ -42,7 +42,7 @@ cell1 = Cell(
     max_length_mean =5*scale_factor,
     max_length_var = 0.1*np.sqrt(scale_factor),
     width_var = 0.03*np.sqrt(scale_factor),
-    width_mean = 0.8*scale_factor
+    width_mean = 0.75*scale_factor
 )
 
 
