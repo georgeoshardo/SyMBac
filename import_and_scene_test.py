@@ -23,9 +23,9 @@ dt = 1/100
 pix_mic_conv = 10
 scale_factor = 3 * pix_mic_conv
 
-trench_length = 25*scale_factor
+trench_length = 17*scale_factor
 
-trench_creator(1.5*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(1.2*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
 #trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
 #trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
@@ -39,10 +39,10 @@ cell1 = Cell(
     dt = 1/60,
     growth_rate_constant = 1,
     max_length = 3.5*scale_factor,
-    max_length_mean =3.5*scale_factor,
+    max_length_mean =5*scale_factor,
     max_length_var = 0.1*np.sqrt(scale_factor),
     width_var = 0.03*np.sqrt(scale_factor),
-    width_mean = 0.95*scale_factor
+    width_mean = 0.8*scale_factor
 )
 
 
@@ -79,7 +79,7 @@ else:
         cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
         if x > 250:
             cell_timeseries.append(deepcopy(cells))
-    with open("output_pickles/cell_timeseries_medium.p", "wb") as f:
+    with open("/home/georgeos/Storage/Dropbox (Cambridge University)/PhD_Georgeos_Hardo/ML_based_segmentation_results/40x_Ph2_test_1.5/output_pickles/cell_timeseries_short_trench.p", "wb") as f:
         pickle.dump(cell_timeseries, f)
-    with open("output_pickles/space_medium.p", "wb") as f:
+    with open("/home/georgeos/Storage/Dropbox (Cambridge University)/PhD_Georgeos_Hardo/ML_based_segmentation_results/40x_Ph2_test_1.5/output_pickles/space_timeseries_short_trench.p", "wb") as f:
         pickle.dump(space, f)
