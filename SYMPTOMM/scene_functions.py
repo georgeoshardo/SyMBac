@@ -62,5 +62,5 @@ def step_and_update(dt, cells, space, phys_iters, ylim):
         space.step(dt)
     update_cell_positions(cells)
 
-    print(str(len(cells))+" cells")
+    #print(str(len(cells))+" cells")
     return (cells)
