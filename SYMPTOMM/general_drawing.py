@@ -202,3 +202,9 @@ def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
     else:
         im = Image.fromarray(scene_array.astype(np.uint8))
         im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))
+        
+def convolve_rescale(image,kernel,rescale_factor):
+    output = cuconvolve(cp.array(image),cp.array(kernel))
+    output = output.get()
+    output = rescale(output, 1/rescale_factor, anti_aliasing=False)
+    return output

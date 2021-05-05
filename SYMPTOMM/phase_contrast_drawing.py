@@ -2,6 +2,41 @@ import numpy as np
 import pandas as pd
 from scipy.special import jv, jve
 from skimage.util import random_noise
+import raster_geometry as rg
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.transform import rotate
+import pickle
+import sys
+from skimage.transform import rescale, resize, downscale_local_mean
+sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
+import itertools
+from joblib import Parallel, delayed
+from skimage.morphology import opening
+from PIL import Image       
+import pymunk
+from skimage.transform import PiecewiseAffineTransform, warp
+from skimage import data
+from copy import deepcopy
+from tqdm import tqdm
+import pandas as pd
+from skimage import draw
+#import napari
+from itertools import combinations
+from SYMPTOMM import PSF
+from matplotlib_scalebar.scalebar import ScaleBar
+from cupyx.scipy.ndimage import convolve as cuconvolve
+import tifffile
+from skimage.exposure import match_histograms
+import cupy as cp
+from scipy.optimize import dual_annealing, shgo
+from skimage.transform import resize
+from skimage.metrics import structural_similarity as ssim
+from scipy.optimize import basinhopping
+import image_similarity_measures
+from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
+from SYMPTOMM.general_drawing import *
+from SYMPTOMM.phase_contrast_drawing import *
 
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
@@ -40,7 +75,7 @@ def generate_PC_OPL(main_segments, offset, scene, trench_multiplier,cell_multipl
         radius = (segment_1_top_left[1] - offset - (segment_2_bottom_right[1] - offset))/2
         circ_midpoint_x = (offset) + radius
 
-        rr, cc = draw.rectangle(start = segment_2_top_left, end = (circ_midpoint_x,80+segment_1_top_left[1] - offset), shape = test_scene.shape)
+        rr, cc = draw.rectangle(start = segment_2_top_left, end = (circ_midpoint_x,segment_1_top_left[1]), shape = test_scene.shape)
         test_scene[rr.astype(int),cc.astype(int)] = 1 * trench_multiplier
         rr, cc = draw.disk(center = (circ_midpoint_x, circ_midpoint_y), radius = radius, shape = test_scene.shape)
         rr_semi = rr[rr < (circ_midpoint_x + 1)]
@@ -76,10 +111,10 @@ def somb(x):
     z[idx] = 2*jv(1,np.pi*x[idx])/(np.pi*x[idx])
     return z
 
-def get_phase_contrast_kernel(R,W,radius,scale,F,sigma):
+def get_phase_contrast_kernel(R,W,radius,scale,F,sigma,λ):
     scale1 = 1000 # micron per millimeter
     F = F * scale1 # to microm
-    Lambda = 0.55 # in micron % wavelength of light
+    Lambda = λ # in micron % wavelength of light
     R = R * scale1 # to microm
     W = W * scale1 # to microm
     #The corresponding point spread kernel function for the negative phase contrast 
@@ -108,7 +143,7 @@ def get_condensers():
     "Ph4": (1.5, 14.0, 24),
     "PhF": (1.5, 19.0, 25)
     } #W, R, Diameter
-    
+    return condensers
     
 def return_intersection_between_image_hists(img1, img2, bins):
     hist_1, _ = np.histogram(img1.flatten()/img1.flatten().max(), bins=bins)
