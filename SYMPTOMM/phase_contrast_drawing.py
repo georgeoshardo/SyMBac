@@ -58,7 +58,7 @@ def get_trench_segments(space):
 
     
 def generate_PC_OPL(main_segments, offset, scene, trench_multiplier,cell_multiplier,background_multiplier):
-    
+
     def get_OPL_image():
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
@@ -81,17 +81,22 @@ def generate_PC_OPL(main_segments, offset, scene, trench_multiplier,cell_multipl
         rr_semi = rr[rr < (circ_midpoint_x + 1)]
         cc_semi = cc[rr < (circ_midpoint_x + 1)]
         test_scene[rr_semi,cc_semi] = background_multiplier
+        no_cells = deepcopy(test_scene)
         test_scene += scene * cell_multiplier
         test_scene = test_scene[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
+        no_cells = no_cells[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
+        expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*1.2), no_cells.shape[1]*2)) + trench_multiplier
+        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - no_cells.shape[0]:,int(no_cells.shape[1]/2):int(no_cells.shape[1]/2) + no_cells.shape[1]] = no_cells
 
         expanded_scene = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2)) + trench_multiplier
         expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,int(test_scene.shape[1]/2):int(test_scene.shape[1]/2) + test_scene.shape[1]] = test_scene
-        return expanded_scene
-    expanded_scene = get_OPL_image()
+        return expanded_scene, expanded_scene_no_cells
+    expanded_scene, expanded_scene_no_cells = get_OPL_image()
     if expanded_scene is None:
         main_segments = main_segments.reindex(index=main_segments.index[::-1])
-        expanded_scene = get_OPL_image()
-    return expanded_scene
+        expanded_scene, expanded_scene_no_cells = get_OPL_image()
+    return expanded_scene, expanded_scene_no_cells
+
 
 def gaussian_2D(size, σ):
     x = np.linspace(0,size,size)
@@ -127,7 +132,7 @@ def get_phase_contrast_kernel(R,W,radius,scale,F,sigma,λ):
     kernel2 = np.pi*(R-W)**2*somb(2*(R-W)*rr_dl)
 
 
-    kernel = kernel1 - 0*kernel2
+    kernel = kernel1 - kernel2
     kernel = kernel/np.max(kernel)
     kernel[radius,radius] = kernel[radius,radius] + 1
     kernel = -kernel/np.sum(kernel)
@@ -151,3 +156,55 @@ def return_intersection_between_image_hists(img1, img2, bins):
     minima = np.minimum(hist_1, hist_2)
     intersection = np.true_divide(np.sum(minima), np.sum(hist_2))
     return intersection
+
+
+def similarity_objective_function(z, ret_tuple=False):
+    real_image = tifffile.imread(
+        "/home/georgeos/Storage/Dropbox (Cambridge University)/PhD_Georgeos_Hardo/ML_based_segmentation_results/40x_Ph2_test_1.5/top_trenches_PC/trench_{}/T_{}.tif".format(
+            str(np.random.randint(1, 56)).zfill(2),
+            str(np.random.randint(20, 25)).zfill(3)))
+
+    real_image = real_image.astype(np.float64) / np.max(real_image)
+
+    σ, trench_multiplier, cell_multiplier, background_multiplier, trench_length, trench_width, cell_max_length, cell_width = z
+    print(z)
+
+    cell_timeseries, space = run_simulation(trench_length, trench_width, cell_max_length, cell_width)
+    main_segments = get_trench_segments(space)
+    ID_props = generate_curve_props(cell_timeseries)
+    cell_timeseries_properties = Parallel(n_jobs=14)(
+        delayed(gen_cell_props_for_draw)(a, ID_props) for a in cell_timeseries[-5:-1])
+    do_transformation = True
+    scenes = Parallel(n_jobs=14)(
+        delayed(draw_scene)(cell_properties, do_transformation) for cell_properties in tqdm(cell_timeseries_properties))
+
+    # expanded_scene = generate_PC_OPL(trench_multiplier,cell_multiplier,background_multiplier)
+    OPL_scenes = [
+        generate_PC_OPL(main_segments, offset, scene[1], trench_multiplier, cell_multiplier, background_multiplier) for
+        scene in scenes]
+
+    kernel = get_phase_contrast_kernel(R, W, 50, scale, 5, σ, 0.6)
+    OPL_scenes_convolved = np.array([convolve_rescale(OPL_scene, kernel, 1) for OPL_scene in OPL_scenes])
+
+    # convolved_image = random_noise(convolved_image, mode="gaussian", mean=5,var=σ2,clip=False)
+    OPL_scenes_convolved = np.array(
+        [match_histograms(OPL_scene_convolved, real_image, multichannel=False) for OPL_scene_convolved in
+         OPL_scenes_convolved])
+    all_objs = [get_similarity_metrics(*make_images_same_shape(real_image, OPL_scene_convolved)) for OPL_scene_convolved
+                in OPL_scenes_convolved]
+    objs = np.mean(all_objs, axis=0)
+    # convolved_image = resize(convolved_image,real_image.shape,clip=False,preserve_range=False,anti_aliasing=None)
+    # ssim_real = ssim(convolved_image, real_image)
+    # intersection = return_intersection_between_image_hists(convolved_image, real_image, 100)
+    # sims
+    # convolved_image.shape += (1,)
+    # real_image.shape += (1,)
+    # _fsim = fsim(convolved_image,real_image)
+    # _issm = issm(convolved_image,real_image)
+    # _sam = sam(convolved_image,real_image)
+    # _sre = sre(convolved_image,real_image)
+    # objs = [ssim_real, 0.5*intersection, _fsim, _issm, _sam, _sre/20]
+    if ret_tuple == False:
+        return -np.linalg.norm(objs)
+    else:
+        return objs, OPL_scenes_convolved
