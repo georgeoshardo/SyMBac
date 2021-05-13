@@ -34,7 +34,7 @@ def get_vertices(cell_length, cell_width, angle, resolution):
 
     return centered_verts.tolist()
 
-def centroid(vertices: list[tuple]) -> tuple:
+def centroid(vertices):
     """Return the centroid of a list of vertices 
     
     Keyword arguments:

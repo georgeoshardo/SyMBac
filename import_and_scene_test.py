@@ -26,8 +26,8 @@ scale_factor = 3 * pix_mic_conv
 trench_length = 17*scale_factor
 
 trench_creator(1.1*scale_factor,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
-#trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
-#trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
+trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
 cell1 = Cell(
     length = 3.5*scale_factor,  
@@ -60,7 +60,7 @@ def on_draw():
 
       
 
-pyglet_draw = False
+pyglet_draw = True
 matplot_draw = False
 
 phys_iters = 200

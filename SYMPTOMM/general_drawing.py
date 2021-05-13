@@ -30,6 +30,7 @@ from skimage.metrics import structural_similarity as ssim
 from scipy.optimize import basinhopping
 import image_similarity_measures
 from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
+from skimage.exposure import rescale_intensity
 
 def generate_curve_props(cell_timeseries):
     #Get unique cell IDs
@@ -128,7 +129,7 @@ def midpoint_intercept(vertex1, vertex2):
     intercept = midpoint[1]-(slope*midpoint[0])
     return intercept
 
-def get_centroid(vertices: list[tuple]) -> tuple:
+def get_centroid(vertices):
     """Return the centroid of a list of vertices 
     
     Keyword arguments:
@@ -203,8 +204,11 @@ def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
         im = Image.fromarray(scene_array.astype(np.uint8))
         im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))
         
-def convolve_rescale(image,kernel,rescale_factor):
+def convolve_rescale(image,kernel,rescale_factor, rescale_int):
     output = cuconvolve(cp.array(image),cp.array(kernel))
     output = output.get()
     output = rescale(output, 1/rescale_factor, anti_aliasing=False)
+    
+    if rescale_int:
+        output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
     return output

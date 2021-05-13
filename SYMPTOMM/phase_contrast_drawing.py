@@ -57,8 +57,7 @@ def get_trench_segments(space):
 
 
     
-def generate_PC_OPL(main_segments, offset, scene, trench_multiplier,cell_multiplier,background_multiplier):
-
+def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier):
     def get_OPL_image():
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
@@ -66,36 +65,43 @@ def generate_PC_OPL(main_segments, offset, scene, trench_multiplier,cell_multipl
         segment_2_top_left = (0 + offset, int(main_segments.iloc[1]["bb"][0] + offset))
         segment_2_bottom_right = (int(main_segments.iloc[1]["bb"][3] + offset), int(main_segments.iloc[1]["bb"][2] + offset))
 
-        test_scene = np.zeros(scene.shape) + background_multiplier
+        test_scene = np.zeros(scene.shape) + device_multiplier
         rr, cc = draw.rectangle(start = segment_1_top_left, end = segment_1_bottom_right, shape = test_scene.shape)
-        test_scene[rr,cc] = 1 * trench_multiplier
+        test_scene[rr,cc] = 1 * media_multiplier
         rr, cc = draw.rectangle(start = segment_2_top_left, end = segment_2_bottom_right, shape = test_scene.shape)
-        test_scene[rr,cc] = 1 * trench_multiplier
+        test_scene[rr,cc] = 1 * media_multiplier
         circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1])/2
         radius = (segment_1_top_left[1] - offset - (segment_2_bottom_right[1] - offset))/2
         circ_midpoint_x = (offset) + radius
 
         rr, cc = draw.rectangle(start = segment_2_top_left, end = (circ_midpoint_x,segment_1_top_left[1]), shape = test_scene.shape)
-        test_scene[rr.astype(int),cc.astype(int)] = 1 * trench_multiplier
+        test_scene[rr.astype(int),cc.astype(int)] = 1 * media_multiplier
         rr, cc = draw.disk(center = (circ_midpoint_x, circ_midpoint_y), radius = radius, shape = test_scene.shape)
         rr_semi = rr[rr < (circ_midpoint_x + 1)]
         cc_semi = cc[rr < (circ_midpoint_x + 1)]
-        test_scene[rr_semi,cc_semi] = background_multiplier
+        test_scene[rr_semi,cc_semi] = device_multiplier
         no_cells = deepcopy(test_scene)
         test_scene += scene * cell_multiplier
         test_scene = test_scene[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
+        mask_resized = mask[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
+        
         no_cells = no_cells[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
-        expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*1.2), no_cells.shape[1]*2)) + trench_multiplier
+        expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*1.2), no_cells.shape[1]*2)) + media_multiplier
         expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - no_cells.shape[0]:,int(no_cells.shape[1]/2):int(no_cells.shape[1]/2) + no_cells.shape[1]] = no_cells
 
-        expanded_scene = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2)) + trench_multiplier
+        expanded_scene = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2)) + media_multiplier
         expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,int(test_scene.shape[1]/2):int(test_scene.shape[1]/2) + test_scene.shape[1]] = test_scene
-        return expanded_scene, expanded_scene_no_cells
-    expanded_scene, expanded_scene_no_cells = get_OPL_image()
+        
+        expanded_mask = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2))
+        expanded_mask[expanded_mask.shape[0] - test_scene.shape[0]:,int(test_scene.shape[1]/2):int(test_scene.shape[1]/2) + test_scene.shape[1]] = mask_resized
+        
+        return expanded_scene, expanded_scene_no_cells, expanded_mask
+    expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image()
     if expanded_scene is None:
         main_segments = main_segments.reindex(index=main_segments.index[::-1])
-        expanded_scene, expanded_scene_no_cells = get_OPL_image()
-    return expanded_scene, expanded_scene_no_cells
+        expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image()
+    return expanded_scene, expanded_scene_no_cells, expanded_mask
+
 
 
 def gaussian_2D(size, σ):
@@ -166,7 +172,7 @@ def similarity_objective_function(z, ret_tuple=False):
 
     real_image = real_image.astype(np.float64) / np.max(real_image)
 
-    σ, trench_multiplier, cell_multiplier, background_multiplier, trench_length, trench_width, cell_max_length, cell_width = z
+    σ, media_multiplier, cell_multiplier, device_multiplier, trench_length, trench_width, cell_max_length, cell_width = z
     print(z)
 
     cell_timeseries, space = run_simulation(trench_length, trench_width, cell_max_length, cell_width)
@@ -178,9 +184,9 @@ def similarity_objective_function(z, ret_tuple=False):
     scenes = Parallel(n_jobs=14)(
         delayed(draw_scene)(cell_properties, do_transformation) for cell_properties in tqdm(cell_timeseries_properties))
 
-    # expanded_scene = generate_PC_OPL(trench_multiplier,cell_multiplier,background_multiplier)
+    # expanded_scene = generate_PC_OPL(media_multiplier,cell_multiplier,device_multiplier)
     OPL_scenes = [
-        generate_PC_OPL(main_segments, offset, scene[1], trench_multiplier, cell_multiplier, background_multiplier) for
+        generate_PC_OPL(main_segments, offset, scene[1], media_multiplier, cell_multiplier, device_multiplier) for
         scene in scenes]
 
     kernel = get_phase_contrast_kernel(R, W, 50, scale, 5, σ, 0.6)
