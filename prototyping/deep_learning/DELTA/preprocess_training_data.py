@@ -101,7 +101,10 @@ for x in range(len(training_img_files)):
 for x in range(len(masks_files)):
     cropped = crop_and_resize(masks_dir + masks_files[x], LEFT_CROP, RIGHT_CROP)
     cropped = np.array(cropped)/255
-    cropped = skimage.img_as_ubyte(cropped)/255
+    temp_image = np.zeros(np.shape(cropped))
+    temp_image[np.where(cropped)] = 1
+    cropped = temp_image
+    #cropped = skimage.img_as_ubyte(cropped)/255
     cropped = Image.fromarray(cropped)
     cropped.save(base_directory + "preprocessed/CROPPED_MASKS/"+masks_files[x])
     
