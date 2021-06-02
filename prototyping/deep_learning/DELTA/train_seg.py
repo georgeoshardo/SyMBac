@@ -2,21 +2,22 @@
 This script trains the cell segmentation U-Net
 
 @author: jblugagne
+Small augmentations: georgeoshardo
 '''
 # pip install "scikit_image==0.16.2"
+#conda install -c conda-forge tensorflow-gpu=1.15
 from model import unet_seg
 from data import trainGenerator_seg
 from tensorflow.keras.callbacks import ModelCheckpoint
-import tensorflow as tf
 import tensorflow as tf
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
 # Files:
-DeLTA_data =  "/home/georgeos/Storage/Dropbox (Cambridge University)/PhD_Georgeos_Hardo/ML_based_segmentation_results/40x_Ph2_test_1.5/training_data/preprocessed/"
-#'/home/georgeos/Documents/MMSynth_data/FalsePosNeg_HADA/training_data_lower_contrast_3/preprocessed/'
+DeLTA_data =  "/home/georgeos/Storage/Dropbox (Cambridge University)/PhD_Georgeos_Hardo/ML_based_segmentation_results/40x_Ph2_test_1.5/PC_training_data/preprocessed/MODELS/"
+
 training_set = DeLTA_data
-model_file = DeLTA_data + '/saved-model-nosmall-{epoch:02d}.hdf5' #'/unet.hdf5'
+model_file = DeLTA_data + '/saved-model-{epoch:02d}.hdf5' #'/unet.hdf5'
 
 # Parameters:
 target_size = (448, 32)
@@ -28,9 +29,9 @@ steps_per_epoch = 30
 #Data generator:
 data_gen_args = dict(
                     rotation = 0.5,
-                    shiftX=.05,
-                    shiftY=.05,
-                    zoom=.15,
+                    shiftX=.08,
+                    shiftY=.08,
+                    zoom=.17,
                     horizontal_flip=True,
                     histogram_voodoo=True,
                     illumination_voodoo=True)
