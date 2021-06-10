@@ -153,15 +153,14 @@ def transform_func(amp_modif, freq_modif, phase_modif):
         return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
     return perm_transform_func
 
-def draw_scene(cell_properties, do_transformation):
-    upscale = 1
-    space_size = np.array([1000, 200]) * upscale
+def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset):
+    space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
     space_masks = np.zeros(space_size)
-    offsets = 50 * upscale
+    offsets = offset 
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
-        length = length*upscale; width = width * upscale; position = np.array(position) * upscale
+        length = length; width = width ; position = np.array(position) 
         angle = np.rad2deg(angle) - 90
         x, y = np.array(position).astype(int) + offsets
         OPL_cell = raster_cell(length = length, width=width)
@@ -183,13 +182,15 @@ def draw_scene(cell_properties, do_transformation):
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
         offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
         offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
+        assert y > cell_y, "Cell has negative pixels in y coordinate, try increasing your offset"
+        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
         space[
             y-cell_y:y+cell_y+offset_y  
               ,  x-cell_x  :  x+cell_x+offset_x  
              ] += rotated_OPL_cell
-        space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > 20)
+        space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)
         space_masks = space_masks == 1
-        space_masks = opening(space_masks,np.ones((2,11)))
+        #space_masks = opening(space_masks,np.ones((2,11)))
     return space, space_masks
 
 def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
