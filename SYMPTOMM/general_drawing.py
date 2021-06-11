@@ -153,18 +153,20 @@ def transform_func(amp_modif, freq_modif, phase_modif):
         return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
     return perm_transform_func
 
-def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset):
+def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset, label_masks):
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
     space_masks = np.zeros(space_size)
-    offsets = offset 
+    offsets = offset
+    if label_masks:
+        colour_label = 1
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
         length = length; width = width ; position = np.array(position) 
         angle = np.rad2deg(angle) - 90
         x, y = np.array(position).astype(int) + offsets
         OPL_cell = raster_cell(length = length, width=width)
-        
+
         if do_transformation:
             OPL_cell_2 = np.zeros((OPL_cell.shape[0],int(OPL_cell.shape[1]*2)))
             midpoint = int(np.median(range(OPL_cell_2.shape[1])))
@@ -177,7 +179,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
             for B in roll_coords:
                 OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
             OPL_cell = (OPL_cell_2)
-        
+
         rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
         offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
@@ -188,8 +190,12 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
             y-cell_y:y+cell_y+offset_y,
             x-cell_x:x+cell_x+offset_x
         ] += rotated_OPL_cell
-        space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)
-        space_masks = space_masks == 1
+        if label_masks:
+            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
+            colour_label += 1
+        else:
+            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
+            space_masks = space_masks == 1
 
 
         #space_masks = opening(space_masks,np.ones((2,11)))
