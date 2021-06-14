@@ -216,8 +216,44 @@ def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
 def convolve_rescale(image,kernel,rescale_factor, rescale_int):
     output = cuconvolve(cp.array(image),cp.array(kernel))
     output = output.get()
-    output = rescale(output, 1/rescale_factor, anti_aliasing=False)
+    output = rescale(output, rescale_factor, anti_aliasing=False)
     
     if rescale_int:
         output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
     return output
+
+def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
+    x_diff = synthetic_image.shape[1] - real_image.shape[1]
+    remove_from_left, remove_from_right = div_odd(x_diff)
+    y_diff = synthetic_image.shape[0] - real_image.shape[0]
+    if y_diff > 0:
+        synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
+    else:
+        synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+        real_image = real_image[abs(y_diff):,:]
+
+    if rescale_int:
+        real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0,1))
+        synthetic_image = rescale_intensity(synthetic_image.astype(np.float32), out_range=(0,1))
+    return real_image, synthetic_image
+
+def get_space_size(cell_timeseries_properties):
+    """Iterates through the simulation timeseries properties, 
+    finds the extreme cell positions and retrieves the required 
+    image size to fit all cells into"""
+    max_x, max_y = 0, 0
+    for timepoint in cell_timeseries_properties:
+        for cell in timepoint:
+            x_, y_ = np.ceil(cell[3]).astype(int)
+            length_ = np.ceil(cell[0]).astype(int)
+            width_ = np.ceil(cell[1]).astype(int)
+            max_y_ = y_ + length_
+            max_x_ = x_ + width_
+            if max_x_ > max_x:
+                max_x = max_x_
+            if max_y_ > max_y:
+                max_y = max_y_
+    return (int(1.2*max_y), int(1.5*max_x))
+
+div_odd = lambda n: (n//2, n//2 + 1)
+perc_diff = lambda a, b: abs(a-b)/((a+b)/2)
