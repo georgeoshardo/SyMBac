@@ -243,7 +243,7 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
 
 
 
-    R,W,radius,scale,F,sigma,λ = kernel_params
+    R,W,radius,scale,F,_,λ = kernel_params
     real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = image_params
     mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,cell_var_error,device_var_error = error_params
     
