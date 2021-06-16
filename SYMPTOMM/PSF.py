@@ -64,30 +64,62 @@ def somb(x):
     z[idx] = 2*jv(1,np.pi*x[idx])/(np.pi*x[idx])
     return z
 
-def get_phase_contrast_kernel(R,W,radius,scale,F,sigma,λ):
+#def get_phase_contrast_kernel(R,W,radius,scale,F,sigma,λ):
+#    scale1 = 1000 # micron per millimeter
+#    F = F * scale1 # to microm
+#    Lambda = λ # in micron % wavelength of light
+#    R = R * scale1 # to microm
+#    W = W * scale1 # to microm
+#    #The corresponding point spread kernel function for the negative phase contrast #
+
+#    meshgrid_arrange = np.arange(-radius,radius + 1,1)
+#    [xx,yy] = np.meshgrid(meshgrid_arrange,meshgrid_arrange)
+#    rr = np.sqrt(xx**2 + yy**2)*scale
+#    rr_dl = rr*(1/F)*(1/Lambda); # scaling with F and Lambda for dimension correction
+#    kernel1 = np.pi*R**2*somb(2*R*rr_dl);     
+#    kernel2 = np.pi*(R-W)**2*somb(2*(R-W)*rr_dl)
+
+
+ #   kernel = kernel1 - kernel2
+ #   kernel = kernel/np.max(kernel)
+ #   kernel[radius,radius] = kernel[radius,radius] + 1
+ #   kernel = -kernel/np.sum(kernel)
+  #  gaussian = gaussian_2D(radius*2+1, sigma)
+  #  kernel = kernel * gaussian
+  #  return kernel
+
+def get_phase_contrast_kernel(R,W,radius,scale,NA,n,sigma,λ):
     scale1 = 1000 # micron per millimeter
-    F = F * scale1 # to microm
+    #F = F * scale1 # to microm
     Lambda = λ # in micron % wavelength of light
     R = R * scale1 # to microm
     W = W * scale1 # to microm
     #The corresponding point spread kernel function for the negative phase contrast 
+    r = np.arange(-radius,radius+1)
+    xx,yy = np.meshgrid(r,r)
+    xx, yy = xx*scale, yy*scale
+    kaw = 2* NA/n * np.pi/Lambda
+    rr = np.sqrt(xx**2 + yy**2)*kaw
 
-    meshgrid_arrange = np.arange(-radius,radius + 1,1)
-    [xx,yy] = np.meshgrid(meshgrid_arrange,meshgrid_arrange)
-    rr = np.sqrt(xx**2 + yy**2)*scale
-    rr_dl = rr*(1/F)*(1/Lambda); # scaling with F and Lambda for dimension correction
-    kernel1 = np.pi*R**2*somb(2*R*rr_dl);     
-    kernel2 = np.pi*(R-W)**2*somb(2*(R-W)*rr_dl)
+    kernel1 = 2*jv(1,rr)/(rr)
+    kernel1[radius,radius] =  1
+
+    kernel2 = 2*(R-W)**2/R**2 * jv(1,(R-W)**2/R**2 * rr)/rr
+    kernel2[radius,radius] = np.nanmax(kernel2)
+    #rr_dl = rr*(1/F)*(1/Lambda); # scaling with F and Lambda for dimension correction
+
+    #kernel1 = np.pi*R**2*somb(2*R*rr_dl);     
+    #kernel2 = np.pi*(R-W)**2*somb(2*(R-W)*rr_dl)
 
 
     kernel = kernel1 - kernel2
     kernel = kernel/np.max(kernel)
-    kernel[radius,radius] = kernel[radius,radius] + 1
+    kernel[radius,radius] =  1
     kernel = -kernel/np.sum(kernel)
     gaussian = gaussian_2D(radius*2+1, sigma)
     kernel = kernel * gaussian
     return kernel
-
+    
 def gaussian_2D(size, σ):
     x = np.linspace(0,size,size)
     μ = np.mean(x)

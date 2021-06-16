@@ -153,7 +153,7 @@ def transform_func(amp_modif, freq_modif, phase_modif):
         return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
     return perm_transform_func
 
-def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset, label_masks):
+def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, x_offset, y_offset, label_masks):
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
     space_masks = np.zeros(space_size)
@@ -164,7 +164,8 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
         length = length; width = width ; position = np.array(position) 
         angle = np.rad2deg(angle) - 90
-        x, y = np.array(position).astype(int) + offsets
+        x = np.array(position).astype(int)[0] + x_offset
+        y = np.array(position).astype(int)[1] + y_offset
         OPL_cell = raster_cell(length = length, width=width)
 
         if do_transformation:
@@ -223,6 +224,9 @@ def convolve_rescale(image,kernel,rescale_factor, rescale_int):
     return output
 
 def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
+    assert real_image.shape[0] < synthetic_image.shape[0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
+    assert real_image.shape[1] < synthetic_image.shape[1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
+
     x_diff = synthetic_image.shape[1] - real_image.shape[1]
     remove_from_left, remove_from_right = div_odd(x_diff)
     y_diff = synthetic_image.shape[0] - real_image.shape[0]
