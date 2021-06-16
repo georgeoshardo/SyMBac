@@ -40,6 +40,7 @@ from SYMPTOMM.phase_contrast_drawing import *
 from SYMPTOMM.scene_functions import *
 from SYMPTOMM.trench_geometry import *
 from SYMPTOMM.PSF import *
+import os
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
     trench_shapes = []
@@ -446,7 +447,13 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
-        mask = Image.fromarray(mask.astype(np.uint8))
-        mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))        
+        
+        if (cell_multiplier == 0) or (cell_multiplier == 0.0):
+            mask = np.zeros(mask.shape)
+            mask = Image.fromarray(mask.astype(np.uint8))
+            mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+        else: 
+            mask = Image.fromarray(mask.astype(np.uint8))
+            mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))        
     ## TODO: change parallel if not using GPU
     Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in tqdm(range(current_file_num,n_samples+current_file_num), desc="Sample generation"))
