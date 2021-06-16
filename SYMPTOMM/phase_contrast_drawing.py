@@ -116,13 +116,13 @@ def similarity_objective_function(z, ret_tuple=False):
     else:
         return objs, OPL_scenes_convolved
     
-def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length):
+def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters):
     
     
     space = create_space()
-    space.gravity = 0, -10 # arbitrasry units, negative is toward trench pole
+    space.gravity = 0, gravity # arbitrary units, negative is toward trench pole
     dt = 1/100 #time-step per frame
-    pix_mic_conv = 10 # pixels per micron
+    pix_mic_conv = 1/pix_mic_conv # micron per pixel
     scale_factor = pix_mic_conv * 3 # resolution scaling factor 
 
     trench_length = trench_length*scale_factor
@@ -150,7 +150,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
 
     cells = [cell1]
     cell_timeseries = []
-    phys_iters = 18
+    phys_iters = phys_iters
     for x in tqdm(range(sim_length+250),desc="Simulation Progress"):
         cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
         if x > 250:
@@ -176,7 +176,7 @@ def get_similarity_metrics(real_image,synthetic_image):
     objs = [ssim_real, 0.5*intersection, _fsim, _issm, _sam, _sre/20]
     return objs
 
-def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier):
+def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient):
     def get_OPL_image(mask):
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
@@ -211,14 +211,17 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
         mask_resized = mask[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
         
         no_cells = no_cells[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
-        expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*1.2), no_cells.shape[1]*2)) + media_multiplier
-        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - no_cells.shape[0]:,int(no_cells.shape[1]/2):int(no_cells.shape[1]/2) + no_cells.shape[1]] = no_cells
+        expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*y_border_expansion_coefficient), int(no_cells.shape[1]*x_border_expansion_coefficient))) + media_multiplier
+        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - no_cells.shape[0]:,
+                                int(expanded_scene_no_cells.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_scene_no_cells.shape[1]/2-int(test_scene.shape[1]/2)) + no_cells.shape[1]] = no_cells
 
-        expanded_scene = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2)) + media_multiplier
-        expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,int(test_scene.shape[1]/2):int(test_scene.shape[1]/2) + test_scene.shape[1]] = test_scene
+        expanded_scene = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient))) + media_multiplier
+        expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,
+                       int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = test_scene
         
-        expanded_mask = np.zeros((int(test_scene.shape[0]*1.2), test_scene.shape[1]*2))
-        expanded_mask[expanded_mask.shape[0] - test_scene.shape[0]:,int(test_scene.shape[1]/2):int(test_scene.shape[1]/2) + test_scene.shape[1]] = mask_resized
+        expanded_mask = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient)))
+        expanded_mask[expanded_mask.shape[0] - test_scene.shape[0]:,
+                      int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = mask_resized
         
         return expanded_scene, expanded_scene_no_cells, expanded_mask
     expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(mask)
@@ -228,7 +231,7 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
     return expanded_scene, expanded_scene_no_cells, expanded_mask
 
 
-def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params):
+def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient):
     
     
     expanded_scene, expanded_scene_no_cells, expanded_mask = generate_PC_OPL(
@@ -238,18 +241,23 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         mask = scenes[scene_no][1],
         media_multiplier=media_multiplier,
         cell_multiplier=cell_multiplier,
-        device_multiplier=device_multiplier
+        device_multiplier=device_multiplier,
+        x_border_expansion_coefficient = x_border_expansion_coefficient,
+        y_border_expansion_coefficient = y_border_expansion_coefficient
     )
 
 
 
-    R,W,radius,scale,F,_,λ = kernel_params
+    #R,W,radius,scale,F,_,λ = kernel_params
+    R,W,radius,scale,NA,n,_,λ = kernel_params
+    
+    
     real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = image_params
     mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,cell_var_error,device_var_error = error_params
     
     
-    
-    kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, F=F, sigma=sigma, λ=λ)
+    kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA,n=n, sigma=sigma, λ=λ)
+    #kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, F=F, sigma=sigma, λ=λ) # 
 
 
 
@@ -355,14 +363,14 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
     space_masks = np.zeros(space_size)
-    offsets = offset
     if label_masks:
         colour_label = 1
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
         length = length; width = width ; position = np.array(position) 
         angle = np.rad2deg(angle) - 90
-        x, y = np.array(position).astype(int) + offsets
+        x = np.array(position).astype(int)[0] + offset
+        y = np.array(position).astype(int)[1] + offset
         OPL_cell = raster_cell(length = length, width=width)
 
         if do_transformation:
@@ -397,7 +405,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
 
 
         #space_masks = opening(space_masks,np.ones((2,11)))
-    return space, space_masks.astype(int)
+    return space, space_masks
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
     media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
