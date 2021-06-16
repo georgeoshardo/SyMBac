@@ -33,8 +33,8 @@ from scipy.optimize import dual_annealing, shgo
 from skimage.transform import resize
 from skimage.metrics import structural_similarity as ssim
 from scipy.optimize import basinhopping
-import image_similarity_measures
-from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
+#import image_similarity_measures
+#from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
 from SYMPTOMM.general_drawing import *
 from SYMPTOMM.phase_contrast_drawing import *
 from SYMPTOMM.scene_functions import *
@@ -408,7 +408,8 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
     return space, space_masks
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
+    #media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient = list(interactive_output.kwargs.values())
     debug_plot = False
     try:
         os.mkdir(save_dir)
@@ -434,10 +435,14 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         _noise_var = np.random.uniform(1-sample_amount,1+sample_amount) * noise_var
         if randomise_hist_match:
             _match_histogram = np.random.choice([True, False])
+        else:
+            _match_histogram = match_histogram
         if randomise_noise_match:
             _match_noise = np.random.choice([True, False])
+        else:
+            _match_noise = match_noise
         
-        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, _match_histogram, match_noise, offset, debug_plot, noise_var)
+        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient)
         
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))

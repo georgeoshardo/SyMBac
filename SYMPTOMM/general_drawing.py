@@ -28,8 +28,8 @@ from scipy.optimize import dual_annealing, shgo
 from skimage.transform import resize
 from skimage.metrics import structural_similarity as ssim
 from scipy.optimize import basinhopping
-import image_similarity_measures
-from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
+#import image_similarity_measures
+#from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
 from skimage.exposure import rescale_intensity
 
 def generate_curve_props(cell_timeseries):
