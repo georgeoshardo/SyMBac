@@ -6,13 +6,71 @@ def circ(theta, start, radius):
     x = radius * np.sin(theta) + start + radius
     return x, y
 
-def wall(radius, start, end, t_or_b, resolution):
+def wall(thickness, start, end, t_or_b, resolution):
+    """Generates the straight part of the cell wall's coordinates (all but the poles)
+
+    Parameters
+    ----------
+    thickness : float
+        The distance from the top cell wall to the bottom cell wall
+    start : float
+        The start coordinate of the cell wall
+    end : float
+        The end coordinate of the cell wall
+    t_or_b: int
+        0 for top wall
+        1 for bottom wall
+    resolution : int
+        Number of points defining the cell wall geometry
+    Returns
+    -------
+    2-tuple of 1D numpy arrays
+        return[0] is the wall's x coordinates
+        return[0] is the wall's y coordiantes
+        
+    Example
+    -------
+    Create two cell walls of length 10, 3 apart
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> top_wall = wall(3,0,10,0,20)
+    >>> bottom_wall = top_wall = wall(3,0,10,1,20)
+    >>> plt.plot(walls[0], walls[1])
+    >>> plt.plot(walls[0], walls[1])
+    >>> plt.show()
+    """
     wall_x = np.linspace(start, end, resolution)
-    wall_y = np.ones(resolution)*radius * t_or_b +radius
+    wall_y = np.ones(resolution)*thickness * t_or_b +thickness
     return wall_x, wall_y
 
 def get_vertices(cell_length, cell_width, angle, resolution):
+    """Generates coordinates for a cell centered aronud (0,0)
 
+    Parameters
+    ----------
+    cell_length : float
+        The length of the STRAIGHT part of the cell's wall. 
+        Total length is cell_length + cell_width because the poles are models as semi-circles.
+    cell_width : float
+        Total thickness of the cell, defines the poles too.
+    angle : float
+        Angle in radians to rotate the cell by (counter-clockwise)
+    resolution : int
+        Number of points defining the cell wall geometry
+    Returns
+    -------
+    list of lists containing cell x and y coords
+    
+    Example
+    -------
+    Create a cell of length 10+4 rotated by 1 radian with a resolution of 20:
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> verts = get_vertices(10,4,1,20)
+    >>> verts_y = [y[0] for y in verts]
+    >>> verts_x = [x[1] for x in verts]
+    >>> plt.plot(verts_x,verts_y)
+    """
     cell_width = cell_width/2
     left_wall = circ(np.linspace(np.pi,2*np.pi, resolution), 0, cell_width)
     top_wall_xy = wall(cell_width, cell_width, cell_length, 1, resolution)
