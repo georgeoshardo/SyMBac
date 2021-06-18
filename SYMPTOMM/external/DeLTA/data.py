@@ -7,8 +7,8 @@ operations.
 Modifications made by @georgeos:
     zoomshift and shift to preserve the output range of the image
     elasdef a separate function
+    illumination_voodoo now takes axis as an arg to either illuminate over x or y direction
     Many thanks for the authors for providing DeLTA under an MIT licence.
-
 '''
 from __future__ import print_function
 import numpy as np 
@@ -408,7 +408,7 @@ def histogram_voodoo(image,num_control_points=3):
     
     return mapping(image)
 
-def illumination_voodoo(image,num_control_points=5):
+def illumination_voodoo(image,num_control_points=5, axis=0):
     '''
     This function inspired by the one above.
     It simulates a variation in illumination along the length of the chamber
@@ -430,15 +430,25 @@ def illumination_voodoo(image,num_control_points=5):
     '''
     
     # Create a random curve along the length of the chamber:
-    control_points = np.linspace(0,image.shape[0]-1,num=num_control_points)
+    control_points = np.linspace(0,image.shape[1]-1,num=num_control_points)
     random_points = np.random.uniform(low=0.1,high=0.9,size=num_control_points)
     mapping = interpolate.PchipInterpolator(control_points, random_points)
-    curve = mapping(np.linspace(0,image.shape[0]-1,image.shape[0]))
+    curve = mapping(np.linspace(0,image.shape[1]-1,image.shape[1]))
     # Apply this curve to the image intensity along the length of the chamebr:
-    newimage = np.multiply(image,
+    if axis == 0:
+        newimage = np.multiply(image,
+                               np.reshape(
+                                       np.tile(
+                                               np.reshape(curve,curve.shape + (1,)), (1, image.shape[0])
+                                               )
+                                       ,image.shape
+                                       )
+                               )
+    if axis ==1:
+        newimage = np.multiply(image,
                            np.reshape(
                                    np.tile(
-                                           np.reshape(curve,curve.shape + (1,)), (1, image.shape[1])
+                                           np.reshape(curve,(1,) + curve.shape ), (image.shape[0], 1)
                                            )
                                    ,image.shape
                                    )
