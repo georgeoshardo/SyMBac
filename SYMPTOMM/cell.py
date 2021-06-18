@@ -5,6 +5,40 @@ sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2/')
 from SYMPTOMM import cell_geometry
 
 class Cell:
+    """
+    A class defining the cell objects
+    
+    ...
+    
+    Attributes
+    ----------
+    length : float
+        Cell's length
+    width : float
+        Cell's width
+    resolution : int
+        Number of points defining cell's geometry
+    position : (float, float)
+        x,y coords of cell centroid
+    angle : float
+        rotation in radians of cell (counterclockwise)
+    space : pymunk.space.Space
+        The pymunk space of the cell
+    dt : float
+        Timestep the cell experiences every iteration
+    growth_rate_constant : float
+        The cell grows by a function of dt*growth_rate_constant depending on its growth model
+    max_length : float
+        The maximum length a cell reaches before dividing
+    max_length_mean : float
+        should be the same as max_length for reasons unless doing advanced simulations
+    max_length_var : float
+        The variance defining a normal distribution around max_length
+    width_var : float
+        The variance defining a normal distribution around width
+    width_mean : float
+        For reasons should be set equal to width unless using advanced features
+    """
     def __init__(
         self,
         length,
@@ -21,6 +55,48 @@ class Cell:
         width_var,
         width_mean
     ):
+        
+        """
+        Initialising a cell
+
+        Parameters
+        ----------
+        length : float
+            Cell's length
+        width : float
+            Cell's width
+        resolution : int
+            Number of points defining cell's geometry
+        position : (float, float)
+            x,y coords of cell centroid
+        angle : float
+            rotation in radians of cell (counterclockwise)
+        space : pymunk.space.Space
+            The pymunk space of the cell
+        dt : float
+            Timestep the cell experiences every iteration
+        growth_rate_constant : float
+            The cell grows by a function of dt*growth_rate_constant depending on its growth model
+        max_length : float
+            The maximum length a cell reaches before dividing
+        max_length_mean : float
+            should be the same as max_length for reasons unless doing advanced simulations
+        max_length_var : float
+            The variance defining a normal distribution around max_length
+        width_var : float
+            The variance defining a normal distribution around width
+        width_mean : float
+            For reasons should be set equal to width unless using advanced features
+        body : pymunk.body.Body
+            The cell's pymunk body object
+        shape : pymunk.shapes.Poly
+            The cell's pymunk body object
+        ID : int
+            A unique identifier for each cell. At the moment just a number from 0 to 100_000_000 and cross fingers that we get no collisions. 
+            
+        For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html
+        Cell class has been tested and works with pymunk version 6.0.0
+        """
         self.dt = dt
         self.growth_rate_constant = growth_rate_constant
         self.length = length
