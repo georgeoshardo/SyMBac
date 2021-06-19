@@ -10,6 +10,19 @@ from joblib import Parallel, delayed
 import pymunk 
 
 def raster_cell(length, width):
+    """Generates a 3D representation of a cell as a 2D image, where intensity is a measure of the depth of the cell at that point
+
+    Parameters
+    ----------
+    length : float
+        The length of the STRAIGHT part of the cell's wall. 
+        Total length is cell_length + cell_width because the poles are models as semi-circles.
+    cell_width : float
+        Total thickness of the cell, defines the poles too.
+    Returns
+    -------
+    array with cell thickness as intensities
+    """
     radius = int(width/2)
     cyl_height = int(length - 2*radius)
     shape = 200 #200
@@ -34,9 +47,35 @@ def raster_cell(length, width):
     return OPL_cell
 
 def get_distance(vertex1, vertex2):
+    """
+    Get euclidian distance between two sets of vertices. 
+    
+    Parameters
+    ----------
+    vertex1 : 2-tuple
+        x,y coordinates of a vertex
+    vertex2 : 2-tuple
+        x,y coordinates of a vertex
+    
+    Returns
+    -------
+    float : absolute distance between two points
+    """
     return abs(np.sqrt((vertex1[0]-vertex2[0])**2 + (vertex1[1]-vertex2[1])**2))
 
 def find_farthest_vertices(vertex_list):
+    """Given a list of vertices, find the pair of vertices which are farthest from each other
+    
+    Parameters
+    ----------
+    vertex_list : list(2-tuple, 2-tuple ... )
+        List of pairs of vertices [(x,y), (x,y), ...]
+    
+    Returns
+    -------
+    array(2-tuple, 2-tuple)
+        The two vertices maximally far apart
+    """
     vertex_combs = list(itertools.combinations(vertex_list, 2))
     distance = 0
     farthest_vertices = 0
@@ -48,14 +87,23 @@ def find_farthest_vertices(vertex_list):
     return np.array(farthest_vertices)
 
 def get_midpoint(vertex1, vertex2):
+    """
+    Get the midpoint between two vertices
+    """
     x_mid = (vertex1[0]+vertex2[0])/2
     y_mid = (vertex1[1]+vertex2[1])/2
     return np.array([x_mid,y_mid])
 
 def vertices_slope(vertex1, vertex2):
+    """
+    Get the slope between two vertices
+    """
     return (vertex1[1] - vertex2[1])/(vertex1[0] - vertex2[0])
 
 def midpoint_intercept(vertex1, vertex2):
+    """
+    Get the y-intercept of the line connecting two vertices
+    """
     midpoint = get_midpoint(vertex1, vertex2)
     slope = vertices_slope(vertex1, vertex2)
     intercept = midpoint[1]-(slope*midpoint[0])
@@ -71,6 +119,27 @@ def get_centroid(vertices: list[tuple]) -> tuple:
     return np.sum(vertices,axis=0)/len(vertices)
 
 def place_cell(length, width, angle, position, space):
+    """Creates a cell and places it in the pymunk space
+    
+    Parameters
+    ----------
+    length : float
+        length of the cell
+    width : float
+        width of the cell
+    angle : float
+        rotation of the cell in radians counterclockwise
+    position : tuple
+        x,y coordinates of the cell centroid
+    space : pymunk.space.Space
+        Pymunk space to place the cell in
+        
+    Returns
+    -------
+    nothing, updates space
+    
+    """  
+    
     angle = np.rad2deg(angle)
     x, y = np.array(position).astype(int)
     OPL_cell = raster_cell(length = length, width=width)
@@ -81,6 +150,9 @@ def place_cell(length, width, angle, position, space):
     space[y-cell_y+100:y+cell_y+offset_y+100,x-cell_x+100:x+cell_x+offset_x+100] += rotated_OPL_cell
 
 def gen_cell_props_for_draw(cell_timeseries_lists):
+    """
+    
+    """
     cell_properties = []
     for cell in cell_timeseries_lists:
         body, shape = (cell.body, cell.shape)
@@ -98,7 +170,8 @@ def gen_cell_props_for_draw(cell_timeseries_lists):
         cell_properties.append([length, width, angle, centroid])
     return cell_properties
 
-def draw_scene(cell_properties):
+#deprecated
+def draw_scene_dep(cell_properties):
     space_size = (800, 170)
     space = np.zeros(space_size)
     space_masks = np.zeros(space_size)
