@@ -41,6 +41,7 @@ from SYMPTOMM.scene_functions import *
 from SYMPTOMM.trench_geometry import *
 from SYMPTOMM.PSF import *
 import os
+import skimage
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
     trench_shapes = []
@@ -117,7 +118,7 @@ def similarity_objective_function(z, ret_tuple=False):
     else:
         return objs, OPL_scenes_convolved
     
-def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters):
+def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters, max_length_var, width_var):
     
     
     space = create_space()
@@ -143,8 +144,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         growth_rate_constant = 1,
         max_length = cell_max_length*scale_factor,
         max_length_mean =cell_max_length*scale_factor,
-        max_length_var = 0.5*np.sqrt(scale_factor),
-        width_var = 0.07*np.sqrt(scale_factor),
+        max_length_var = max_length_var*np.sqrt(scale_factor),
+        width_var = width_var*np.sqrt(scale_factor),
         width_mean = cell_width*scale_factor
     )
 
