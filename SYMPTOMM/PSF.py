@@ -64,6 +64,7 @@ def somb(x):
     z[idx] = 2*jv(1,np.pi*x[idx])/(np.pi*x[idx])
     return z
 
+## our old PC kernel from Yin et al
 #def get_phase_contrast_kernel(R,W,radius,scale,F,sigma,λ):
 #    scale1 = 1000 # micron per millimeter
 #    F = F * scale1 # to microm
