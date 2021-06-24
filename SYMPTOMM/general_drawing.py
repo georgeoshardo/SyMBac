@@ -76,7 +76,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
 def raster_cell(length, width):
     radius = int(width/2)
     cyl_height = int(length - 2*radius)
-    shape = 300 #200
+    shape = 500 #200
     cylinder = rg.cylinder(
             shape = shape,
             height = cyl_height,
@@ -230,11 +230,18 @@ def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
     x_diff = synthetic_image.shape[1] - real_image.shape[1]
     remove_from_left, remove_from_right = div_odd(x_diff)
     y_diff = synthetic_image.shape[0] - real_image.shape[0]
-    if y_diff > 0:
-        synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
-    else:
-        synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-        real_image = real_image[abs(y_diff):,:]
+    if synthetic_image.shape[1]%2 == 0:
+        if y_diff > 0:
+            synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
+        else:
+            synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+            real_image = real_image[abs(y_diff):,:]
+    elif synthetic_image.shape[1]%2 == 1:
+        if y_diff > 0:
+            synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+        else:
+            synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+            real_image = real_image[abs(y_diff):,:]
 
     if rescale_int:
         real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0,1))
