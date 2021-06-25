@@ -42,6 +42,7 @@ from SYMPTOMM.trench_geometry import *
 from SYMPTOMM.PSF import *
 import os
 import skimage
+from skimage.segmentation import find_boundaries
 
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
@@ -369,12 +370,14 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         return noisy_img, expanded_mask_resized_reshaped.astype(int)
     
     
+    
 def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset, label_masks):
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
-    space_masks = np.zeros(space_size)
-    if label_masks:
-        colour_label = 1
+    space_masks_label = np.zeros(space_size)
+    space_masks_nolabel = np.zeros(space_size)    
+    colour_label = [1]
+    
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
         length = length; width = width ; position = np.array(position) 
@@ -406,15 +409,26 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
             y-cell_y:y+cell_y+offset_y,
             x-cell_x:x+cell_x+offset_x
         ] += rotated_OPL_cell
-        if label_masks:
-            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
-            colour_label += 1
-        else:
-            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
-            space_masks = space_masks == 1
 
-
-        #space_masks = opening(space_masks,np.ones((2,11)))
+        def get_mask(label_masks):
+            
+            if label_masks:
+                space_masks_label[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > 0)*colour_label[0]
+                colour_label[0] += 1
+                return space_masks_label
+            else:
+                space_masks_nolabel[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > 0)*1
+                return space_masks_nolabel
+                #space_masks = opening(space_masks,np.ones((2,11)))
+            
+            
+        label_mask = get_mask(True).astype(int)
+        nolabel_mask = get_mask(False).astype(int)
+        label_mask_fixed = np.where(nolabel_mask > 1,0,label_mask)
+        mask_borders = find_boundaries(label_mask_fixed,mode="outer")
+        space_masks = np.where(mask_borders, 0,label_mask_fixed)
+        if label_masks == False:
+            space_masks = space_masks.astype(bool)
     return space, space_masks
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
