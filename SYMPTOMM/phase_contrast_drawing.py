@@ -271,6 +271,7 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         fftim1 = fft.fftshift(fft.fft2(real_resize))
         angs, mags = cart2pol(np.real(fftim1),np.imag(fftim1))
         matched = sfMatch([real_resize, expanded_resized],tarmag = mags)[1]
+        matched = lumMatch([real_resize,matched],None,[np.mean(real_resize),np.std(real_resize)])[1]
     else:
         matched = expanded_resized
     
@@ -418,7 +419,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
     #media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient = list(interactive_output.kwargs.values())
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient = list(interactive_output.kwargs.values())
     debug_plot = False
     try:
         os.mkdir(save_dir)
@@ -451,7 +452,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         else:
             _match_noise = match_noise
         
-        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient)
+        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, match_fourier, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient)
         
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
@@ -564,7 +565,7 @@ def lumMatch(images, mask = None, lum = None):
     
 
     numin = len(images)
-    if (mask == None) and (lum == None):
+    if (mask is None) and (lum is None):
         M = 0; S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
@@ -581,7 +582,24 @@ def lumMatch(images, mask = None, lum = None):
             else:
                 im1[:,:] = M
             output_images.append(im1)
-    elif (mask != None) and (lum == None):
+    elif (mask is None) and (lum != None):
+        M = 0; S = 0
+        for im in range(numin):
+            if len(images[im].shape) == 3:
+                images[im] = rgb2gray(images[im])
+            M = lum[0]
+            S = lum[1]
+        M = M/numin
+        S = S/numin
+        output_images = []
+        for im in range(numin):
+            im1 = copy.deepcopy(images[im])
+            if np.std(im1) != 0:
+                im1 = (im1 - np.mean(im1))/np.std(im1) * S + M
+            else:
+                im1[:,:] = M
+            output_images.append(im1)
+    elif (mask != None) and (lum is None):
         M = 0; S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
