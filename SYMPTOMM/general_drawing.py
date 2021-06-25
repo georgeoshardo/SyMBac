@@ -153,54 +153,54 @@ def transform_func(amp_modif, freq_modif, phase_modif):
         return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
     return perm_transform_func
 
-def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, x_offset, y_offset, label_masks):
-    space_size = np.array(space_size) # 1000, 200 a good value
-    space = np.zeros(space_size)
-    space_masks = np.zeros(space_size)
-    offsets = offset
-    if label_masks:
-        colour_label = 1
-    for properties in cell_properties:
-        length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
-        length = length; width = width ; position = np.array(position) 
-        angle = np.rad2deg(angle) - 90
-        x = np.array(position).astype(int)[0] + x_offset
-        y = np.array(position).astype(int)[1] + y_offset
-        OPL_cell = raster_cell(length = length, width=width)
+#def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, x_offset, y_offset, label_masks):
+#    space_size = np.array(space_size) # 1000, 200 a good value
+#    space = np.zeros(space_size)
+#    space_masks = np.zeros(space_size)
+#    offsets = offset
+#    if label_masks:
+#        colour_label = 1
+#    for properties in cell_properties:
+#        length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
+#        length = length; width = width ; position = np.array(position) 
+#        angle = np.rad2deg(angle) - 90
+#        x = np.array(position).astype(int)[0] + x_offset
+#        y = np.array(position).astype(int)[1] + y_offset
+#        OPL_cell = raster_cell(length = length, width=width)
 
-        if do_transformation:
-            OPL_cell_2 = np.zeros((OPL_cell.shape[0],int(OPL_cell.shape[1]*2)))
-            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
-            OPL_cell_2[:,midpoint-int(OPL_cell.shape[1]/2):midpoint-int(OPL_cell.shape[1]/2)+OPL_cell.shape[1]] = OPL_cell
-            roll_coords = np.array(range(OPL_cell_2.shape[0]))
-            freq_mult = (OPL_cell_2.shape[0])
-            amp_mult = OPL_cell_2.shape[1]/10
-            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
-            roll_amounts = sin_transform_cell(roll_coords,amp_mult,freq_mult,phase_mult)
-            for B in roll_coords:
-                OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
-            OPL_cell = (OPL_cell_2)
+#        if do_transformation:
+#            OPL_cell_2 = np.zeros((OPL_cell.shape[0],int(OPL_cell.shape[1]*2)))
+#            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
+#            OPL_cell_2[:,midpoint-int(OPL_cell.shape[1]/2):midpoint-int(OPL_cell.shape[1]/2)+OPL_cell.shape[1]] = OPL_cell
+#            roll_coords = np.array(range(OPL_cell_2.shape[0]))
+#            freq_mult = (OPL_cell_2.shape[0])
+#            amp_mult = OPL_cell_2.shape[1]/10
+#            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
+#            roll_amounts = sin_transform_cell(roll_coords,amp_mult,freq_mult,phase_mult)
+#            for B in roll_coords:
+#                OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
+#            OPL_cell = (OPL_cell_2)
 
-        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
-        cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
-        offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
-        offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
-        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
-        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
-        space[
-            y-cell_y:y+cell_y+offset_y,
-            x-cell_x:x+cell_x+offset_x
-        ] += rotated_OPL_cell
-        if label_masks:
-            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
-            colour_label += 1
-        else:
-            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
-            space_masks = space_masks == 1
+#        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
+#        cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
+#        offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
+#        offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
+#        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
+#        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
+#        space[
+#            y-cell_y:y+cell_y+offset_y,
+#            x-cell_x:x+cell_x+offset_x
+#        ] += rotated_OPL_cell
+#        if label_masks:
+#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
+#            colour_label += 1
+#        else:
+#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
+#            space_masks = space_masks == 1
 
 
         #space_masks = opening(space_masks,np.ones((2,11)))
-    return space, space_masks
+#    return space, space_masks
 
 def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
     if matplotlib_draw == True:
@@ -222,7 +222,6 @@ def convolve_rescale(image,kernel,rescale_factor, rescale_int):
     if rescale_int:
         output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
     return output
-
 def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
     assert real_image.shape[0] < synthetic_image.shape[0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
     assert real_image.shape[1] < synthetic_image.shape[1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
@@ -230,18 +229,32 @@ def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
     x_diff = synthetic_image.shape[1] - real_image.shape[1]
     remove_from_left, remove_from_right = div_odd(x_diff)
     y_diff = synthetic_image.shape[0] - real_image.shape[0]
-    if synthetic_image.shape[1]%2 == 0:
-        if y_diff > 0:
-            synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
-        else:
-            synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-            real_image = real_image[abs(y_diff):,:]
-    elif synthetic_image.shape[1]%2 == 1:
-        if y_diff > 0:
-            synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
-        else:
-            synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-            real_image = real_image[abs(y_diff):,:]
+    if real_image.shape[1]%2 == 0:
+        if synthetic_image.shape[1]%2 == 0:
+            if y_diff > 0:
+                synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
+            else:
+                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):,:]
+        elif synthetic_image.shape[1]%2 == 1:
+            if y_diff > 0:
+                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+            else:
+                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):,:]
+    elif real_image.shape[1]%2 == 1:
+        if synthetic_image.shape[1]%2 == 0:
+            if y_diff > 0:
+                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+            else:
+                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):,:]
+        elif synthetic_image.shape[1]%2 == 1:
+            if y_diff > 0:
+                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+            else:
+                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):,:]
 
     if rescale_int:
         real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0,1))
