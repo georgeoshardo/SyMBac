@@ -425,8 +425,9 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
         label_mask = get_mask(True).astype(int)
         nolabel_mask = get_mask(False).astype(int)
         label_mask_fixed = np.where(nolabel_mask > 1,0,label_mask)
-        mask_borders = find_boundaries(label_mask_fixed,mode="outer")
+        mask_borders = find_boundaries(label_mask_fixed,mode="thick", connectivity=2)
         space_masks = np.where(mask_borders, 0,label_mask_fixed)
+        space_masks = opening(space_masks)
         if label_masks == False:
             space_masks = space_masks.astype(bool)
         space = space*space_masks.astype(bool)

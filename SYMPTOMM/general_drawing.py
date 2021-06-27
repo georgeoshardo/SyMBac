@@ -74,6 +74,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     return cell_properties
 
 def raster_cell(length, width):
+    #TODO: make this FASTER
     radius = int(width/2)
     cyl_height = int(length - 2*radius)
     shape = 500 #200
