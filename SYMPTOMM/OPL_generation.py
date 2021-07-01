@@ -149,7 +149,8 @@ def place_cell(length, width, angle, position, space):
     offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
     space[y-cell_y+100:y+cell_y+offset_y+100,x-cell_x+100:x+cell_x+offset_x+100] += rotated_OPL_cell
 
-def gen_cell_props_for_draw(cell_timeseries_lists):
+#deprecated
+def gen_cell_props_for_draw_dep(cell_timeseries_lists):
     """
     
     """

@@ -67,7 +67,8 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         width = cell.width
         #angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
         angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],(farthest_vertices[0] - farthest_vertices[1])[0])
-        
+        angle = np.rad2deg(angle)+90
+
         ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:,0] == cell.ID][0]
         phase_mult = 20
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif,phase_mult])
