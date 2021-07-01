@@ -120,7 +120,7 @@ def similarity_objective_function(z, ret_tuple=False):
     else:
         return objs, OPL_scenes_convolved
     
-def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters, max_length_var, width_var):
+def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters, max_length_var, width_var, save_dir):
     
     
     space = create_space()
@@ -132,8 +132,6 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     trench_length = trench_length*scale_factor
     trench_width = trench_width*scale_factor
     trench_creator(trench_width,trench_length,(35,0),space) # Coordinates of bottom left corner of the trench
-    #trench_creator(35,trench_length,(35*3,0),space) # Coordinates of bottom left corner of the trench
-    #trench_creator(35,trench_length,(35*5,0),space) # Coordinates of bottom left corner of the trench
 
     cell1 = Cell(
         length = cell_max_length*scale_factor,  
@@ -150,15 +148,39 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         width_var = width_var*np.sqrt(scale_factor),
         width_mean = cell_width*scale_factor
     )
+    
+    
+    window = pyglet.window.Window(700, 700, "SImBac", resizable=True)
+    options = DrawOptions()
+    @window.event
+    def on_draw():
+        window.clear()
+        space.debug_draw(options)
 
-
-    cells = [cell1]
+    global cell_timeseries
+    global x    
+    
+    
+    try:
+        del cell_timeseries
+    except:
+        pass
+    try:
+        del x
+    except:
+        pass
+    
+    x = [0]
     cell_timeseries = []
-    phys_iters = phys_iters
-    for x in tqdm(range(sim_length+250),desc="Simulation Progress"):
-        cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length)
-        if x > 250:
-            cell_timeseries.append(deepcopy(cells))
+    cells = [cell1]
+    pyglet.clock.schedule_interval(step_and_update, interval=dt, cells=cells, space=space, phys_iters=phys_iters ,ylim=trench_length, cell_timeseries = cell_timeseries,x=x,sim_length=sim_length, save_dir=save_dir)
+    pyglet.app.run()
+    #window.close()
+    #phys_iters = phys_iters
+    #for x in tqdm(range(sim_length+250),desc="Simulation Progress"):
+    #    cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length*1.1, cell_timeseries = cell_timeseries, x=x, sim_length = sim_length, save_dir = save_dir)
+    #    if x > 250:
+    #        cell_timeseries.append(deepcopy(cells))
     return cell_timeseries, space
 
 def get_similarity_metrics(real_image,synthetic_image):
@@ -180,35 +202,42 @@ def get_similarity_metrics(real_image,synthetic_image):
     objs = [ssim_real, 0.5*intersection, _fsim, _issm, _sam, _sre/20]
     return objs
 
-def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient):
-    def get_OPL_image(mask):
+def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence):
+    def get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence):
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
 
         segment_2_top_left = (0 + offset, int(main_segments.iloc[1]["bb"][0] + offset))
         segment_2_bottom_right = (int(main_segments.iloc[1]["bb"][3] + offset), int(main_segments.iloc[1]["bb"][2] + offset))
+        
+        if fluorescence:
+            test_scene = np.zeros(scene.shape)
+            media_multiplier = -1*device_multiplier
+        else:
+            test_scene = np.zeros(scene.shape) + device_multiplier
+            rr, cc = draw.rectangle(start = segment_1_top_left, end = segment_1_bottom_right, shape = test_scene.shape)
+            test_scene[rr,cc] = 1 * media_multiplier
+            rr, cc = draw.rectangle(start = segment_2_top_left, end = segment_2_bottom_right, shape = test_scene.shape)
+            test_scene[rr,cc] = 1 * media_multiplier
+            circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1])/2
+            radius = (segment_1_top_left[1] - offset - (segment_2_bottom_right[1] - offset))/2
+            circ_midpoint_x = (offset) + radius
 
-        test_scene = np.zeros(scene.shape) + device_multiplier
-        rr, cc = draw.rectangle(start = segment_1_top_left, end = segment_1_bottom_right, shape = test_scene.shape)
-        test_scene[rr,cc] = 1 * media_multiplier
-        rr, cc = draw.rectangle(start = segment_2_top_left, end = segment_2_bottom_right, shape = test_scene.shape)
-        test_scene[rr,cc] = 1 * media_multiplier
-        circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1])/2
-        radius = (segment_1_top_left[1] - offset - (segment_2_bottom_right[1] - offset))/2
-        circ_midpoint_x = (offset) + radius
-
-        rr, cc = draw.rectangle(start = segment_2_top_left, end = (circ_midpoint_x,segment_1_top_left[1]), shape = test_scene.shape)
-        test_scene[rr.astype(int),cc.astype(int)] = 1 * media_multiplier
-        rr, cc = draw.disk(center = (circ_midpoint_x, circ_midpoint_y), radius = radius, shape = test_scene.shape)
-        rr_semi = rr[rr < (circ_midpoint_x + 1)]
-        cc_semi = cc[rr < (circ_midpoint_x + 1)]
-        test_scene[rr_semi,cc_semi] = device_multiplier
+            rr, cc = draw.rectangle(start = segment_2_top_left, end = (circ_midpoint_x,segment_1_top_left[1]), shape = test_scene.shape)
+            test_scene[rr.astype(int),cc.astype(int)] = 1 * media_multiplier
+            rr, cc = draw.disk(center = (circ_midpoint_x, circ_midpoint_y), radius = radius, shape = test_scene.shape)
+            rr_semi = rr[rr < (circ_midpoint_x + 1)]
+            cc_semi = cc[rr < (circ_midpoint_x + 1)]
+            test_scene[rr_semi,cc_semi] = device_multiplier
         no_cells = deepcopy(test_scene)
         
         
         
         test_scene += scene * cell_multiplier
-        test_scene = np.where(no_cells != media_multiplier, test_scene, media_multiplier)
+        if fluorescence:
+            pass
+        else:
+            test_scene = np.where(no_cells != media_multiplier, test_scene, media_multiplier)
         test_scene = test_scene[segment_2_top_left[0]:segment_1_bottom_right[0],segment_2_top_left[1]:segment_1_bottom_right[1]]
         
         mask = np.where(no_cells != media_multiplier, mask, 0)
@@ -218,9 +247,13 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
         expanded_scene_no_cells = np.zeros((int(no_cells.shape[0]*y_border_expansion_coefficient), int(no_cells.shape[1]*x_border_expansion_coefficient))) + media_multiplier
         expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - no_cells.shape[0]:,
                                 int(expanded_scene_no_cells.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_scene_no_cells.shape[1]/2-int(test_scene.shape[1]/2)) + no_cells.shape[1]] = no_cells
-
-        expanded_scene = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient))) + media_multiplier
-        expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,
+        if fluorescence:
+            expanded_scene = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient)))
+            expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,
+                       int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = test_scene
+        else:
+            expanded_scene = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient))) + media_multiplier
+            expanded_scene[expanded_scene.shape[0] - test_scene.shape[0]:,
                        int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_scene.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = test_scene
         
         expanded_mask = np.zeros((int(test_scene.shape[0]*y_border_expansion_coefficient), int(test_scene.shape[1]*x_border_expansion_coefficient)))
@@ -228,14 +261,13 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
                       int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = mask_resized
         
         return expanded_scene, expanded_scene_no_cells, expanded_mask
-    expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(mask)
+    expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence)
     if expanded_scene is None:
         main_segments = main_segments.reindex(index=main_segments.index[::-1])
-        expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(mask)
+        expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence)
     return expanded_scene, expanded_scene_no_cells, expanded_mask
 
-
-def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient):
+def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient,fluorescence):
     
     
     expanded_scene, expanded_scene_no_cells, expanded_mask = generate_PC_OPL(
@@ -247,22 +279,23 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         cell_multiplier=cell_multiplier,
         device_multiplier=device_multiplier,
         x_border_expansion_coefficient = x_border_expansion_coefficient,
-        y_border_expansion_coefficient = y_border_expansion_coefficient
+        y_border_expansion_coefficient = y_border_expansion_coefficient,
+        fluorescence = fluorescence
     )
 
 
 
-    #R,W,radius,scale,F,_,λ = kernel_params
     R,W,radius,scale,NA,n,_,λ = kernel_params
     
     
     real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = image_params
     mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,cell_var_error,device_var_error = error_params
     
+    if fluorescence:
+        kernel = get_fluorescence_kernel(radius=radius, scale=scale, NA=NA,n=n, Lambda=λ)[0]
+    else:
+        kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA,n=n, sigma=sigma, λ=λ)
     
-    kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA,n=n, sigma=sigma, λ=λ)
-    #kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, F=F, sigma=sigma, λ=λ) # 
-
 
 
     convolved = convolve_rescale(expanded_scene, kernel, 1/resize_amount, rescale_int = True)
@@ -277,10 +310,15 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         matched = expanded_resized
     
     if match_histogram and match_fourier:
+        matched = sfMatch([real_resize, matched],tarmag = mags)[1]
+        matched = lumMatch([real_resize,matched],None,[np.mean(real_resize),np.std(real_resize)])[1]
         matched = match_histograms(matched, real_resize, multichannel=False)
     else:
         pass
-    
+    if match_histogram:
+        matched = match_histograms(matched, real_resize, multichannel=False)
+    else:
+        pass
     
     noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
     noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0,var=noise_var,clip=False)
@@ -311,8 +349,10 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
 
     real_resize, expanded_cell_pseudo_mask = make_images_same_shape(real_image,expanded_cell_pseudo_mask, rescale_int=True)
     just_cells = expanded_cell_pseudo_mask * noisy_img
-    
-    expanded_device_mask = expanded_scene_no_cells == media_multiplier
+    if True:
+        expanded_device_mask = expanded_scene_no_cells
+    else:
+        expanded_device_mask = expanded_scene_no_cells == media_multiplier
     expanded_device_mask = rescale(expanded_device_mask, 1/resize_amount, anti_aliasing=False)
     real_resize, expanded_device_mask = make_images_same_shape(real_image,expanded_device_mask, rescale_int=True)
     just_device = expanded_device_mask * noisy_img
@@ -370,7 +410,6 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         return noisy_img, expanded_mask_resized_reshaped.astype(int)
     
     
-    
 def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset, label_masks):
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
@@ -381,7 +420,6 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
         length = length; width = width ; position = np.array(position) 
-        angle = np.rad2deg(angle) - 90
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
         OPL_cell = raster_cell(length = length, width=width)
@@ -399,7 +437,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
                 OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
             OPL_cell = (OPL_cell_2)
 
-        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
+        rotated_OPL_cell = rotate(OPL_cell,-angle,resize=True,clip=False,preserve_range=True, center=(x,y))
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
         offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
         offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
