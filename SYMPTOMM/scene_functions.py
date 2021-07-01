@@ -9,6 +9,7 @@ import numpy as np
 from SYMPTOMM.cell import Cell
 import time
 from copy import deepcopy
+import pickle
 def create_space():
     return pymunk.Space()
 
@@ -38,9 +39,8 @@ def wipe_space(space):
             space.remove(poly)        
 
 
-  
-def step_and_update(dt, cells, space, phys_iters, ylim):
 
+def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
     for shape in space.shapes:
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
@@ -63,4 +63,16 @@ def step_and_update(dt, cells, space, phys_iters, ylim):
     update_cell_positions(cells)
 
     #print(str(len(cells))+" cells")
+    if x[0] > 250:
+        cell_timeseries.append(deepcopy(cells))
+    if x[0] == sim_length+250:
+        with open(save_dir+"/cell_timeseries.p", "wb") as f:
+            pickle.dump(cell_timeseries, f)
+        with open(save_dir+"/space_timeseries.p", "wb") as f:
+            pickle.dump(space, f)
+        pyglet.app.exit()
+        return cells
+    x[0] += 1
     return (cells)
+
+
