@@ -366,17 +366,20 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
     
     
     
-    
-    mean_error.append(np.mean(perc_diff(real_means, simulated_means)))
-    media_error.append(perc_diff(simulated_means[0], real_media_mean))
-    cell_error.append(perc_diff(simulated_means[1], real_cell_mean))
-    device_error.append(perc_diff(simulated_means[2], real_device_mean))
-    
-    
-    mean_var_error.append(np.mean(perc_diff(real_vars, simulated_vars)))
-    media_var_error.append(perc_diff(simulated_vars[0], real_media_var))
-    cell_var_error.append(perc_diff(simulated_vars[1], real_cell_var))
-    device_var_error.append(perc_diff(simulated_vars[2], real_device_var))
+    if fluorescence:
+        mean_error.append(perc_diff(np.mean(noisy_img),np.mean(real_resize)))
+        mean_var_error.append(perc_diff(np.var(noisy_img),np.var(real_resize)))
+    else:
+        mean_error.append(np.mean(perc_diff(real_means, simulated_means)))
+        media_error.append(perc_diff(simulated_means[0], real_media_mean))
+        cell_error.append(perc_diff(simulated_means[1], real_cell_mean))
+        device_error.append(perc_diff(simulated_means[2], real_device_mean))
+
+
+        mean_var_error.append(np.mean(perc_diff(real_vars, simulated_vars)))
+        media_var_error.append(perc_diff(simulated_vars[0], real_media_var))
+        cell_var_error.append(perc_diff(simulated_vars[1], real_cell_var))
+        device_var_error.append(perc_diff(simulated_vars[2], real_device_var))
     if debug_plot == True:
         fig = plt.figure(figsize=(15,5))
         ax1 = plt.subplot2grid((1,8),(0,0),colspan=1,rowspan=1)
