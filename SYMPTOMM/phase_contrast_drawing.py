@@ -476,7 +476,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
     #media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient = list(interactive_output.kwargs.values())
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence = list(interactive_output.kwargs.values())
     debug_plot = False
     try:
         os.mkdir(save_dir)
@@ -509,7 +509,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         else:
             _match_noise = match_noise
         
-        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, match_fourier, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient)
+        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, match_fourier, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence)
         
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
