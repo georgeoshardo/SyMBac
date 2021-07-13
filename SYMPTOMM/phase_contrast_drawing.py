@@ -43,6 +43,7 @@ from SYMPTOMM.PSF import *
 import os
 import skimage
 from skimage.segmentation import find_boundaries
+from scipy.ndimage import gaussian_filter
 
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
@@ -202,8 +203,8 @@ def get_similarity_metrics(real_image,synthetic_image):
     objs = [ssim_real, 0.5*intersection, _fsim, _issm, _sam, _sre/20]
     return objs
 
-def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence):
-    def get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence):
+def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
+    def get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
 
@@ -261,13 +262,13 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
                       int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)):int(expanded_mask.shape[1]/2-int(test_scene.shape[1]/2)) + test_scene.shape[1]] = mask_resized
         
         return expanded_scene, expanded_scene_no_cells, expanded_mask
-    expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence)
+    expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus)
     if expanded_scene is None:
         main_segments = main_segments.reindex(index=main_segments.index[::-1])
-        expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence)
+        expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus)
     return expanded_scene, expanded_scene_no_cells, expanded_mask
 
-def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient,fluorescence):
+def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient,fluorescence,defocus):
     
     
     expanded_scene, expanded_scene_no_cells, expanded_mask = generate_PC_OPL(
@@ -280,7 +281,8 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
         device_multiplier=device_multiplier,
         x_border_expansion_coefficient = x_border_expansion_coefficient,
         y_border_expansion_coefficient = y_border_expansion_coefficient,
-        fluorescence = fluorescence
+        fluorescence = fluorescence,
+        defocus = defocus
     )
 
 
@@ -293,17 +295,20 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
     
     if fluorescence:
         kernel = get_fluorescence_kernel(radius=radius, scale=scale, NA=NA,n=n, Lambda=λ)[0]
+        if defocus > 0:
+            kernel = gaussian_filter(kernel,defocus,mode="reflect")
     else:
         kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA,n=n, sigma=sigma, λ=λ)
-    
+        if defocus > 0:
+            kernel = gaussian_filter(kernel,defocus,mode="reflect")
 
 
     convolved = convolve_rescale(expanded_scene, kernel, 1/resize_amount, rescale_int = True)
     real_resize, expanded_resized = make_images_same_shape(real_image,convolved, rescale_int=True)
+    fftim1 = fft.fftshift(fft.fft2(real_resize))
+    angs, mags = cart2pol(np.real(fftim1),np.imag(fftim1))
     
-    if match_fourier:
-        fftim1 = fft.fftshift(fft.fft2(real_resize))
-        angs, mags = cart2pol(np.real(fftim1),np.imag(fftim1))
+    if match_fourier and not match_histogram:
         matched = sfMatch([real_resize, expanded_resized],tarmag = mags)[1]
         matched = lumMatch([real_resize,matched],None,[np.mean(real_resize),np.std(real_resize)])[1]
     else:
@@ -476,7 +481,7 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
     #media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence = list(interactive_output.kwargs.values())
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence, defocus = list(interactive_output.kwargs.values())
     debug_plot = False
     try:
         os.mkdir(save_dir)
@@ -509,7 +514,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         else:
             _match_noise = match_noise
         
-        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, match_fourier, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence)
+        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma, _scene_no, scale, match_fourier, _match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence, defocus)
         
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
