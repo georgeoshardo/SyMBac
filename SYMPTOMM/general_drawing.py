@@ -74,34 +74,56 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif,phase_mult])
     return cell_properties
 
+#def raster_cell(length, width):
+ #   #TODO: make this FASTER
+ #   radius = int(width/2)
+ #   cyl_height = int(length - 2*radius)
+ #   shape = 500 #200
+ #   cylinder = rg.cylinder(
+ #           shape = shape,
+ #           height = cyl_height,
+ #           radius = radius,
+ #           axis=0,
+ #           position=(0.5,0.5,0.5),
+ #           smoothing=False)##
+
+ #   sphere1 = rg.sphere(shape,radius,((shape + cyl_height)/(2*shape),0.5,0.5))
+ #   sphere2 = rg.sphere(shape,radius,((shape - cyl_height)/(2*shape),0.5,0.5))#
+
+
+ #   cell = (cylinder + sphere1 + sphere2)
+ #   cell = cell[int(shape/2-cyl_height/2-radius-1):int(shape/2+cyl_height/2+radius+1),
+ #               int(shape/2)-radius:int(shape/2)+radius,
+ #              int(shape/2)-radius:int(shape/2)+radius]
+ #   z,x,y = cell.nonzero()
+ #   OPL_cell = np.sum(cell,axis=2)
+ #   return OPL_cell
+
 def raster_cell(length, width):
-    #TODO: make this FASTER
-    radius = int(width/2)
-    cyl_height = int(length - 2*radius)
-    shape = 500 #200
-    cylinder = rg.cylinder(
-            shape = shape,
-            height = cyl_height,
-            radius = radius,
-            axis=0,
-            position=(0.5,0.5,0.5),
-            smoothing=False)
-
-    sphere1 = rg.sphere(shape,radius,((shape + cyl_height)/(2*shape),0.5,0.5))
-    sphere2 = rg.sphere(shape,radius,((shape - cyl_height)/(2*shape),0.5,0.5))
+    L = int(np.rint(length))
+    W = int(np.rint(width))
+    new_cell = np.zeros((L,W))
+    R = (W-1)/2
 
 
-    cell = (cylinder + sphere1 + sphere2)
-    cell = cell[int(shape/2-cyl_height/2-radius-1):int(shape/2+cyl_height/2+radius+1),
-                int(shape/2)-radius:int(shape/2)+radius,
-               int(shape/2)-radius:int(shape/2)+radius]
-    z,x,y = cell.nonzero()
-    OPL_cell = np.sum(cell,axis=2)
-    return OPL_cell
+    x_cyl = np.arange(0,2*R+1,1)
+    I_cyl = np.sqrt(R**2 - (x_cyl-R)**2)
+    L_cyl = L - W
+    new_cell[int(W/2):-int(W/2),:] = I_cyl
 
-#OPL_cell = raster_cell(length = 55*2, width=15*2)
-#plt.imshow(OPL_cell)
-#plt.show()
+    x_sphere = np.arange(0,int(W/2),1)
+    sphere_Rs = np.sqrt((R)**2 - (x_sphere-R)**2)
+    sphere_Rs = np.rint(sphere_Rs).astype(int)
+
+    for c in range(len(sphere_Rs)):
+        R_ = sphere_Rs[c]
+        x_cyl = np.arange(0,R_,1)
+        I_cyl = np.sqrt(R_**2 - (x_cyl-R_)**2)
+        new_cell[c,int(W/2)-sphere_Rs[c]:int(W/2)+sphere_Rs[c]] = np.concatenate((I_cyl,I_cyl[::-1]))
+        new_cell[L-c-1,int(W/2)-sphere_Rs[c]:int(W/2)+sphere_Rs[c]] = np.concatenate((I_cyl,I_cyl[::-1]))
+    new_cell = new_cell.astype(int)
+    return new_cell
+
 
 def get_distance(vertex1, vertex2):
     return abs(np.sqrt((vertex1[0]-vertex2[0])**2 + (vertex1[1]-vertex2[1])**2))
@@ -253,7 +275,7 @@ def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
                 real_image = real_image[abs(y_diff):,:]
         elif synthetic_image.shape[1]%2 == 1:
             if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+                synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
             else:
                 synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
                 real_image = real_image[abs(y_diff):,:]
@@ -262,6 +284,7 @@ def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
         real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0,1))
         synthetic_image = rescale_intensity(synthetic_image.astype(np.float32), out_range=(0,1))
     return real_image, synthetic_image
+
 
 def get_space_size(cell_timeseries_properties):
     """Iterates through the simulation timeseries properties, 
