@@ -151,7 +151,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     )
     
     
-    window = pyglet.window.Window(700, 700, "SImBac", resizable=True)
+    window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
     options = DrawOptions()
     @window.event
     def on_draw():
