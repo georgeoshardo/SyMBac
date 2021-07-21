@@ -126,3 +126,7 @@ dmypy.json
 
 # Random figures
 /figures
+
+#Hidden files
+.*
+!/.gitignore
