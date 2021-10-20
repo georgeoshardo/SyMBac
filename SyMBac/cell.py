@@ -1,9 +1,8 @@
 import numpy as np
 import pymunk
 import sys
-sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2/')
-from SYMPTOMM import cell_geometry
-
+#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2/')
+from SyMBac import cell_geometry
 class Cell:
     """
     A class defining the cell objects

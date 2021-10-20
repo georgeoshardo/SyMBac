@@ -22,7 +22,7 @@ import pandas as pd
 from skimage import draw
 #import napari
 from itertools import combinations
-from SYMPTOMM import PSF
+from SyMBac import PSF
 from matplotlib_scalebar.scalebar import ScaleBar
 from cupyx.scipy.ndimage import convolve as cuconvolve
 import tifffile
@@ -34,12 +34,12 @@ from skimage.metrics import structural_similarity as ssim
 from scipy.optimize import basinhopping
 #import image_similarity_measures
 #from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
-sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
-from SYMPTOMM.general_drawing import *
-from SYMPTOMM.phase_contrast_drawing import *
-from SYMPTOMM.scene_functions import *
-from SYMPTOMM.trench_geometry import *
-from SYMPTOMM.PSF import *
+#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
+from SyMBac.general_drawing import *
+from SyMBac.phase_contrast_drawing import *
+from SyMBac.scene_functions import *
+from SyMBac.trench_geometry import *
+from SyMBac.PSF import *
 import os
 import skimage
 from skimage.segmentation import find_boundaries

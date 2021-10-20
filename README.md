@@ -18,7 +18,7 @@ That is up to you. SyMBac is **not** a machine learning tool. It is a tool to ge
 
 ## Prerequisites
 
-Please make sure you an NVIDIA GPU and a working installation of `cuda` and `cudNN` 
+Please make sure you an NVIDIA GPU and a working installation of `CUDA` and `cudNN` 
 
 SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK interface), so make sure that you are running this on a local machine (you should have access to the machine's display).
 
@@ -41,6 +41,12 @@ Activate the Jupyter widgets extension. This is needed to interact with slides i
 
 ```sh
 jupyter nbextension enable --py widgetsnbextension
+```
+
+Check the version of `CUDA` you have installed using `nvidia-smi` and install the appropriate version of [cupy](https://cupy.dev/). For example, if you have `CUDA 11.4` you would install as follows:
+
+```sh
+pip install cupy-cuda114
 ```
 
 

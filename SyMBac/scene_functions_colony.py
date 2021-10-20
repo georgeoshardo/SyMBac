@@ -2,8 +2,8 @@ import pyglet
 import pymunk
 from pymunk.pyglet_util import DrawOptions
 import sys
-sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
-from SYMPTOMM import cell_geometry
+#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
+from SyMBac import cell_geometry
 import matplotlib.pyplot as plt
 import numpy as np
 from SYMPTOMM.cell_colony import Cell

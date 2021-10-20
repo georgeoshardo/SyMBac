@@ -5,7 +5,7 @@ from skimage.transform import rotate
 import pickle
 import sys
 from skimage.transform import rescale, resize, downscale_local_mean
-sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
+#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
 import itertools
 from joblib import Parallel, delayed
 from skimage.morphology import opening
@@ -18,7 +18,7 @@ from tqdm import tqdm
 import pandas as pd
 from skimage import draw
 from itertools import combinations
-from SYMPTOMM import PSF
+from SyMBac import PSF
 from matplotlib_scalebar.scalebar import ScaleBar
 from cupyx.scipy.ndimage import convolve as cuconvolve
 import tifffile

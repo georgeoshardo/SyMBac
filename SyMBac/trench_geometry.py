@@ -1,6 +1,6 @@
 import pymunk
 import numpy as np
-from SYMPTOMM.plotting import matplot_scene
+from SyMBac.plotting import matplot_scene
 
 def segment_creator(local_xy1, local_xy2,global_xy,thickness):
     segment_body = pymunk.Body(mass=2, moment=3,body_type=pymunk.Body.STATIC)

@@ -12,3 +12,7 @@ jupyterlab
 ipywidgets
 joblib
 napari[all]
+pymunk
+pyglet
+raster-geometry
+matplotlib-scalebar

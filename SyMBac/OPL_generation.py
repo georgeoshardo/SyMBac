@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from skimage.transform import rotate
 import pickle
 import sys
-sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
+#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
 import itertools
 from joblib import Parallel, delayed
 import pymunk 
