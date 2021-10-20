@@ -26,13 +26,17 @@ The images are tuned to perfectly replicate your experimental setup, no matter w
 
 Additionally,
 
-* SyMBac is very fast compared to humans:<img src="readme_files/speed_comparison.png" alt="comparisons" width="200"  />
+* SyMBac is very fast compared to humans:
 
-* The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:<img src="readme_files/image_generation.jpeg" alt="comparisons" style="zoom:30%;" />
+  <img src="readme_files/speed_comparison.png" alt="comparisons" width="300"  />
+
+* The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:<img src="readme_files/image_generation.jpeg" alt="comparisons"  width="500" />
 
 ## How do I use these synthetic images?
 
-That is up to you. SyMBac is **not** a machine learning tool. It is a tool to generate unlimited free training data which accurately represents your experiment. It is up to you to train a machine learning network on these synthetic images. We do however provide example notebooks for how to train a U-net (as implemented by [DeLTA](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007673)). <img src="readme_files/training.png" alt="comparisons" style="zoom:30%;" />
+That is up to you. SyMBac is **not** a machine learning tool. It is a tool to generate unlimited free training data which accurately represents your experiment. It is up to you to train a machine learning network on these synthetic images. We do however provide example notebooks for how to train a U-net (as implemented by [DeLTA](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007673)).
+
+ <img src="readme_files/training.png" alt="comparisons"  width="300" />
 
 ## Prerequisites
 
