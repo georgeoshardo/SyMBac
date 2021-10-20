@@ -26,13 +26,9 @@ The images are tuned to perfectly replicate your experimental setup, no matter w
 
 Additionally,
 
-* SyMBac is very fast compared to humans:
+* SyMBac is very fast compared to humans:<img src="readme_files/speed_comparison.png" alt="comparisons" style="zoom:30%;" />
 
-<img src="readme_files/speed_comparison.png" alt="comparisons" style="zoom:30%;" />
-
-* The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:
-
-  <img src="readme_files/image_generation.jpeg" alt="comparisons" style="zoom:30%;" />
+* The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:<img src="readme_files/image_generation.jpeg" alt="comparisons" style="zoom:30%;" />
 
 ## How do I use these synthetic images?
 
