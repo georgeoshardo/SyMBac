@@ -1,4 +1,6 @@
-# SyMBac: Synthetic Micrographs of Bacteria
+# [SyMBac: Synthetic Micrographs of Bacteria](https://www.biorxiv.org/node/2068273.external-links.html)
+
+[Read the preprint!](https://www.biorxiv.org/node/2068273.external-links.html)
 
 ## What is it?
 
