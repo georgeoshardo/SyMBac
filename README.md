@@ -6,9 +6,9 @@
 
 doi: https://doi.org/10.1101/2021.07.21.453284
 
-![Sliders optimising image simiarity](readme_files/symbac_sliders.gif)
 
 
+<img src="readme_files/symbac_sliders.gif" alt="drawing" width="600" height="400"/>
 
 ## What is it?
 
