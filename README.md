@@ -1,6 +1,14 @@
-# [SyMBac: Synthetic Micrographs of Bacteria](https://www.biorxiv.org/node/2068273.external-links.html)
+# SyMBac: Synthetic Micrographs of Bacteria
 
-[Read the preprint!](https://www.biorxiv.org/node/2068273.external-links.html)
+[Read the preprint: Accurate Segmentation of Bacterial Cells using Synthetic Training Data](https://doi.org/10.1101/2021.07.21.453284)
+
+[Georgeos Hardo, Maximillian Noka, Somenath Bakshi](https://doi.org/10.1101/2021.07.21.453284)
+
+doi: https://doi.org/10.1101/2021.07.21.453284
+
+![Sliders optimising image simiarity](readme_files/symbac_sliders.gif)
+
+
 
 ## What is it?
 
