@@ -1,0 +1,14 @@
+tensorflow
+csbdeep
+stardist
+elasticdeform
+tifffile
+scikit-image
+matplotlib
+tqdm
+pandas
+natsort
+jupyterlab
+ipywidgets
+joblib
+napari[all]
