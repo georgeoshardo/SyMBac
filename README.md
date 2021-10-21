@@ -1,4 +1,4 @@
-SyMBac: Synthetic Micrographs of Bacteria
+# SyMBac: Synthetic Micrographs of Bacteria
 
 [Read the preprint: Accurate Segmentation of Bacterial Cells using Synthetic Training Data](https://doi.org/10.1101/2021.07.21.453284)
 
@@ -42,7 +42,7 @@ That is up to you. SyMBac is **not** a machine learning tool. It is a tool to ge
 
 ## Prerequisites
 
-Please make sure you an NVIDIA GPU and a working installation of `CUDA` and `cudNN` 
+Please make sure you have an NVIDIA GPU and a working installation of `CUDA` and `cudNN` 
 
 SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK interface), so make sure that you are running this on a local machine (you should have access to the machine's display).
 
