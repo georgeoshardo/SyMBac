@@ -47,6 +47,13 @@ from scipy.ndimage import gaussian_filter
 
 ##From here, prototyping phase contrast
 def get_trench_segments(space):
+    """    
+    A function which extracts the rigid body trench objects from the pymunk space object. Space object should be passed from the return value of the run_simulation() function
+    
+    Returns
+    -------
+    List of trench segment properties, later used to draw the trench.
+    """
     trench_shapes = []
     for shape, body in zip(space.shapes, space.bodies):
         if body.body_type == 2:
@@ -123,6 +130,41 @@ def similarity_objective_function(z, ret_tuple=False):
     
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity, phys_iters, max_length_var, width_var, save_dir):
     
+    """
+    Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the simulation. There is currently a bug where if you try to rerun the simulation in the same kernel, it will be extremely slow.
+    
+    Parameters
+    ----------
+    
+    trench_length : float
+        Length of a mother machine trench (micron)
+    trench_width : float
+        Width of a mother machine trench (micron)
+    cell_max_length : float
+        Maximum length a cell can reach before dividing (micron)
+    cell_width : float
+        the average cell width in the simmulation (micron)
+    pix_mic_conv : float
+        The micron/pixel size of the image
+    gravity : float
+        Pressure forcing cells into the trench. Typically left at zero, but can be varied if cells start to fall into each other or if the simulation behaves strangely.
+    phys_iters : int
+        Number of physics iterations per simulation frame. Increase to resolve collisions if cells are falling into one another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off each other very hard). 20 is a good starting point
+    max_length_var : float
+        Variance of the maximum cell length
+    width_var : float
+        Variance of the maximum cell width
+    save_dir : str
+        Location to save simulation outupt
+        
+    Returns
+    -------
+    cell_timeseries : lists
+        A list of parameters for each cell, such as length, width, position, angle, etc. All used in the drawing of the scene later
+    space : a pymunk space object
+        Contains the rigid body physics objects which are the cells.
+    """
+    
     
     space = create_space()
     space.gravity = 0, gravity # arbitrary units, negative is toward trench pole
@@ -185,6 +227,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     return cell_timeseries, space
 
 def get_similarity_metrics(real_image,synthetic_image):
+    """ No longer used function to get a list of similarity metrics between two images, may be re-purposed later"""    
     synthetic_image = match_histograms(synthetic_image, real_image, multichannel=False)
     synthetic_image = resize(synthetic_image,real_image.shape,clip=False,preserve_range=False,anti_aliasing=None)
     synthetic_image = synthetic_image/np.max(synthetic_image)
@@ -204,6 +247,44 @@ def get_similarity_metrics(real_image,synthetic_image):
     return objs
 
 def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
+    """
+    Takes a scene drawing, adds the trenches and colours all parts of the image to generate a first-order phase contrast image, uncorrupted (unconvolved) by the phase contrat optics. Also has a fluorescence parameter to quickly switch to fluorescence if you want. 
+    
+    Parameters
+    ----------
+    main_segments : list
+        A list of the trench segments, used for drawing the trench
+    offset : int
+        The same offset from the draw_scene function. Used to know the cell offset. 
+    scene : 2D numpy array
+        A scene image
+    mask : 2D numpy array
+        The mask for the scene
+    media_multiplier : float
+        Intensity multiplier for media (the area between cells which isn't the device)
+    cell_multiplier : float
+        Intensity multiplier for cell
+    device_multiplier : float
+        Intensity multiplier for device
+    y_border_expansioon_coefficient : int
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+    x_border_expansioon_coefficient : int
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+    fluorescence : bool
+        If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF). 
+    defocus : float
+        Simulated optical defocus by convolving the kernel with a 2D gaussian of radius defocus.
+        
+    Returns
+    -------
+    expanded_scene : 2D numpy array
+        A large (expanded on x and y axis) image of cells in a trench, but unconvolved. (The raw PC image before convolution)
+    expanded_scene_no_cells : 2D numpy array
+        Same as expanded_scene, except with the cells removed (this is necessary for later intensity tuning)
+    expanded_mask : 2D numpy array
+        The masks for the expanded scene
+    """
+    
     def get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
@@ -419,6 +500,33 @@ def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplie
     
     
 def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, offset, label_masks):
+    """
+    Draws a raw scene (no trench) of cells, and returns accompanying masks for training data.
+    
+    Parameters
+    ----------
+    Cell properties : list
+        A list of cell properties for that frame
+    do_transformation : bool
+        True if you want cells to be bent, false and cells remain straight as in the simulation
+    mask_threshold : depracated param
+    space_size : tuple
+        The xy size of the numpy array in which the space is rendered. If too small then cells will not fit. recommend using the get_space_size() function to find the correct space size for your simulation
+    offset : int
+        A necessary parameter which offsets the drawing a number of pixels from the left hand side of the image. 30 is a good number, but if the cells are very thick, then might need increasing. 
+    label_masks : bool
+        If true returns cell masks which are labelled (good for instance segmentation). If false returns binary masks only. I recommend leaving this as True, because you can always binarise the masks later if you want. 
+        
+    Returns
+    -------
+    space, space_masks : 2D numpy array, 2D numpy array
+    
+    space : 2D numpy array
+        Not to be confused with the pyglet object calledspace in some other functions. Simply a 2D numpy array with an image of cells from the input frame properties
+    space_masks : 2D numy array
+        The masks (labelled or bool) for that scene.
+    
+    """
     space_size = np.array(space_size) # 1000, 200 a good value
     space = np.zeros(space_size)
     space_masks_label = np.zeros(space_size)

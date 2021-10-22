@@ -33,6 +33,19 @@ from scipy.optimize import basinhopping
 from skimage.exposure import rescale_intensity
 
 def generate_curve_props(cell_timeseries):
+    """
+    Generates individual cell curvature properties. 3 parameters for each cell, which are passed to a cosine function to modulate the cell's curvature. 
+    
+    Paramters
+    ---------
+    cell_timeseries : list
+        The output of run_simulation()
+    
+    Returns
+    -------
+    A numpy array of unique curvature properties for each cell in the simulation
+    """
+    
     #Get unique cell IDs
     IDs = []
     for cell_list in cell_timeseries:
@@ -52,6 +65,19 @@ def generate_curve_props(cell_timeseries):
     return np.array(ID_props)
 
 def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
+    """
+    Parameters
+    ----------
+    cell_timeseries_list : list
+        A list (single frame) from cell_timeseries, the output from run_simulation. E.g: cell_timeseries[x]
+    ID_props : list
+        A list of properties for each cell in that frame, the output of generate_curve_props()
+    
+    Returns
+    -------
+    cell_properties : list
+        The final property list used to actually draw a scene of cells. The input to draw_scene
+    """
     cell_properties = []
     for cell in cell_timeseries_lists:
         body, shape = (cell.body, cell.shape)
