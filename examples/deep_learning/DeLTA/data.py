@@ -3,12 +3,6 @@ This file contains function definitions for data manipulations and input/output
 operations.
 
 @author: jblugagne
-
-Modifications made by @georgeos:
-    zoomshift and shift to preserve the output range of the image
-    elasdef a separate function
-    illumination_voodoo now takes axis as an arg to either illuminate over x or y direction
-    Many thanks for the authors for providing DeLTA under an MIT licence.
 '''
 from __future__ import print_function
 import numpy as np 
@@ -307,45 +301,7 @@ def data_augmentation(images_input, aug_par, order=0):
     
     return output
 
-def shift(image, vector, order=0):
-    '''
-    Image shifting function
-
-    Parameters
-    ----------
-    image : 2D numpy array
-        Input image.
-    vector : tuple of ints
-        Translation/shit vector.
-    order : int, optional
-        Interpolation order. The default is 0.
-
-    Returns
-    -------
-    shifted : 2D numpy image
-        Shifted image.
-
-    '''
-    transform = trans.AffineTransform(translation=vector)
-    shifted = trans.warp(image, transform, mode='edge',order=order, preserve_range=True)
-
-    return shifted
-
-def elasdef(image, sigma, points, order):
-    return elasticdeform.deform_random_grid(image,
-                                                      sigma=sigma,
-                                                      points=points,
-                                                      order=order, # Using bicubic interpolation instead of bilinear here
-                                                      mode='nearest',
-                                                      axis=(0,1),
-                                                      prefilter=False)
-    
-
 def zoomshift(I,zoomlevel,shiftX,shiftY, order=0):
-    
-    
-
-    
     '''
     This function zooms and shifts images.
 
@@ -370,7 +326,7 @@ def zoomshift(I,zoomlevel,shiftX,shiftY, order=0):
     '''
     
     oldshape = I.shape
-    I = trans.rescale(I,zoomlevel,mode='edge',multichannel=False, order=order,preserve_range=True,anti_aliasing=None)
+    I = trans.rescale(I,zoomlevel,mode='edge',multichannel=False, order=order)
     shiftX = shiftX * I.shape[0]
     shiftY = shiftY * I.shape[1]
     I = shift(I,(shiftY, shiftX),order=order) # For some reason it looks like X & Y are inverted?
@@ -378,7 +334,29 @@ def zoomshift(I,zoomlevel,shiftX,shiftY, order=0):
     I = I[i0[0]:(i0[0]+oldshape[0]), i0[1]:(i0[1]+oldshape[1])]
     return I
     
+def shift(image, vector, order=0):
+    '''
+    Image shifting function
 
+    Parameters
+    ----------
+    image : 2D numpy array
+        Input image.
+    vector : tuple of ints
+        Translation/shit vector.
+    order : int, optional
+        Interpolation order. The default is 0.
+
+    Returns
+    -------
+    shifted : 2D numpy image
+        Shifted image.
+
+    '''
+    transform = trans.AffineTransform(translation=vector)
+    shifted = trans.warp(image, transform, mode='edge',order=order)
+
+    return shifted
 
 def histogram_voodoo(image,num_control_points=3):
     '''
@@ -408,7 +386,7 @@ def histogram_voodoo(image,num_control_points=3):
     
     return mapping(image)
 
-def illumination_voodoo(image,num_control_points=5, axis=0):
+def illumination_voodoo(image,num_control_points=5):
     '''
     This function inspired by the one above.
     It simulates a variation in illumination along the length of the chamber
@@ -430,25 +408,15 @@ def illumination_voodoo(image,num_control_points=5, axis=0):
     '''
     
     # Create a random curve along the length of the chamber:
-    control_points = np.linspace(0,image.shape[1]-1,num=num_control_points)
+    control_points = np.linspace(0,image.shape[0]-1,num=num_control_points)
     random_points = np.random.uniform(low=0.1,high=0.9,size=num_control_points)
     mapping = interpolate.PchipInterpolator(control_points, random_points)
-    curve = mapping(np.linspace(0,image.shape[1]-1,image.shape[1]))
+    curve = mapping(np.linspace(0,image.shape[0]-1,image.shape[0]))
     # Apply this curve to the image intensity along the length of the chamebr:
-    if axis == 0:
-        newimage = np.multiply(image,
-                               np.reshape(
-                                       np.tile(
-                                               np.reshape(curve,curve.shape + (1,)), (1, image.shape[0])
-                                               )
-                                       ,image.shape
-                                       )
-                               )
-    if axis ==1:
-        newimage = np.multiply(image,
+    newimage = np.multiply(image,
                            np.reshape(
                                    np.tile(
-                                           np.reshape(curve,(1,) + curve.shape ), (image.shape[0], 1)
+                                           np.reshape(curve,curve.shape + (1,)), (1, image.shape[1])
                                            )
                                    ,image.shape
                                    )

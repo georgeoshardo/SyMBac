@@ -1,0 +1,21 @@
+name: delta_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - scikit-image=0.18
+  - tifffile=2021
+  - spyder=4.2
+  - opencv=4.5
+  - tensorflow-gpu=2.3
+  - tensorflow=2.3=mkl_py38h1fcfbd6_0
+  - tensorflow-estimator=2.4
+  - h5py=2.10
+  - ffmpeg-python
+  - git
+  - pip
+  - pip:
+    - python-bioformats
+    - git+https://github.com/gvtulder/elasticdeform
+
