@@ -283,8 +283,8 @@ def convolve_rescale(image,kernel,rescale_factor, rescale_int):
     -------
     outupt : 2D numpy array
         The output of the convolution rescale operation
-    
     """
+    
     output = cuconvolve(cp.array(image),cp.array(kernel))
     output = output.get()
     output = rescale(output, rescale_factor, anti_aliasing=False)

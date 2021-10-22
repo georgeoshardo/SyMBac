@@ -24,10 +24,8 @@ from skimage import draw
 from itertools import combinations
 from SyMBac import PSF
 from matplotlib_scalebar.scalebar import ScaleBar
-from cupyx.scipy.ndimage import convolve as cuconvolve
 import tifffile
 from skimage.exposure import match_histograms
-import cupy as cp
 from scipy.optimize import dual_annealing, shgo
 from skimage.transform import resize
 from skimage.metrics import structural_similarity as ssim
