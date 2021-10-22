@@ -351,6 +351,65 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
 
 def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient,fluorescence,defocus):
     
+    """
+
+    Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image. 
+    
+    Parameters
+    ----------
+    media_multiplier : float
+        Intensity multiplier for media (the area between cells which isn't the device)
+    cell_multiplier : float
+        Intensity multiplier for cell
+    device_multiplier : float
+        Intensity multiplier for device
+    sigma : float
+        Radius of a gaussian which simulates PSF apodisation
+    scene_no : int in range(len(cell_timeseries_properties))
+        The index of which scene to render
+    scale : float
+        The micron/pixel value of the image
+    match_fourier : bool
+        If true, use sfmatch to match the rotational fourier spectrum of the synthetic image to a real image sample
+    match_histogram : bool
+        If true, match the intensity histogram of a synthetic image to a real image
+    offset : int
+        The same offset value from draw_scene
+    debug_plot : bool
+        True if you want to see a quick preview of the rendered synthetic image
+    noise_var : float
+        The variance for the simulated camera noise (gaussian)
+    main_segments : list
+        List of trench segment properties, output of get_trench_segments function
+    scenes : list(2D numpy array)
+        A list of the previously rendered scene mask pairs
+    kernel_params : tuple
+        A tuple of kernel parameters in this order: (R,W,radius,scale,NA,n,sigma,λ)
+    resize_amount : int
+        The upscaling factor to render the image by. E.g a resize_amount of 3 will interally render the image at 3x resolution before convolving and then downsampling the image. Values >2 are recommended.
+    real_image : 2D numpy array
+        A sample real image from the experiment you are trying to replicate
+    image_params : tuple
+        A tuple of parameters which describe the intensities and variances of the real image, in this order: (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars).
+    error_params : tuple
+        A tuple of parameters which characterises the error between the intensities in the real image and the synthetic image, in this order: (mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,cell_var_error,device_var_error). I have given an example of their calculation in the example notebooks.
+y_border_expansioon_coefficient : int
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+    x_border_expansioon_coefficient : int
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+    fluorescence : bool
+        If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF). 
+    defocus : float
+        Simulated optical defocus by convolving the kernel with a 2D gaussian of radius defocus.
+        
+    Returns
+    -------
+    noisy_img : 2D numpy array
+        The final simulated microscope image
+    expanded_mask_resized_reshaped : 2D numpy array
+        The final image's accompanying masks
+
+    """
     
     expanded_scene, expanded_scene_no_cells, expanded_mask = generate_PC_OPL(
         main_segments=main_segments,
@@ -588,6 +647,30 @@ def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, o
     return space, space_masks
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length, burn_in, n_samples, save_dir):
+    """
+    Generates the training data from a Jupyter interactive output of generate_test_comparison
+    
+    Parameters
+    ----------
+    interactive_output : ipywidgets.widgets.interaction.interactive
+        The slider object after you have finished tweaking parameters
+    sample_amount : float
+        The percentage sampling variance (drawn from a uniform distribution) to vary intensities by. For example, a sample_amount of 0.05 will randomly sample +/- 5% above and below the chosen intensity for cells, media and device. Can be used to create a little bit of variance in the final training data. 
+    randomise_hist_match : bool
+        If true, histogram matching is randomly turned on and off each time a training sample is generated
+    randomise_noise_match : bool
+        If true, noise matching is randomly turned on and off each time a training sample is generated
+    sim_length : int
+        the length of the simulation which was run
+    burn_in : int
+        Number of frames to wait before generating training data. Can be used to ignore the start of the simulation where the trench only has 1 cell in it.
+    n_samples : int
+        The number of training images to generate
+    save_dir : str
+        The save directory of the training data
+    
+    """
+    
     #media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
     media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient, fluorescence, defocus = list(interactive_output.kwargs.values())
     debug_plot = False

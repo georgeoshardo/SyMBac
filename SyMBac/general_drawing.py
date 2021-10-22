@@ -265,6 +265,26 @@ def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
         im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))
         
 def convolve_rescale(image,kernel,rescale_factor, rescale_int):
+    """
+    Convolves an image with a kernel, and rescales it to the correct size. 
+    
+    Parameters
+    ----------
+    image : 2D numpy array
+        The image
+    kernel : 2D numpy array
+        The kernel
+    rescale_factor : int
+        Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+    rescale_int : bool
+        If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
+        
+    Returns
+    -------
+    outupt : 2D numpy array
+        The output of the convolution rescale operation
+    
+    """
     output = cuconvolve(cp.array(image),cp.array(kernel))
     output = output.get()
     output = rescale(output, rescale_factor, anti_aliasing=False)
@@ -273,6 +293,9 @@ def convolve_rescale(image,kernel,rescale_factor, rescale_int):
         output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
     return output
 def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
+    """ Makes a synthetic image the same shape as the real image"""
+    
+    
     assert real_image.shape[0] < synthetic_image.shape[0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
     assert real_image.shape[1] < synthetic_image.shape[1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
 
