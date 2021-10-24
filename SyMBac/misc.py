@@ -1,4 +1,7 @@
 from skimage.measure import label
+import tifffile
+import pkgutil
+from io import BytesIO
 
 def resize_mask(mask, resize_shape, ret_label):
     """
@@ -19,3 +22,14 @@ def histogram_intersection(h1, h2,bins):
     for i in range(bins):
         sm += min(h1[i], h2[i])
     return sm
+   
+def misc_load_img(dir):
+    return tifffile.imread(BytesIO(pkgutil.get_data(__name__, dir)))
+
+def get_sample_images():
+    Ecoli100x = misc_load_img("sample_images/sample_100x.tiff")
+    Ecoli100x_stationary = misc_load_img("sample_images/sample_100x_stationary.tiff")
+    return {
+        "E. coli 100x" : Ecoli100x,
+        "E. coli 100x stationary" : Ecoli100x_stationary
+        }
