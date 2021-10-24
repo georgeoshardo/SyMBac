@@ -1,0 +1,108 @@
+For each position in a processed experiment, DeLTA will save an MP4 movie
+for quickly assessing the results, and a MAT file containing all necessary
+information about image preprocessing, segmentation results, tracking and a 
+reconstructed lineage for each chamber in the movie.
+
+The data structure is presented as if loaded in python here. The structure is
+generally the same if the MAT file is loaded in Matlab. The following
+equivalencies can be used for data structures:
+float32 <=> double
+dict <=> struct
+list <=> cell
+
+Because this was originally done in Matlab, the data structure is not optimal
+for python, especially when it comes to indexing: A lot of elements use 1-based
+indexing when python indexing is usually 0-based. We try to be as clear as 
+possible about these cases here. The notes about 0-based & 1-based indexing can
+generally be ignored if the data is loaded in Matlab.
+
+To load these MAT files in python, run the following command:
+delta_result = scipy.io.loadmat('PositionXXXXXX.mat',simplify_cells=True)
+
+
+delta_result : dict
+DeLTA data loaded from the MAT file.
+Fields:
+|
+|
+|---moviedimensions : 1D array of int
+|       Dimensions of the experiment movie stored as [Y, X, Channels, 
+|       timepoints].
+|
+|---tiffile : str
+|       Path to the original experiment file. Can be a tif file, nd2, czi, oib
+|       or other Bio-formats files, or a folder with an image sequence.
+|
+|---proc : dict
+|       Dictionary of data relevant to image preprocessing operations.
+|       Fields:
+|       |
+|       |---chambers : 2D array of float32
+|       |       Bounding box of detected chambers in the image, stored as
+|       |       [X top left corner, Y top left corner, width, height].
+|       |       Dimensions are chamber -by- 4.
+|       |
+|       |---rotation : float32
+|       |       Rotation angle to apply to get chambers horizontal, in degrees.
+|       |
+|       |---XYdrift : 2D array of float32
+|               Image drift estimated over time, stored as [Y, X]. Dimensions
+|               are timepoints -by- 2.
+|
+|---res : list of dict
+        List of dictionaries containing data relevant to segmentation and 
+        lineages for each chamber in the FOV.
+        Fields:
+        |
+        |---labelsstack : 3D array of uint16
+        |       Stack of images containing labelled segmentation masks. Each
+        |       single cell is uniquely labelled. Labels use 1-based indexing:
+        |       In python, Label L in the stack corresponds to cell #L-1 in the
+        |       lineage list (see below). The dimensions are timepoints -by-
+        |       256 -by- 32.
+        |
+        |---labelsstack_resized : 3D array of uint16
+        |       Same as labelstack above, except it has been resized from the
+        |       256 -by- 32 default dimensions of the U-Nets to the original
+        |       dimensions of the chamber bounding box. Dimensions are
+        |       timepoints -by- box_height -by- box_width
+        |
+        |---lineage: list of dict
+                Lineage information for all cells detected and tracked in the
+                chamber.
+                Fields:
+                |
+                |---area : 1D array of float32
+                |       Cell area over time, in pixels.
+                |
+                |---daughters : 1D array of float32
+                |       Daughter cells over time. 0 if no division happened at
+                |       timepoint, otherwise daughters are indexed with 1-based 
+                |       indexes: In python, daughter D corresponds to 
+                |       cell/item #D-1 in lineage list.
+                |
+                |---fluo1/fluo2/fluo3... : 1D array of float32
+                |       Mean fluorescence value over time.
+                |
+                |---framenbs : 1D array of float32
+                |       Frame numbers / timepoints where the cell is present. 
+                |       Frame numbers use 1-based indexing: In python, Frame
+                |       number F here corresponds to frame/timepoint #F-1 in
+                |       labelsstack for example.
+                |
+                |---length : 1D array of float32
+                |       Cell length over time, in pixels.
+                |
+                |---mothernb : int
+                |       Mother cell number for this cell. 0 if no mothernb
+                |       detected (eg first timepoint), 1-based indexing 
+                |       otherwise: In python, mother M is cell/item #M-1 in 
+                |       this lineage list.
+                |
+                |---pixels : 1D array of 1D arrays of float32
+                |       Pixel indexes lists over time. 1-based unravelled
+                |       indexes of pixels where the cell is present in the
+                |       chamber.
+                |
+                |---width : 1D array of float32
+                        Cell width over time, in pixels.

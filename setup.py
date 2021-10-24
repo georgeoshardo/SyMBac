@@ -8,7 +8,7 @@ setup(
     author='Georgeos Hardo',
     author_email='gh464@cam.ac.uk',
     license='GPL-2.0',
-    packages=['SyMBac'],
+    packages=['SyMBac','SyMBac.external','SyMBac.sample_images','SyMBac.external.DeLTA'],
     long_description = "SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming.",
 
     install_requires=['tensorflow==2.6.0',

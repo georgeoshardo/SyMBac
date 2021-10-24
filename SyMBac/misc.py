@@ -33,3 +33,53 @@ def get_sample_images():
         "E. coli 100x" : Ecoli100x,
         "E. coli 100x stationary" : Ecoli100x_stationary
         }
+        
+def unet_weight_map(y, wc=None, w0 = 10, sigma = 5):
+
+    """
+    Generate weight maps as specified in the U-Net paper
+    for boolean mask.
+
+    "U-Net: Convolutional Networks for Biomedical Image Segmentation"
+    https://arxiv.org/pdf/1505.04597.pdf
+
+    Parameters
+    ----------
+    mask: Numpy array
+        2D array of shape (image_height, image_width) representing binary mask
+        of objects.
+    wc: dict
+        Dictionary of weight classes.
+    w0: int
+        Border weight parameter.
+    sigma: int
+        Border width parameter.
+
+    Returns
+    -------
+    Numpy array
+        Training weights. A 2D array of shape (image_height, image_width).
+    """
+
+    labels = label(y)
+    no_labels = labels == 0
+    label_ids = sorted(np.unique(labels))[1:]
+
+    if len(label_ids) > 1:
+        distances = np.zeros((y.shape[0], y.shape[1], len(label_ids)))
+
+        for i, label_id in enumerate(label_ids):
+            distances[:,:,i] = distance_transform_edt(labels != label_id)
+
+        distances = np.sort(distances, axis=2)
+        d1 = distances[:,:,0]
+        d2 = distances[:,:,1]
+        w = w0 * np.exp(-1/2*((d1 + d2) / sigma)**2) * no_labels
+    else:
+        w = np.zeros_like(y)
+    if wc:
+        class_weights = np.zeros_like(y)
+        for k, v in wc.items():
+            class_weights[y == k] = v
+        w = w + class_weights
+    return w
