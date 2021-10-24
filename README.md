@@ -71,5 +71,4 @@ pip install cupy-cuda114
 
 ## Usage
 
-Please bear with me while I upload installation documentation!
-Please note that the previous name of this project was SYMPTOMM, and so I am currently in the process of renaming these references in the library.
+Download the [drawing example notebook](examples/Drawing_Phase_Contrast_100x_oil.ipynb) and follow along! 
