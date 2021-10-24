@@ -48,14 +48,11 @@ SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK i
 
 ## Installation
 
-`pip install SyMBac`
-
-Using Anaconda, create an environment and enter it.
-
 ```sh
-conda create --name SyMBac python=3.9 -y
-conda activate SyMBac
+pip install SyMBac
 ```
+
+Activate the Jupyter widgets extension. This is needed to interact with slides in the notebooks to optimise images. 
 
 ```sh
 jupyter nbextension enable --py widgetsnbextension
