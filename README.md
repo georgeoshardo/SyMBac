@@ -66,9 +66,6 @@ Check the version of `CUDA` you have installed using `nvcc --version` and instal
 pip install cupy-cuda114
 ```
 
-
-
-
 ## Usage
 
 Download the [drawing example notebook](examples/Drawing_Phase_Contrast_100x_oil.ipynb) and follow along! 
