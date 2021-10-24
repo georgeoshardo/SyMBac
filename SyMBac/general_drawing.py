@@ -20,10 +20,8 @@ from skimage import draw
 from itertools import combinations
 from SyMBac import PSF
 from matplotlib_scalebar.scalebar import ScaleBar
-from cupyx.scipy.ndimage import convolve as cuconvolve
 import tifffile
 from skimage.exposure import match_histograms
-import cupy as cp
 from scipy.optimize import dual_annealing, shgo
 from skimage.transform import resize
 from skimage.metrics import structural_similarity as ssim
@@ -31,6 +29,69 @@ from scipy.optimize import basinhopping
 #import image_similarity_measures
 #from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
 from skimage.exposure import rescale_intensity
+import importlib, warnings
+if importlib.util.find_spec("cupy") is None:
+    from scipy.signal import convolve2d as cuconvolve
+    warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
+    def convolve_rescale(image,kernel,rescale_factor, rescale_int):
+        """
+        Convolves an image with a kernel, and rescales it to the correct size. 
+
+        Parameters
+        ----------
+        image : 2D numpy array
+            The image
+        kernel : 2D numpy array
+            The kernel
+        rescale_factor : int
+            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+        rescale_int : bool
+            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
+
+        Returns
+        -------
+        outupt : 2D numpy array
+            The output of the convolution rescale operation
+        """
+
+        output = cuconvolve(image,kernel,mode="same")
+        #output = output.get()
+        output = rescale(output, rescale_factor, anti_aliasing=False)
+
+        if rescale_int:
+            output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
+        return output
+else:
+    import cupy as cp
+    from cupyx.scipy.ndimage import convolve as cuconvolve
+    def convolve_rescale(image,kernel,rescale_factor, rescale_int):
+        """
+        Convolves an image with a kernel, and rescales it to the correct size. 
+
+        Parameters
+        ----------
+        image : 2D numpy array
+            The image
+        kernel : 2D numpy array
+            The kernel
+        rescale_factor : int
+            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+        rescale_int : bool
+            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
+
+        Returns
+        -------
+        outupt : 2D numpy array
+            The output of the convolution rescale operation
+        """
+
+        output = cuconvolve(cp.array(image),cp.array(kernel))
+        output = output.get()
+        output = rescale(output, rescale_factor, anti_aliasing=False)
+
+        if rescale_int:
+            output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
+        return output
 
 def generate_curve_props(cell_timeseries):
     """
@@ -100,30 +161,6 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif,phase_mult])
     return cell_properties
 
-#def raster_cell(length, width):
- #   #TODO: make this FASTER
- #   radius = int(width/2)
- #   cyl_height = int(length - 2*radius)
- #   shape = 500 #200
- #   cylinder = rg.cylinder(
- #           shape = shape,
- #           height = cyl_height,
- #           radius = radius,
- #           axis=0,
- #           position=(0.5,0.5,0.5),
- #           smoothing=False)##
-
- #   sphere1 = rg.sphere(shape,radius,((shape + cyl_height)/(2*shape),0.5,0.5))
- #   sphere2 = rg.sphere(shape,radius,((shape - cyl_height)/(2*shape),0.5,0.5))#
-
-
- #   cell = (cylinder + sphere1 + sphere2)
- #   cell = cell[int(shape/2-cyl_height/2-radius-1):int(shape/2+cyl_height/2+radius+1),
- #               int(shape/2)-radius:int(shape/2)+radius,
- #              int(shape/2)-radius:int(shape/2)+radius]
- #   z,x,y = cell.nonzero()
- #   OPL_cell = np.sum(cell,axis=2)
- #   return OPL_cell
 
 def raster_cell(length, width):
     L = int(np.rint(length))
@@ -203,54 +240,7 @@ def transform_func(amp_modif, freq_modif, phase_modif):
         return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
     return perm_transform_func
 
-#def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, x_offset, y_offset, label_masks):
-#    space_size = np.array(space_size) # 1000, 200 a good value
-#    space = np.zeros(space_size)
-#    space_masks = np.zeros(space_size)
-#    offsets = offset
-#    if label_masks:
-#        colour_label = 1
-#    for properties in cell_properties:
-#        length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
-#        length = length; width = width ; position = np.array(position) 
-#        angle = np.rad2deg(angle) - 90
-#        x = np.array(position).astype(int)[0] + x_offset
-#        y = np.array(position).astype(int)[1] + y_offset
-#        OPL_cell = raster_cell(length = length, width=width)
 
-#        if do_transformation:
-#            OPL_cell_2 = np.zeros((OPL_cell.shape[0],int(OPL_cell.shape[1]*2)))
-#            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
-#            OPL_cell_2[:,midpoint-int(OPL_cell.shape[1]/2):midpoint-int(OPL_cell.shape[1]/2)+OPL_cell.shape[1]] = OPL_cell
-#            roll_coords = np.array(range(OPL_cell_2.shape[0]))
-#            freq_mult = (OPL_cell_2.shape[0])
-#            amp_mult = OPL_cell_2.shape[1]/10
-#            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
-#            roll_amounts = sin_transform_cell(roll_coords,amp_mult,freq_mult,phase_mult)
-#            for B in roll_coords:
-#                OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
-#            OPL_cell = (OPL_cell_2)
-
-#        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
-#        cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
-#        offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
-#        offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
-#        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
-#        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
-#        space[
-#            y-cell_y:y+cell_y+offset_y,
-#            x-cell_x:x+cell_x+offset_x
-#        ] += rotated_OPL_cell
-#        if label_masks:
-#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
-#            colour_label += 1
-#        else:
-#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
-#            space_masks = space_masks == 1
-
-
-        #space_masks = opening(space_masks,np.ones((2,11)))
-#    return space, space_masks
 
 def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
     if matplotlib_draw == True:
@@ -264,34 +254,7 @@ def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
         im = Image.fromarray(scene_array.astype(np.uint8))
         im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))
         
-def convolve_rescale(image,kernel,rescale_factor, rescale_int):
-    """
-    Convolves an image with a kernel, and rescales it to the correct size. 
-    
-    Parameters
-    ----------
-    image : 2D numpy array
-        The image
-    kernel : 2D numpy array
-        The kernel
-    rescale_factor : int
-        Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
-    rescale_int : bool
-        If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
-        
-    Returns
-    -------
-    outupt : 2D numpy array
-        The output of the convolution rescale operation
-    """
-    
-    output = cuconvolve(cp.array(image),cp.array(kernel))
-    output = output.get()
-    output = rescale(output, rescale_factor, anti_aliasing=False)
-    
-    if rescale_int:
-        output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
-    return output
+
 def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
     """ Makes a synthetic image the same shape as the real image"""
     
@@ -355,3 +318,79 @@ def get_space_size(cell_timeseries_properties):
 
 div_odd = lambda n: (n//2, n//2 + 1)
 perc_diff = lambda a, b: abs(a-b)/((a+b)/2)
+
+
+
+#def draw_scene(cell_properties, do_transformation, mask_threshold, space_size, x_offset, y_offset, label_masks):
+#    space_size = np.array(space_size) # 1000, 200 a good value
+#    space = np.zeros(space_size)
+#    space_masks = np.zeros(space_size)
+#    offsets = offset
+#    if label_masks:
+#        colour_label = 1
+#    for properties in cell_properties:
+#        length, width, angle, position, freq_modif, amp_modif, phase_modif,phase_mult = properties
+#        length = length; width = width ; position = np.array(position) 
+#        angle = np.rad2deg(angle) - 90
+#        x = np.array(position).astype(int)[0] + x_offset
+#        y = np.array(position).astype(int)[1] + y_offset
+#        OPL_cell = raster_cell(length = length, width=width)
+
+#        if do_transformation:
+#            OPL_cell_2 = np.zeros((OPL_cell.shape[0],int(OPL_cell.shape[1]*2)))
+#            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
+#            OPL_cell_2[:,midpoint-int(OPL_cell.shape[1]/2):midpoint-int(OPL_cell.shape[1]/2)+OPL_cell.shape[1]] = OPL_cell
+#            roll_coords = np.array(range(OPL_cell_2.shape[0]))
+#            freq_mult = (OPL_cell_2.shape[0])
+#            amp_mult = OPL_cell_2.shape[1]/10
+#            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
+#            roll_amounts = sin_transform_cell(roll_coords,amp_mult,freq_mult,phase_mult)
+#            for B in roll_coords:
+#                OPL_cell_2[B,:] = np.roll(OPL_cell_2[B,:], roll_amounts[B])
+#            OPL_cell = (OPL_cell_2)
+
+#        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
+#        cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
+#        offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
+#        offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
+#        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
+#        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
+#        space[
+#            y-cell_y:y+cell_y+offset_y,
+#            x-cell_x:x+cell_x+offset_x
+#        ] += rotated_OPL_cell
+#        if label_masks:
+#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] = (rotated_OPL_cell > 0)*colour_label
+#            colour_label += 1
+#        else:
+#            space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > mask_threshold)*colour_label
+#            space_masks = space_masks == 1
+
+
+        #space_masks = opening(space_masks,np.ones((2,11)))
+#    return space, space_masks
+
+#def raster_cell(length, width):
+ #   #TODO: make this FASTER
+ #   radius = int(width/2)
+ #   cyl_height = int(length - 2*radius)
+ #   shape = 500 #200
+ #   cylinder = rg.cylinder(
+ #           shape = shape,
+ #           height = cyl_height,
+ #           radius = radius,
+ #           axis=0,
+ #           position=(0.5,0.5,0.5),
+ #           smoothing=False)##
+
+ #   sphere1 = rg.sphere(shape,radius,((shape + cyl_height)/(2*shape),0.5,0.5))
+ #   sphere2 = rg.sphere(shape,radius,((shape - cyl_height)/(2*shape),0.5,0.5))#
+
+
+ #   cell = (cylinder + sphere1 + sphere2)
+ #   cell = cell[int(shape/2-cyl_height/2-radius-1):int(shape/2+cyl_height/2+radius+1),
+ #               int(shape/2)-radius:int(shape/2)+radius,
+ #              int(shape/2)-radius:int(shape/2)+radius]
+ #   z,x,y = cell.nonzero()
+ #   OPL_cell = np.sum(cell,axis=2)
+ #   return OPL_cell
