@@ -1,6 +1,4 @@
 tensorflow
-csbdeep
-stardist
 elasticdeform
 tifffile
 scikit-image
