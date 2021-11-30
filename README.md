@@ -10,6 +10,17 @@ doi: https://doi.org/10.1101/2021.07.21.453284
 
 <img src="readme_files/symbac_sliders.gif" alt="drawing" width="600" height="400"/>
 
+  * [What is it?](#what-is-it-)
+  * [Why would I want to generate synthetic images?](#why-would-i-want-to-generate-synthetic-images-)
+  * [How do I use these synthetic images?](#how-do-i-use-these-synthetic-images-)
+  * [Prerequisites](#prerequisites)
+  * [Installation](#installation)
+    + [If you're using a GPU:](#if-you-re-using-a-gpu-)
+  * [Usage](#usage)
+  * [FAQs](#faqs)
+
+
+
 ## What is it?
 
 SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming. 
@@ -66,6 +77,23 @@ Check the version of `CUDA` you have installed using `nvcc --version` and instal
 pip install cupy-cuda114
 ```
 
+If you installed CUDA on Ubuntu 18.04+ using the new Nvidia supplied repositories, it is a real possibility that `nvcc` won't work. Instead check your CUDA version using `nvidia-smi`.
+
+### If you aren't using a GPU:
+
+See FAQs "Do I need to have a GPU?"
+
 ## Usage
 
 Download the [drawing example notebook](examples/Drawing_Phase_Contrast_100x_oil.ipynb) and follow along! 
+
+## FAQs
+
+* Do I need to have a GPU?
+  * No, although image synthesis will be around 40x slower on the CPU. SyMBac will detect that you do not have CuPy installed and default to using CPU convolution.
+  * Interactive image optimisation will be very painful on the CPU. By default I turn off slider interactivity if you are using the CPU, so that you can move a slider without the CPU being maxed out. This means that every time you move a slider you must click the button to update the image (do a convolution).
+* Can I generate fluorescence images as well?
+  * Yes, you can do fluorescence image generation, just make sure that in the interactive image generation part of the code, you select fluorescence.
+  * Since our fluorescence kernel is defined to be a subset of the phase contrast kernel, you can choose **any** condenser, and your fluorescence kernel should be correct. Just ensure that the imaging wavelength, numerical aperture, refractive index, and pixel size are set correctly.
+* What format do my images need to be in?
+  * The real images you are trying to replicate should be in the format of single-trench timeseries images. If you are unsure what this is, you can call `get_sample_images()["E. coli 100x"]` from `SyMBac.misc`for an example image.
