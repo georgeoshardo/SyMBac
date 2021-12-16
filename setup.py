@@ -15,7 +15,7 @@ setup(
     include_package_data=True,
     long_description = (this_directory / "README.md").read_text(), #"SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming.",
     long_description_content_type='text/markdown',
-    install_requires=['tensorflow==2.5.0',
+    install_requires=['tensorflow==2.6.1',
                       'elasticdeform==0.4.9', 
                       'tifffile==2021.10.12',
                       'scikit-image==0.18.3' ,
