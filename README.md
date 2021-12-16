@@ -8,7 +8,7 @@ doi: https://doi.org/10.1101/2021.07.21.453284
 
 
 
-<img src="readme_files/symbac_sliders.gif" alt="drawing" width="600" height="400"/>
+<img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/symbac_sliders.gif" alt="drawing" width="600" height="400"/>
 
   * [What is it?](#what-is-it-)
   * [Why would I want to generate synthetic images?](#why-would-i-want-to-generate-synthetic-images-)
@@ -25,7 +25,7 @@ doi: https://doi.org/10.1101/2021.07.21.453284
 
 SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming. 
 
-<img src="readme_files/example_comparison.jpeg" alt="comparisons" width="600" />
+<img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/example_comparison.jpeg" alt="comparisons" width="600" />
 
 
 
@@ -39,17 +39,17 @@ Additionally,
 
 * SyMBac is very fast compared to humans:
 
-<img src="readme_files/speed_comparison.png" alt="comparisons" width="400"  />
+<img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/speed_comparison.png" alt="comparisons" width="400"  />
 
 * The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:
 
-<img src="readme_files/image_generation.jpeg" alt="comparisons"  width="600" />
+<img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/image_generation.jpeg" alt="comparisons"  width="600" />
 
 ## How do I use these synthetic images?
 
 That is up to you. SyMBac is **not** a machine learning tool. It is a tool to generate unlimited free training data which accurately represents your experiment. It is up to you to train a machine learning network on these synthetic images. We do however provide example notebooks for how to train a U-net (as implemented by [DeLTA](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007673)).
 
- <img src="readme_files/training.png" alt="comparisons"  width="350" />
+ <img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/training.png" alt="comparisons"  width="350" />
 
 ## Prerequisites
 
