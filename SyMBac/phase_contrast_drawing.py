@@ -347,7 +347,7 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier,cell_mu
         expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(main_segments, offset, scene, mask, media_multiplier,cell_multiplier,device_multiplier, y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus)
     return expanded_scene, expanded_scene_no_cells, expanded_mask
 
-def generate_test_comparison(media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient,y_border_expansion_coefficient,fluorescence,defocus):
+def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85, scene_no=0, scale=None, match_fourier=False, match_histogram=True, match_noise=False, offset=30, debug_plot=False, noise_var=0.001, main_segments=None, scenes=None, kernel_params=None, resize_amount=None, real_image=None, image_params=None, error_params=None, x_border_expansion_coefficient=None,y_border_expansion_coefficient=None,fluorescence=False,defocus=3.0):
     
     """
 

@@ -1,1 +1,0 @@
-/home/georgeos/Documents/GitHub/SYMPTOMM2/SYMPTOMM/general_drawing.py
