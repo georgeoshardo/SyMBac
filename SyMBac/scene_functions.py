@@ -1,13 +1,7 @@
 import pyglet
 import pymunk
 from pymunk.pyglet_util import DrawOptions
-import sys
-#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
-from SyMBac import cell_geometry
-import matplotlib.pyplot as plt
-import numpy as np
 from SyMBac.cell import Cell
-import time
 from copy import deepcopy
 import pickle
 def create_space():

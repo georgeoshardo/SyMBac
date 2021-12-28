@@ -32,29 +32,3 @@ def trench_creator(size,trench_length, global_xy, space):
     for z in walls:
         for s in z:
             space.add(s)
-
-
-
-if __name__ == "__main__":
-    import pyglet
-    import sys
-    sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
-    from pymunk.pyglet_util import DrawOptions
-    from SYMPTOMM.scene_functions import create_space, step_and_update
-    options = DrawOptions() 
-    space = create_space()
-    window = pyglet.window.Window(180, 700, "MM Trench test", resizable=False)
-
-    @window.event
-    def on_draw():
-        window.clear()
-        space.debug_draw(options)
-
-    def update(dt):
-        space.step(1/30)
-
-    
-    trench_creator(size=40,trench_length=600,global_xy=(50,50),space=space)
-
-    pyglet.clock.schedule_interval(update, 1/60)
-    pyglet.app.run()

@@ -2,12 +2,8 @@ import raster_geometry as rg
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import rotate
-import pickle
-import sys
-#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
 import itertools
 from joblib import Parallel, delayed
-import pymunk 
 
 def raster_cell(length, width):
     """Generates a 3D representation of a cell as a 2D image, where intensity is a measure of the depth of the cell at that point
@@ -170,36 +166,3 @@ def gen_cell_props_for_draw_dep(cell_timeseries_lists):
         angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
         cell_properties.append([length, width, angle, centroid])
     return cell_properties
-
-#deprecated
-def draw_scene_dep(cell_properties):
-    space_size = (800, 170)
-    space = np.zeros(space_size)
-    space_masks = np.zeros(space_size)
-    offsets = 30
-    for properties in cell_properties:
-        length, width, angle, position = properties
-        angle = np.rad2deg(angle) + 90
-        x, y = np.array(position).astype(int) + offsets
-        OPL_cell = raster_cell(length = length, width=width)
-        rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
-        cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
-        offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
-        offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
-        space[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += rotated_OPL_cell
-        space_masks[y-cell_y:y+cell_y+offset_y,x-cell_x:x+cell_x+offset_x] += (rotated_OPL_cell > 7)
-        space_masks = space_masks == 1
-        space_masks = opening(space_masks,np.ones((1,8)))
-    return space, space_masks
-
-def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
-    if matplotlib_draw == True:
-        plt.figure(figsize=(3,10))
-        plt.imshow(scene_array)
-        plt.tight_layout()
-        plt.savefig(output_dir+"/{}_{}.png".format(name,str(a).zfill(3)))
-        plt.clf()
-        plt.close('all')
-    else:
-        im = Image.fromarray(scene_array.astype(np.uint8))
-        im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))

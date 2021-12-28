@@ -1,38 +1,21 @@
 import numpy as np
 import pandas as pd
-from scipy.special import jv, jve
 from skimage.util import random_noise
 import raster_geometry as rg
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import rotate
-import pickle
-import sys
-from skimage.transform import rescale, resize, downscale_local_mean
-import itertools
 from joblib import Parallel, delayed
 from skimage.morphology import opening
 from PIL import Image       
-import pymunk
-from skimage.transform import PiecewiseAffineTransform, warp
-from skimage import data
 from copy import deepcopy
 from tqdm import tqdm
 import pandas as pd
 from skimage import draw
-#import napari
-from itertools import combinations
-from SyMBac import PSF
-from matplotlib_scalebar.scalebar import ScaleBar
 import tifffile
 from skimage.exposure import match_histograms
-from scipy.optimize import dual_annealing, shgo
 from skimage.transform import resize
 from skimage.metrics import structural_similarity as ssim
-from scipy.optimize import basinhopping
-#import image_similarity_measures
-#from image_similarity_measures.quality_metrics import rmse, psnr, fsim, issm, sre, sam, uiq
-#sys.path.insert(0,'/home/georgeos/Documents/GitHub/SYMPTOMM2')
 from SyMBac.general_drawing import *
 from SyMBac.phase_contrast_drawing import *
 from SyMBac.scene_functions import *
@@ -875,7 +858,6 @@ def lumMatch(images, mask = None, lum = None):
                 im1[m==1] = M
             output_images.append(im1)
     elif (mask != None) and (lum != None):
-        print("HI3")
         M = lum[0]; S = lum[1]
         output_images = []
         for im in range(numin):

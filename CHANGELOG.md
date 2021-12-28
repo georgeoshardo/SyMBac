@@ -1,3 +1,7 @@
+# 0.2.0b
+
+* Reduction in size of code, removal of old garbage
+
 # 0.1.10
 
 * Increased pinned napari (0.4.12) version Tensorflow version (2.7.0) - hopefully this fixes `typing_extensions` intercompatibility issues.
