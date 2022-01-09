@@ -1,4 +1,4 @@
-# 0.2.0b
+# 0.2.0
 
 * Reduction in size of code, removal of old garbage
 
