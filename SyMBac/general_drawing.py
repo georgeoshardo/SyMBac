@@ -1,11 +1,13 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from skimage.transform import rotate
-from skimage.transform import rescale
+import importlib
 import itertools
+import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
 from skimage.exposure import rescale_intensity
-import importlib, warnings
+from skimage.transform import rescale
+from skimage.transform import rotate
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: abs(a - b) / ((a + b) / 2)
@@ -116,7 +118,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     """
     Parameters
     ----------
-    cell_timeseries_list : list
+    cell_timeseries_lists : list
         A list (single frame) from cell_timeseries, the output from run_simulation. E.g: cell_timeseries[x]
     ID_props : list
         A list of properties for each cell in that frame, the output of generate_curve_props()
@@ -254,6 +256,26 @@ def get_centroid(vertices):
 
 
 def place_cell(length, width, angle, position, space):
+    """Creates a cell and places it in the pymunk space
+
+    Parameters
+    ----------
+    length : float
+        length of the cell
+    width : float
+        width of the cell
+    angle : float
+        rotation of the cell in radians counterclockwise
+    position : tuple
+        x,y coordinates of the cell centroid
+    space : pymunk.space.Space
+        Pymunk space to place the cell in
+
+    Returns
+    -------
+    nothing, updates space
+
+    """
     angle = np.rad2deg(angle)
     x, y = np.array(position).astype(int)
     OPL_cell = raster_cell(length=length, width=width)

@@ -1,6 +1,5 @@
 import pyglet
 import pymunk
-from pymunk.pyglet_util import DrawOptions
 from SyMBac.cell import Cell
 from copy import deepcopy
 import pickle

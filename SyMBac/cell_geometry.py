@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 def circ(theta, start, radius):
     y = radius * np.cos(theta) +radius
     x = radius * np.sin(theta) + start + radius
