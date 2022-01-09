@@ -11,7 +11,7 @@ import skimage.io as io
 import tifffile
 import skimage.transform as trans
 from skimage.measure import label
-from skimage.morphology import square, binary_opening, medial_axis, remove_small_objects
+from skimage.morphology import square, binary_opening, remove_small_objects
 from scipy import interpolate
 
 # Try to import elastic deformations, issue warning if not found:

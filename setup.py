@@ -13,7 +13,9 @@ setup(
     packages = ['SyMBac', 'SyMBac.external', 'SyMBac.sample_images', 'SyMBac.external.DeLTA'],
     package_data = {'': ['sample_images/*.tiff']},
     include_package_data = True,
-    long_description = (this_directory / "README.md").read_text(), #"SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming.",
+    long_description = (this_directory / "README.md").read_text(), #"SyMBac is a tool to generate synthetic phase
+    # contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother
+    # machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming.",
     long_description_content_type = 'text/markdown',
     install_requires = [
         'tensorflow==2.7.0',
