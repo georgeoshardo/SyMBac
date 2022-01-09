@@ -117,7 +117,6 @@ def get_trench_segments(space):
     return main_segments
 
 
-
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir):
     """
@@ -223,6 +222,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     #        cell_timeseries.append(deepcopy(cells))
     return cell_timeseries, space
 
+
 def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                     y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
     """
@@ -272,11 +272,11 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_m
                       y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
         segment_1_top_left = (0 + offset, int(main_segments.iloc[0]["bb"][0] + offset))
         segment_1_bottom_right = (
-        int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
+            int(main_segments.iloc[0]["bb"][3] + offset), int(main_segments.iloc[0]["bb"][2] + offset))
 
         segment_2_top_left = (0 + offset, int(main_segments.iloc[1]["bb"][0] + offset))
         segment_2_bottom_right = (
-        int(main_segments.iloc[1]["bb"][3] + offset), int(main_segments.iloc[1]["bb"][2] + offset))
+            int(main_segments.iloc[1]["bb"][3] + offset), int(main_segments.iloc[1]["bb"][2] + offset))
 
         if fluorescence:
             test_scene = np.zeros(scene.shape)
@@ -634,12 +634,14 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         def get_mask(label_masks):
 
             if label_masks:
-                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * \
+                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                     rotated_OPL_cell > 0) * \
                                                                                                          colour_label[0]
                 colour_label[0] += 1
                 return space_masks_label
             else:
-                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * 1
+                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                       rotated_OPL_cell > 0) * 1
                 return space_masks_nolabel
                 # space_masks = opening(space_masks,np.ones((2,11)))
 
@@ -684,9 +686,9 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     
     """
 
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram,\
-    match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image,\
-    image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence,\
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, \
+    match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, \
+    image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence, \
     defocus = list(
         interactive_output.kwargs.values())
     debug_plot = False
@@ -742,9 +744,6 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
     Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in
                        tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
-
-
-
 
 
 # from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
@@ -833,7 +832,7 @@ def rescale_shine(images, option=1):
     for m in range(numin):
         if option == 1:
             rescaled = (images[m] - the_darkest) / (the_brightest - the_darkest) * 255
-        else: # option == 2:
+        else:  # option == 2:
             rescaled = (images[m] - avg_darkest) / (avg_brightest - avg_darkest) * 255
         output_images.append(rescaled.astype(np.uint8))
     return output_images
