@@ -7,13 +7,16 @@ from PIL import Image
 from skimage.exposure import rescale_intensity
 import importlib, warnings
 
-div_odd = lambda n: (n//2, n//2 + 1)
-perc_diff = lambda a, b: abs(a-b)/((a+b)/2)
+div_odd = lambda n: (n // 2, n // 2 + 1)
+perc_diff = lambda a, b: abs(a - b) / ((a + b) / 2)
 
 if importlib.util.find_spec("cupy") is None:
     from scipy.signal import convolve2d as cuconvolve
+
     warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
-    def convolve_rescale(image,kernel,rescale_factor, rescale_int):
+
+
+    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
         """
         Convolves an image with a kernel, and rescales it to the correct size. 
 
@@ -34,17 +37,19 @@ if importlib.util.find_spec("cupy") is None:
             The output of the convolution rescale operation
         """
 
-        output = cuconvolve(image,kernel,mode="same")
-        #output = output.get()
+        output = cuconvolve(image, kernel, mode="same")
+        # output = output.get()
         output = rescale(output, rescale_factor, anti_aliasing=False)
 
         if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
+            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
         return output
 else:
     import cupy as cp
     from cupyx.scipy.ndimage import convolve as cuconvolve
-    def convolve_rescale(image,kernel,rescale_factor, rescale_int):
+
+
+    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
         """
         Convolves an image with a kernel, and rescales it to the correct size. 
 
@@ -65,13 +70,14 @@ else:
             The output of the convolution rescale operation
         """
 
-        output = cuconvolve(cp.array(image),cp.array(kernel))
+        output = cuconvolve(cp.array(image), cp.array(kernel))
         output = output.get()
         output = rescale(output, rescale_factor, anti_aliasing=False)
 
         if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0,1))
+            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
         return output
+
 
 def generate_curve_props(cell_timeseries):
     """
@@ -86,24 +92,25 @@ def generate_curve_props(cell_timeseries):
     -------
     A numpy array of unique curvature properties for each cell in the simulation
     """
-    
-    #Get unique cell IDs
+
+    # Get unique cell IDs
     IDs = []
     for cell_list in cell_timeseries:
         for cell in cell_list:
             IDs.append(cell.ID)
     IDs = np.array(IDs)
     unique_IDs = np.unique(IDs)
-    #For each cell, assign random curvature properties
+    # For each cell, assign random curvature properties
     ID_props = []
     for ID in unique_IDs:
-        freq_modif = (np.random.uniform(0.9,1.1)) # Choose one per cell
-        amp_modif = (np.random.uniform(0.9,1.1)) # Choose one per cell
-        phase_modif = np.random.uniform(-1,1)  # Choose one per cell
+        freq_modif = (np.random.uniform(0.9, 1.1))  # Choose one per cell
+        amp_modif = (np.random.uniform(0.9, 1.1))  # Choose one per cell
+        phase_modif = np.random.uniform(-1, 1)  # Choose one per cell
         ID_props.append([int(ID), freq_modif, amp_modif, phase_modif])
     ID_propps = np.array(ID_props)
-    ID_propps[:,0] = ID_propps[:,0].astype(int)
+    ID_propps[:, 0] = ID_propps[:, 0].astype(int)
     return np.array(ID_props)
+
 
 def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     """
@@ -124,46 +131,46 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         body, shape = (cell.body, cell.shape)
         vertices = []
         for v in shape.get_vertices():
-            x,y = v.rotated(shape.body.angle) + shape.body.position #.rotated(self.shape.body.angle)
-            vertices.append((x,y))
+            x, y = v.rotated(shape.body.angle) + shape.body.position  # .rotated(self.shape.body.angle)
+            vertices.append((x, y))
         vertices = np.array(vertices)
 
-        centroid = get_centroid(vertices) 
+        centroid = get_centroid(vertices)
         farthest_vertices = find_farthest_vertices(vertices)
-        length = get_distance(farthest_vertices[0],farthest_vertices[1])
+        length = get_distance(farthest_vertices[0], farthest_vertices[1])
         width = cell.width
-        #angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
-        angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],(farthest_vertices[0] - farthest_vertices[1])[0])
-        angle = np.rad2deg(angle)+90
+        # angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
+        angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],
+                           (farthest_vertices[0] - farthest_vertices[1])[0])
+        angle = np.rad2deg(angle) + 90
 
-        ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:,0] == cell.ID][0]
+        ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.ID][0]
         phase_mult = 20
-        cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif,phase_mult])
+        cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult])
     return cell_properties
 
 
 def raster_cell(length, width):
     L = int(np.rint(length))
     W = int(np.rint(width))
-    new_cell = np.zeros((L,W))
-    R = (W-1)/2
+    new_cell = np.zeros((L, W))
+    R = (W - 1) / 2
 
-
-    x_cyl = np.arange(0,2*R+1,1)
-    I_cyl = np.sqrt(R**2 - (x_cyl-R)**2)
+    x_cyl = np.arange(0, 2 * R + 1, 1)
+    I_cyl = np.sqrt(R ** 2 - (x_cyl - R) ** 2)
     L_cyl = L - W
-    new_cell[int(W/2):-int(W/2),:] = I_cyl
+    new_cell[int(W / 2):-int(W / 2), :] = I_cyl
 
-    x_sphere = np.arange(0,int(W/2),1)
-    sphere_Rs = np.sqrt((R)**2 - (x_sphere-R)**2)
+    x_sphere = np.arange(0, int(W / 2), 1)
+    sphere_Rs = np.sqrt((R) ** 2 - (x_sphere - R) ** 2)
     sphere_Rs = np.rint(sphere_Rs).astype(int)
 
     for c in range(len(sphere_Rs)):
         R_ = sphere_Rs[c]
-        x_cyl = np.arange(0,R_,1)
-        I_cyl = np.sqrt(R_**2 - (x_cyl-R_)**2)
-        new_cell[c,int(W/2)-sphere_Rs[c]:int(W/2)+sphere_Rs[c]] = np.concatenate((I_cyl,I_cyl[::-1]))
-        new_cell[L-c-1,int(W/2)-sphere_Rs[c]:int(W/2)+sphere_Rs[c]] = np.concatenate((I_cyl,I_cyl[::-1]))
+        x_cyl = np.arange(0, R_, 1)
+        I_cyl = np.sqrt(R_ ** 2 - (x_cyl - R_) ** 2)
+        new_cell[c, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
+        new_cell[L - c - 1, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
 
@@ -243,78 +250,83 @@ def get_centroid(vertices):
     vertices -- A list of tuples containing x,y coordinates.
 
     """
-    return np.sum(vertices,axis=0)/len(vertices)
+    return np.sum(vertices, axis=0) / len(vertices)
+
 
 def place_cell(length, width, angle, position, space):
     angle = np.rad2deg(angle)
     x, y = np.array(position).astype(int)
-    OPL_cell = raster_cell(length = length, width=width)
-    rotated_OPL_cell = rotate(OPL_cell,angle,resize=True,clip=False,preserve_range=True)
-    cell_y, cell_x = (np.array(rotated_OPL_cell.shape)/2).astype(int)
-    offset_y = rotated_OPL_cell.shape[0] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[0]
-    offset_x = rotated_OPL_cell.shape[1] - space[y-cell_y:y+cell_y,x-cell_x:x+cell_x].shape[1]
-    space[y-cell_y+100:y+cell_y+offset_y+100,x-cell_x+100:x+cell_x+offset_x+100] += rotated_OPL_cell
-    
+    OPL_cell = raster_cell(length=length, width=width)
+    rotated_OPL_cell = rotate(OPL_cell, angle, resize=True, clip=False, preserve_range=True)
+    cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
+    offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
+    offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
+    space[y - cell_y + 100:y + cell_y + offset_y + 100,
+    x - cell_x + 100:x + cell_x + offset_x + 100] += rotated_OPL_cell
+
+
 def transform_func(amp_modif, freq_modif, phase_modif):
     def perm_transform_func(x, amp_mult, freq_mult, phase_mult):
-        return (amp_mult*amp_modif*np.cos((x/(freq_mult * freq_modif) - phase_mult * phase_modif)*np.pi)).astype(int)
+        return (amp_mult * amp_modif * np.cos(
+            (x / (freq_mult * freq_modif) - phase_mult * phase_modif) * np.pi)).astype(int)
+
     return perm_transform_func
 
 
-
-def scene_plotter(scene_array,output_dir,name,a,matplotlib_draw):
+def scene_plotter(scene_array, output_dir, name, a, matplotlib_draw):
     if matplotlib_draw == True:
-        plt.figure(figsize=(3,10))
+        plt.figure(figsize=(3, 10))
         plt.imshow(scene_array)
         plt.tight_layout()
-        plt.savefig(output_dir+"/{}_{}.png".format(name,str(a).zfill(3)))
+        plt.savefig(output_dir + "/{}_{}.png".format(name, str(a).zfill(3)))
         plt.clf()
         plt.close('all')
     else:
         im = Image.fromarray(scene_array.astype(np.uint8))
-        im.save(output_dir+"/{}_{}.tif".format(name,str(a).zfill(3)))
-        
+        im.save(output_dir + "/{}_{}.tif".format(name, str(a).zfill(3)))
 
-def make_images_same_shape(real_image,synthetic_image, rescale_int = True):
+
+def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
     """ Makes a synthetic image the same shape as the real image"""
-    
-    
-    assert real_image.shape[0] < synthetic_image.shape[0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
-    assert real_image.shape[1] < synthetic_image.shape[1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
+
+    assert real_image.shape[0] < synthetic_image.shape[
+        0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
+    assert real_image.shape[1] < synthetic_image.shape[
+        1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
 
     x_diff = synthetic_image.shape[1] - real_image.shape[1]
     remove_from_left, remove_from_right = div_odd(x_diff)
     y_diff = synthetic_image.shape[0] - real_image.shape[0]
-    if real_image.shape[1]%2 == 0:
-        if synthetic_image.shape[1]%2 == 0:
+    if real_image.shape[1] % 2 == 0:
+        if synthetic_image.shape[1] % 2 == 0:
             if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
+                synthetic_image = synthetic_image[y_diff:, remove_from_left - 1:-remove_from_right]
             else:
-                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):,:]
-        elif synthetic_image.shape[1]%2 == 1:
+                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):, :]
+        elif synthetic_image.shape[1] % 2 == 1:
             if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+                synthetic_image = synthetic_image[y_diff:, remove_from_left:-remove_from_right]
             else:
-                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):,:]
-    elif real_image.shape[1]%2 == 1:
-        if synthetic_image.shape[1]%2 == 0:
+                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):, :]
+    elif real_image.shape[1] % 2 == 1:
+        if synthetic_image.shape[1] % 2 == 0:
             if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:,remove_from_left:-remove_from_right]
+                synthetic_image = synthetic_image[y_diff:, remove_from_left:-remove_from_right]
             else:
-                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):,:]
-        elif synthetic_image.shape[1]%2 == 1:
+                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):, :]
+        elif synthetic_image.shape[1] % 2 == 1:
             if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:,remove_from_left-1:-remove_from_right]
+                synthetic_image = synthetic_image[y_diff:, remove_from_left - 1:-remove_from_right]
             else:
-                synthetic_image = synthetic_image[:,remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):,:]
+                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
+                real_image = real_image[abs(y_diff):, :]
 
     if rescale_int:
-        real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0,1))
-        synthetic_image = rescale_intensity(synthetic_image.astype(np.float32), out_range=(0,1))
+        real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0, 1))
+        synthetic_image = rescale_intensity(synthetic_image.astype(np.float32), out_range=(0, 1))
     return real_image, synthetic_image
 
 
@@ -334,4 +346,4 @@ def get_space_size(cell_timeseries_properties):
                 max_x = max_x_
             if max_y_ > max_y:
                 max_y = max_y_
-    return (int(1.2*max_y), int(1.5*max_x))
+    return (int(1.2 * max_y), int(1.5 * max_x))
