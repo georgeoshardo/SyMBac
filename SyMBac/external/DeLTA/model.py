@@ -8,7 +8,7 @@ import tensorflow.keras as keras
 from tensorflow.keras import backend as K
 from tensorflow.python.ops import array_ops, math_ops
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dropout, UpSampling2D, ZeroPadding2D, LeakyReLU, BatchNormalization, Concatenate, Add
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dropout, UpSampling2D, Concatenate
 from tensorflow.keras.optimizers import Adam
 
 

@@ -1,9 +1,8 @@
 import numpy as np
 from skimage.color import rgb2gray
 from numpy import fft
-from itertools import product
-from PIL import Image
 import copy
+
 #from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
 def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
