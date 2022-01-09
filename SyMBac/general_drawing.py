@@ -1,13 +1,9 @@
-import raster_geometry as rg
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import rotate
-from skimage.transform import rescale, resize, downscale_local_mean
+from skimage.transform import rescale
 import itertools
-from PIL import Image       
-from skimage import data
-from skimage.transform import resize
-from skimage.metrics import structural_similarity as ssim
+from PIL import Image
 from skimage.exposure import rescale_intensity
 import importlib, warnings
 
@@ -173,32 +169,72 @@ def raster_cell(length, width):
 
 
 def get_distance(vertex1, vertex2):
-    return abs(np.sqrt((vertex1[0]-vertex2[0])**2 + (vertex1[1]-vertex2[1])**2))
+    """
+    Get euclidian distance between two sets of vertices.
+
+    Parameters
+    ----------
+    vertex1 : 2-tuple
+        x,y coordinates of a vertex
+    vertex2 : 2-tuple
+        x,y coordinates of a vertex
+
+    Returns
+    -------
+    float : absolute distance between two points
+    """
+    return abs(np.sqrt((vertex1[0] - vertex2[0]) ** 2 + (vertex1[1] - vertex2[1]) ** 2))
+
 
 def find_farthest_vertices(vertex_list):
+    """Given a list of vertices, find the pair of vertices which are farthest from each other
+
+    Parameters
+    ----------
+    vertex_list : list(2-tuple, 2-tuple ... )
+        List of pairs of vertices [(x,y), (x,y), ...]
+
+    Returns
+    -------
+    array(2-tuple, 2-tuple)
+        The two vertices maximally far apart
+    """
     vertex_combs = list(itertools.combinations(vertex_list, 2))
     distance = 0
     farthest_vertices = 0
     for vertex_comb in vertex_combs:
-        distance_ = get_distance(vertex_comb[0],vertex_comb[1])
+        distance_ = get_distance(vertex_comb[0], vertex_comb[1])
         if distance_ > distance:
             distance = distance_
             farthest_vertices = vertex_comb
     return np.array(farthest_vertices)
 
+
 def get_midpoint(vertex1, vertex2):
-    x_mid = (vertex1[0]+vertex2[0])/2
-    y_mid = (vertex1[1]+vertex2[1])/2
-    return np.array([x_mid,y_mid])
+    """
+    Get the midpoint between two vertices
+    """
+    x_mid = (vertex1[0] + vertex2[0]) / 2
+    y_mid = (vertex1[1] + vertex2[1]) / 2
+    return np.array([x_mid, y_mid])
+
 
 def vertices_slope(vertex1, vertex2):
-    return (vertex1[1] - vertex2[1])/(vertex1[0] - vertex2[0])
+    """
+    Get the slope between two vertices
+    """
+    return (vertex1[1] - vertex2[1]) / (vertex1[0] - vertex2[0])
+
 
 def midpoint_intercept(vertex1, vertex2):
+    """
+    Get the y-intercept of the line connecting two vertices
+    """
     midpoint = get_midpoint(vertex1, vertex2)
     slope = vertices_slope(vertex1, vertex2)
-    intercept = midpoint[1]-(slope*midpoint[0])
+    intercept = midpoint[1] - (slope * midpoint[0])
     return intercept
+
 
 def get_centroid(vertices):
     """Return the centroid of a list of vertices 

@@ -1,96 +1,29 @@
+import pyglet
+from matplotlib import pyplot as plt
+from pymunk.pyglet_util import DrawOptions
+from skimage.transform import rescale, rotate
 from skimage.util import random_noise
 from joblib import Parallel, delayed
 from skimage.morphology import opening
 from tqdm import tqdm
 import pandas as pd
 from skimage import draw
-from skimage.exposure import match_histograms
-from SyMBac.general_drawing import *
-from SyMBac.scene_functions import *
-from SyMBac.trench_geometry import *
+from skimage.exposure import match_histograms, rescale_intensity
 from SyMBac.PSF import *
 import os
 import skimage
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter
-import importlib, warnings
 import numpy as np
 from skimage.color import rgb2gray
 from numpy import fft
 from PIL import Image
 import copy
 
-if importlib.util.find_spec("cupy") is None:
-    from scipy.signal import convolve2d as cuconvolve
-
-    warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
-
-
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size. 
-
-        Parameters
-        ----------
-        image : 2D numpy array
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render
-            the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved
-            downscaled image.
-
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
-
-        output = cuconvolve(image, kernel, mode="same")
-        # output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
-
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
-else:
-    import cupy as cp
-    from cupyx.scipy.ndimage import convolve as cuconvolve
-
-
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size. 
-
-        Parameters
-        ----------
-        image : 2D numpy array
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render
-            the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved
-            downscaled image.
-
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
-
-        output = cuconvolve(cp.array(image), cp.array(kernel))
-        output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
-
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
+from SyMBac.cell import Cell
+from SyMBac.general_drawing import convolve_rescale, make_images_same_shape, perc_diff, raster_cell, transform_func
+from SyMBac.scene_functions import create_space, step_and_update
+from SyMBac.trench_geometry import trench_creator
 
 
 def get_trench_segments(space):
@@ -298,7 +231,7 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_m
             rr_semi = rr[rr < (circ_midpoint_x + 1)]
             cc_semi = cc[rr < (circ_midpoint_x + 1)]
             test_scene[rr_semi, cc_semi] = device_multiplier
-        no_cells = deepcopy(test_scene)
+        no_cells = copy.deepcopy(test_scene)
 
         test_scene += scene * cell_multiplier
         if fluorescence:
@@ -635,13 +568,13 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
             if label_masks:
                 space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                     rotated_OPL_cell > 0) * \
+                                                                                                                 rotated_OPL_cell > 0) * \
                                                                                                          colour_label[0]
                 colour_label[0] += 1
                 return space_masks_label
             else:
                 space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                       rotated_OPL_cell > 0) * 1
+                                                                                                                   rotated_OPL_cell > 0) * 1
                 return space_masks_nolabel
                 # space_masks = opening(space_masks,np.ones((2,11)))
 
