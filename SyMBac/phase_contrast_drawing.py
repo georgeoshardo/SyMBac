@@ -4,7 +4,6 @@ from skimage.morphology import opening
 from tqdm import tqdm
 import pandas as pd
 from skimage import draw
-import tifffile
 from skimage.exposure import match_histograms
 from SyMBac.general_drawing import *
 from SyMBac.scene_functions import *
@@ -15,6 +14,11 @@ import skimage
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter
 import importlib, warnings
+import numpy as np
+from skimage.color import rgb2gray
+from numpy import fft
+from PIL import Image
+import copy
 
 if importlib.util.find_spec("cupy") is None:
     from scipy.signal import convolve2d as cuconvolve
@@ -33,9 +37,11 @@ if importlib.util.find_spec("cupy") is None:
         kernel : 2D numpy array
             The kernel
         rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render
+            the image and kernel at high resolution, so that we can do the convolution at high resolution.
         rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
+            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved
+            downscaled image.
 
         Returns
         -------
@@ -66,9 +72,11 @@ else:
         kernel : 2D numpy array
             The kernel
         rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render
+            the image and kernel at high resolution, so that we can do the convolution at high resolution.
         rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
+            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved
+            downscaled image.
 
         Returns
         -------
@@ -87,7 +95,8 @@ else:
 
 def get_trench_segments(space):
     """    
-    A function which extracts the rigid body trench objects from the pymunk space object. Space object should be passed from the return value of the run_simulation() function
+    A function which extracts the rigid body trench objects from the pymunk space object. Space object should be passed
+    from the return value of the run_simulation() function
     
     Returns
     -------
@@ -112,7 +121,10 @@ def get_trench_segments(space):
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir):
     """
-    Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the simulation. There is currently a bug where if you try to rerun the simulation in the same kernel, it will be extremely slow.
+    Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
+    display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
+    simulation. There is currently a bug where if you try to rerun the simulation in the same kernel, it will be
+    extremely slow.
     
     Parameters
     ----------
@@ -128,9 +140,12 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     pix_mic_conv : float
         The micron/pixel size of the image
     gravity : float
-        Pressure forcing cells into the trench. Typically left at zero, but can be varied if cells start to fall into each other or if the simulation behaves strangely.
+        Pressure forcing cells into the trench. Typically left at zero, but can be varied if cells start to fall into
+        each other or if the simulation behaves strangely.
     phys_iters : int
-        Number of physics iterations per simulation frame. Increase to resolve collisions if cells are falling into one another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off each other very hard). 20 is a good starting point
+        Number of physics iterations per simulation frame. Increase to resolve collisions if cells are falling into one
+        another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off
+        each other very hard). 20 is a good starting point
     max_length_var : float
         Variance of the maximum cell length
     width_var : float
@@ -141,7 +156,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     Returns
     -------
     cell_timeseries : lists
-        A list of parameters for each cell, such as length, width, position, angle, etc. All used in the drawing of the scene later
+        A list of parameters for each cell, such as length, width, position, angle, etc. All used in the drawing of the
+        scene later
     space : a pymunk space object
         Contains the rigid body physics objects which are the cells.
     """
@@ -210,14 +226,16 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
 def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                     y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
     """
-    Takes a scene drawing, adds the trenches and colours all parts of the image to generate a first-order phase contrast image, uncorrupted (unconvolved) by the phase contrat optics. Also has a fluorescence parameter to quickly switch to fluorescence if you want. 
+    Takes a scene drawing, adds the trenches and colours all parts of the image to generate a first-order phase contrast
+    image, uncorrupted (unconvolved) by the phase contrat optics. Also has a fluorescence parameter to quickly switch to
+    fluorescence if you want.
     
     Parameters
     ----------
     main_segments : list
         A list of the trench segments, used for drawing the trench
     offset : int
-        The same offset from the draw_scene function. Used to know the cell offset. 
+        The same offset from the draw_scene function. Used to know the cell offset.
     scene : 2D numpy array
         A scene image
     mask : 2D numpy array
@@ -229,18 +247,21 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_m
     device_multiplier : float
         Intensity multiplier for device
     y_border_expansion_coefficient : int
-        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting
+        value because you want the image to be relatively larger than the PSF which you are convolving over it.
     x_border_expansion_coefficient : int
-        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting
+        value because you want the image to be relatively larger than the PSF which you are convolving over it.
     fluorescence : bool
-        If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF). 
+        If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF).
     defocus : float
         Simulated optical defocus by convolving the kernel with a 2D gaussian of radius defocus.
         
     Returns
     -------
     expanded_scene : 2D numpy array
-        A large (expanded on x and y axis) image of cells in a trench, but unconvolved. (The raw PC image before convolution)
+        A large (expanded on x and y axis) image of cells in a trench, but unconvolved. (The raw PC image before
+        convolution)
     expanded_scene_no_cells : 2D numpy array
         Same as expanded_scene, except with the cells removed (this is necessary for later intensity tuning)
     expanded_mask : 2D numpy array
@@ -377,17 +398,24 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
     kernel_params : tuple
         A tuple of kernel parameters in this order: (R,W,radius,scale,NA,n,sigma,λ)
     resize_amount : int
-        The upscaling factor to render the image by. E.g a resize_amount of 3 will interally render the image at 3x resolution before convolving and then downsampling the image. Values >2 are recommended.
+        The upscaling factor to render the image by. E.g a resize_amount of 3 will interally render the image at 3x
+        resolution before convolving and then downsampling the image. Values >2 are recommended.
     real_image : 2D numpy array
         A sample real image from the experiment you are trying to replicate
     image_params : tuple
-        A tuple of parameters which describe the intensities and variances of the real image, in this order: (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars).
+        A tuple of parameters which describe the intensities and variances of the real image, in this order:
+        (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var,
+            real_vars).
     error_params : tuple
-        A tuple of parameters which characterises the error between the intensities in the real image and the synthetic image, in this order: (mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,cell_var_error,device_var_error). I have given an example of their calculation in the example notebooks.
+        A tuple of parameters which characterises the error between the intensities in the real image and the synthetic
+        image, in this order: (mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,
+        cell_var_error,device_var_error). I have given an example of their calculation in the example notebooks.
 y_border_expansioon_coefficient : int
-        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting
+        value because you want the image to be relatively larger than the PSF which you are convolving over it.
     x_border_expansioon_coefficient : int
-        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting value because you want the image to be relatively larger than the PSF which you are convolving over it.
+        Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting
+        value because you want the image to be relatively larger than the PSF which you are convolving over it.
     fluorescence : bool
         If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF). 
     defocus : float
@@ -480,10 +508,9 @@ y_border_expansioon_coefficient : int
     real_resize, expanded_cell_pseudo_mask = make_images_same_shape(real_image, expanded_cell_pseudo_mask,
                                                                     rescale_int=True)
     just_cells = expanded_cell_pseudo_mask * noisy_img
-    if True:
-        expanded_device_mask = expanded_scene_no_cells
-    else:
-        expanded_device_mask = expanded_scene_no_cells == media_multiplier
+
+    expanded_device_mask = expanded_scene_no_cells
+
     expanded_device_mask = rescale(expanded_device_mask, 1 / resize_amount, anti_aliasing=False)
     real_resize, expanded_device_mask = make_images_same_shape(real_image, expanded_device_mask, rescale_int=True)
     just_device = expanded_device_mask * noisy_img
@@ -492,17 +519,15 @@ y_border_expansioon_coefficient : int
                                 just_device[np.where(just_device)].mean()])
     simulated_vars = np.array([just_media[np.where(just_media)].var(), just_cells[np.where(just_cells)].var(),
                                just_device[np.where(just_device)].var()])
-
+    mean_error.append(perc_diff(np.mean(noisy_img), np.mean(real_resize)))
+    mean_var_error.append(perc_diff(np.var(noisy_img), np.var(real_resize)))
     if fluorescence:
-        mean_error.append(perc_diff(np.mean(noisy_img), np.mean(real_resize)))
-        mean_var_error.append(perc_diff(np.var(noisy_img), np.var(real_resize)))
+        pass
     else:
-        mean_error.append(np.mean(perc_diff(real_means, simulated_means)))
         media_error.append(perc_diff(simulated_means[0], real_media_mean))
         cell_error.append(perc_diff(simulated_means[1], real_cell_mean))
         device_error.append(perc_diff(simulated_means[2], real_device_mean))
 
-        mean_var_error.append(np.mean(perc_diff(real_vars, simulated_vars)))
         media_var_error.append(perc_diff(simulated_vars[0], real_media_var))
         cell_var_error.append(perc_diff(simulated_vars[1], real_cell_var))
         device_var_error.append(perc_diff(simulated_vars[2], real_device_var))
@@ -545,7 +570,7 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     
     Parameters
     ----------
-    Cell properties : list
+    cell properties : list
         A list of cell properties for that frame
     do_transformation : bool
         True if you want cells to be bent, false and cells remain straight as in the simulation
@@ -574,8 +599,8 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult = properties
-        length = length;
-        width = width;
+        length = length
+        width = width
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
@@ -609,14 +634,12 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         def get_mask(label_masks):
 
             if label_masks:
-                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                     rotated_OPL_cell > 0) * \
+                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * \
                                                                                                          colour_label[0]
                 colour_label[0] += 1
                 return space_masks_label
             else:
-                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                       rotated_OPL_cell > 0) * 1
+                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * 1
                 return space_masks_nolabel
                 # space_masks = opening(space_masks,np.ones((2,11)))
 
@@ -642,7 +665,9 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     interactive_output : ipywidgets.widgets.interaction.interactive
         The slider object after you have finished tweaking parameters
     sample_amount : float
-        The percentage sampling variance (drawn from a uniform distribution) to vary intensities by. For example, a sample_amount of 0.05 will randomly sample +/- 5% above and below the chosen intensity for cells, media and device. Can be used to create a little bit of variance in the final training data. 
+        The percentage sampling variance (drawn from a uniform distribution) to vary intensities by. For example, a
+        sample_amount of 0.05 will randomly sample +/- 5% above and below the chosen intensity for cells,
+        media and device. Can be used to create a little bit of variance in the final training data.
     randomise_hist_match : bool
         If true, histogram matching is randomly turned on and off each time a training sample is generated
     randomise_noise_match : bool
@@ -650,7 +675,8 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     sim_length : int
         the length of the simulation which was run
     burn_in : int
-        Number of frames to wait before generating training data. Can be used to ignore the start of the simulation where the trench only has 1 cell in it.
+        Number of frames to wait before generating training data. Can be used to ignore the start of the simulation
+        where the trench only has 1 cell in it.
     n_samples : int
         The number of training images to generate
     save_dir : str
@@ -658,8 +684,10 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     
     """
 
-    # media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_histogram, match_noise, offset, debug_plot, noise_var = list(interactive_output.kwargs.values())
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence, defocus = list(
+    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram,\
+    match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image,\
+    image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence,\
+    defocus = list(
         interactive_output.kwargs.values())
     debug_plot = False
     try:
@@ -677,7 +705,6 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
     current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
-    # for z in range(n_samples):
     def generate_samples(z):
         _media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * media_multiplier
         _cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * cell_multiplier
@@ -717,12 +744,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
                        tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
 
 
-import numpy as np
-from skimage.color import rgb2gray
-from numpy import fft
-from itertools import product
-from PIL import Image
-import copy
+
 
 
 # from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
@@ -811,7 +833,7 @@ def rescale_shine(images, option=1):
     for m in range(numin):
         if option == 1:
             rescaled = (images[m] - the_darkest) / (the_brightest - the_darkest) * 255
-        elif option == 2:
+        else: # option == 2:
             rescaled = (images[m] - avg_darkest) / (avg_brightest - avg_darkest) * 255
         output_images.append(rescaled.astype(np.uint8))
     return output_images
@@ -841,7 +863,7 @@ def lumMatch(images, mask=None, lum=None):
                 im1[:, :] = M
             output_images.append(im1)
     elif (mask is None) and (lum != None):
-        M = 0;
+        M = 0
         S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
@@ -859,7 +881,7 @@ def lumMatch(images, mask=None, lum=None):
                 im1[:, :] = M
             output_images.append(im1)
     elif (mask != None) and (lum is None):
-        M = 0;
+        M = 0
         S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
@@ -884,7 +906,7 @@ def lumMatch(images, mask=None, lum=None):
                 im1[m == 1] = M
             output_images.append(im1)
     elif (mask != None) and (lum != None):
-        M = lum[0];
+        M = lum[0]
         S = lum[1]
         output_images = []
         for im in range(numin):
