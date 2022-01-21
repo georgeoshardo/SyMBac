@@ -9,7 +9,7 @@ from tqdm import tqdm
 import pandas as pd
 from skimage import draw
 from skimage.exposure import match_histograms, rescale_intensity
-from SyMBac.PSF import *
+from SyMBac.PSF import get_fluorescence_kernel, get_phase_contrast_kernel
 import os
 import skimage
 from skimage.segmentation import find_boundaries
@@ -60,7 +60,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     
     Parameters
     ----------
-    
+
     trench_length : float
         Length of a mother machine trench (micron)
     trench_width : float
@@ -532,8 +532,6 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult = properties
-        length = length
-        width = width
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
@@ -646,7 +644,6 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         _device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * device_multiplier
         _sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * sigma
         _scene_no = np.random.randint(burn_in, sim_length - 2)
-        _noise_var = np.random.uniform(1 - sample_amount, 1 + sample_amount) * noise_var
         if randomise_hist_match:
             _match_histogram = np.random.choice([True, False])
         else:
@@ -657,7 +654,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
             _match_noise = match_noise
 
         syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma,
-                                                   _scene_no, scale, match_fourier, _match_histogram, match_noise,
+                                                   _scene_no, scale, match_fourier, _match_histogram, _match_noise,
                                                    offset, debug_plot, noise_var, main_segments, scenes, kernel_params,
                                                    resize_amount, real_image, image_params, error_params,
                                                    x_border_expansion_coefficient, y_border_expansion_coefficient,
@@ -683,13 +680,13 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 def cart2pol(x, y):
     rho = np.sqrt(x ** 2 + y ** 2)
     phi = np.arctan2(y, x)
-    return (phi, rho)
+    return phi, rho
 
 
 def pol2cart(phi, rho):
     x = rho * np.cos(phi)
     y = rho * np.sin(phi)
-    return (x, y)
+    return x, y
 
 
 def sfMatch(images, rescaling=0, tarmag=None):
@@ -773,7 +770,7 @@ def rescale_shine(images, option=1):
 
 def lumMatch(images, mask=None, lum=None):
     assert type(images) == type([]), 'The input must be a list.'
-    assert (mask == None) or type(mask) == type([]), 'The input mask must be a list.'
+    assert (mask is None) or type(mask) == type([]), 'The input mask must be a list.'
 
     numin = len(images)
     if (mask is None) and (lum is None):
@@ -794,7 +791,7 @@ def lumMatch(images, mask=None, lum=None):
             else:
                 im1[:, :] = M
             output_images.append(im1)
-    elif (mask is None) and (lum != None):
+    elif (mask is None) and (lum is not None):
         M = 0
         S = 0
         for im in range(numin):
@@ -812,7 +809,7 @@ def lumMatch(images, mask=None, lum=None):
             else:
                 im1[:, :] = M
             output_images.append(im1)
-    elif (mask != None) and (lum is None):
+    elif (mask is not None) and (lum is None):
         M = 0
         S = 0
         for im in range(numin):
@@ -837,7 +834,7 @@ def lumMatch(images, mask=None, lum=None):
             else:
                 im1[m == 1] = M
             output_images.append(im1)
-    elif (mask != None) and (lum != None):
+    elif (mask is not None) and (lum is not None):
         M = lum[0]
         S = lum[1]
         output_images = []

@@ -9,7 +9,6 @@ def resize_mask(mask, resize_shape, ret_label):
     """
     labeled_mask = label(mask>0,connectivity=1)
     labeled_mask = resize(labeled_mask,resize_shape, order=0, mode='reflect', cval=0, clip=True, preserve_range=True, anti_aliasing=False, anti_aliasing_sigma=None).astype(int)
-    mask = resize(mask,resize_shape, order=0, mode='reflect', cval=0, clip=True, preserve_range=True, anti_aliasing=False, anti_aliasing_sigma=None).astype(int)
     mask_borders = find_boundaries(labeled_mask,mode="thick", connectivity=1)
     labeled_mask = np.where(mask_borders, 0,labeled_mask)
     if ret_label:
