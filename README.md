@@ -1,10 +1,8 @@
 # SyMBac: Synthetic Micrographs of Bacteria
 
-[Read the preprint: Accurate Segmentation of Bacterial Cells using Synthetic Training Data](https://doi.org/10.1101/2021.07.21.453284)
+[Read the preprint: Accurate Segmentation of Bacterial Cells using Synthetic Training Data](https://www.biorxiv.org/content/10.1101/2021.07.21.453284v3)
 
-[Georgeos Hardo, Maximillian Noka, Somenath Bakshi](https://doi.org/10.1101/2021.07.21.453284)
-
-doi: https://doi.org/10.1101/2021.07.21.453284
+[Georgeos Hardo, Maximillian Noka, Somenath Bakshi](https://www.biorxiv.org/content/10.1101/2021.07.21.453284v3)
 
 
 
