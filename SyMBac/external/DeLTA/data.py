@@ -480,7 +480,8 @@ def trainGenerator_seg(batch_size,
     
     # Get training image files list:
     image_name_arr =    glob.glob(os.path.join(img_path,"*.png")) +\
-                        glob.glob(os.path.join(img_path,"*.tif"))
+                        glob.glob(os.path.join(img_path,"*.tif")) +\
+			glob.glob(os.path.join(img_path,"*.tiff"))
     
     # If preloading, load the images and compute weight maps:
     if preload:

@@ -95,3 +95,5 @@ Download the [drawing example notebook](examples/Drawing_Phase_Contrast_100x_oil
   * Since our fluorescence kernel is defined to be a subset of the phase contrast kernel, you can choose **any** condenser, and your fluorescence kernel should be correct. Just ensure that the imaging wavelength, numerical aperture, refractive index, and pixel size are set correctly.
 * What format do my images need to be in?
   * The real images you are trying to replicate should be in the format of single-trench timeseries images. If you are unsure what this is, you can call `get_sample_images()["E. coli 100x"]` from `SyMBac.misc`for an example image.
+* I'm getting libGL MESA-LOADER errors
+  * See https://unix.stackexchange.com/questions/655495/trying-to-run-pygame-on-my-conda-environment-on-my-fresh-manjaro-install-and-ge
