@@ -53,12 +53,18 @@ That is up to you. SyMBac is **not** a machine learning tool. It is a tool to ge
 
 Please make sure you have an NVIDIA GPU and a working installation of `CUDA` and `cudNN`. If you don't have an NVIDIA GPU then the convolution will default to the CPU, and be **very** slow.
 
-SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK interface), so make sure that you are running this on a local machine (you should have access to the machine's display).
+SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK intWWerface), so make sure that you are running this on a local machine (you should have access to the machine's display).
 
 ## Installation
 
 ```sh
 pip install SyMBac
+```
+
+Or to install the development version, run:
+
+```sh
+pip install git+https://github.com/georgeoshardo/SyMBac
 ```
 
 Activate the Jupyter widgets extension. This is needed to interact with slides in the notebooks to optimise images. 
