@@ -1,4 +1,11 @@
-**What is it?**
+Introduction
+============
+
+For a quick understanding of what SyMBac is, withuot reading the preprint_, then read this page.
+
+
+What is it?
+-----------
 
 SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, we also have preliminary support for bacteria growing in 2D monolayers on agar pads (again, both in fluorescence and phase contrast).
 
@@ -14,7 +21,8 @@ SyMBac is a tool to generate synthetic phase contrast or fluorescence images of 
    :align: center
    :width: 1000px
 
-**Why would I want to generate synthetic images?**
+Why would I want to generate synthetic images?
+----------------------------------------------
 
 Because you're sick of generating your own training data by hand! Synthetic images provide an instant source of high quality and unlimited training data for machine learning image segmentation algorithms!
 
@@ -32,7 +40,8 @@ Additionally:
    
    .. image:: images/index/paper_figures/simulation.png  
   
-**How do I use these synthetic images?**
+How do I use these synthetic images?
+------------------------------------
 
 That is up to you. SyMBac is not a machine learning tool. It is a tool to generate unlimited free training data which accurately represents your experiment. It is up to you to train a machine learning network on these synthetic images. We do however provide example notebooks for how to train a U-net (as implemented by DeLTA_), and for training Omnipose_.
 
