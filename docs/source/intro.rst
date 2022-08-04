@@ -48,3 +48,6 @@ That is up to you. SyMBac is not a machine learning tool. It is a tool to genera
 .. image:: images/index/paper_figures/training.png
    :align: center
    :width: 350px
+
+
+.. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
