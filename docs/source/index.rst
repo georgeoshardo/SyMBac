@@ -16,6 +16,9 @@ Contents
 
 .. toctree::
    intro
+   installation
+   faqs
+
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 
