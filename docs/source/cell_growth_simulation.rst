@@ -10,7 +10,6 @@ Mother machine simulations are handled with ``run_simulation``, which is in the 
 
 .. code-block:: python
    :caption: Running a simple simulation of cell growth in the mother machine.
-   <options>
 
    from SyMBac.phase_contrast_drawing import run_simulation
 
