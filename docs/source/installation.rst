@@ -17,7 +17,7 @@ Installation
 
     pip install SyMBac
 
-Or to install the development version, run:
+Or to install the development version (recommended for now), run:
 
 .. code-block:: bash
 
