@@ -3,8 +3,8 @@
 # -- Project information
 import os
 import sys
-from sphinx_automodapi import automodsumm
-from sphinx_automodapi.utils import find_mod_objs
+
+
 sys.path.insert(0, os.path.abspath('../..'))
 
 
