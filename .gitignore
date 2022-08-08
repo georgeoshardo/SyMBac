@@ -129,5 +129,5 @@ dmypy.json
 /figures
 
 #Hidden files
-.*
+
 !/.gitignore
