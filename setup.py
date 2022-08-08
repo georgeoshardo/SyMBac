@@ -10,7 +10,7 @@ setup(
     author = 'Georgeos Hardo',
     author_email = 'gh464@cam.ac.uk',
     license = 'GPL-2.0',
-    packages = ['SyMBac', 'SyMBac.general_drawing', 'SyMBac.external', 'SyMBac.sample_images', 'SyMBac.external.DeLTA'],
+    packages = ['SyMBac', 'SyMBac.external', 'SyMBac.sample_images', 'SyMBac.external.DeLTA'],
     package_data = {'': ['sample_images/*.tiff']},
     include_package_data = True,
     long_description = (this_directory / "README.md").read_text(), #"SyMBac is a tool to generate synthetic phase
