@@ -1,6 +1,11 @@
+.. _cell_growth_simulations:
+
+
 ============================
 Bacterial growth simulations
 ============================
+
+
 
 SyMBac contains two simulation backends. The first one uses the 2D physics library Pymunk_, and is the default simulator working with mother machine images. I am also in the process of adding experimental support for the CellModeller_ simulator, which is currently used for the 2D monolayer growth of cells on agar pads. In time I hope that CellModeller will entirely replace the Pymunk backend. 
 
@@ -23,8 +28,11 @@ Mother machine simulations are handled with ``run_simulation``, which is in the 
 - *width_var*: The variance applied to the normal distribution of cell widths which has mean *cell_width*.
 - *save_dir*: The save location of the return value of the function. The output will be pickled and saved here, so that the simulation can be reloaded later withuot having to rerun it, for reproducibility. If you don't want to save it, just leave it as ``/tmp/``.
 
+.. :
+
 .. code-block:: python
    :caption: Running a simple simulation of cell growth in the mother machine.
+   :name: simple_simulation
 
    from SyMBac.phase_contrast_drawing import run_simulation, get_trench_segments
 
@@ -69,28 +77,23 @@ Next we will collate all the properties for each cell in each timepoint into one
     from joblib import Parallel, delayed #Importing joblig in order to process all cells in parallel
     from tqdm.notebook import tqdm
     from SyMBac.general_drawing import generate_curve_props, gen_cell_props_for_draw, get_space_size, convolve_rescale
-    from SyMbac.general
 
     cell_timeseries_properties = Parallel(n_jobs=-1)(
         delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(cell_timeseries, desc='Timeseries Properties'))
 
-.. plot::
-   
-   import mahotas
-   import mahotas.demos
-   import numpy as np
-   from pylab import imshow, gray, show
-   from os import path
 
-   photo = mahotas.demos.load('luispedro', as_grey=True)
-   photo = photo.astype(np.uint8)
+We can pickle the ``cell_timeseries_properties`` object for later use, or we can continue using it in the same session if you are following along and want to generate a script which does the entire image simulation process in one go.
 
-   gray()
-   imshow(photo)
-   show()
+.. code-block:: python
+   :caption: Pickling the ``cell_timeseries_properties`` 
+
+   import pickle
+   cell_timeseries_properties_file = open('cell_timeseries_properties.p', 'wb')
+   pickle.dump(cell_timeseries_properties, cell_timeseries_properties_file)
+   cell_timeseries_properties_file.close()
 
 
-Next we will move onto generating the scenes, which is the process of converting this cell simulation data into images...
+Next we will move onto generating the scenes, which is the process of converting this cell simulation data into images.
 
 
 

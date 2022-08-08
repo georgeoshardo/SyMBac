@@ -10,8 +10,8 @@ project = 'SyMBac'
 copyright = '2022, Georgeos Hardo'
 author = 'Georgeos Hardo'
 
-release = '0.1'
-version = '0.1.0'
+release = '0.2'
+version = '0.2.0'
 
 # -- General configuration
 
@@ -21,7 +21,8 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
-    'matplotlib.sphinxext.plot_directive'
+    'matplotlib.sphinxext.plot_directive',
+    'sphinx.ext.autosectionlabel'
 ]
 
 intersphinx_mapping = {
@@ -38,3 +39,7 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+# Options for plot output
+# -----------------------
+plot_include_source = True

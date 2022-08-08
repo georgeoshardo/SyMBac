@@ -26,6 +26,7 @@ Or to install the development version (recommended for now), run:
 Activate the Jupyter widgets extension. This is needed to interact with slides in the notebooks to optimise images.
 
 .. code-block:: bash
+    
     jupyter nbextension enable --py widgetsnbextension
 
 If you're using a GPU
@@ -34,6 +35,7 @@ If you're using a GPU
 Check the version of CUDA you have installed using nvcc --version and install the appropriate version of cupy. For example, if you have CUDA 11.4 you would install as follows:
 
 .. code-block:: bash
+
     pip install cupy-cuda114
 
 If you installed CUDA on Ubuntu 18.04+ using the new Nvidia supplied repositories, it is a real possibility that nvcc won't work. Instead check your CUDA version using nvidia-smi.

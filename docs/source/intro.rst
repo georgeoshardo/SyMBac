@@ -51,3 +51,5 @@ That is up to you. SyMBac is not a machine learning tool. It is a tool to genera
 
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
+.. _Omnipose: https://github.com/kevinjohncutler/omnipose
+.. _DeLTA: https://gitlab.com/dunloplab/delta

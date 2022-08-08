@@ -1,3 +1,5 @@
+.. _Omnipose: https://www.biorxiv.org/content/10.1101/2021.11.03.467199v4
+
 SyMBac Documentation
 ====================
 
@@ -15,12 +17,12 @@ Contents
 --------
 
 .. toctree::
+   
    intro
    installation
    faqs
    cell_growth_simulation
    scene_generation
-
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 
@@ -28,4 +30,3 @@ Contents
 
 .. _DeLTA: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007673
 
-.. _Omnipose: https://www.biorxiv.org/content/10.1101/2021.11.03.467199v4
