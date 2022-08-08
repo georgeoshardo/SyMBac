@@ -3,11 +3,10 @@
 # -- Project information
 import os
 import sys
+from sphinx_automodapi import automodsumm
+from sphinx_automodapi.utils import find_mod_objs
+sys.path.insert(0, os.path.abspath('../..'))
 
-
-sys.path.insert(0, os.path.abspath('../../SyMbac'))
-sys.path.insert(0, os.path.abspath("."))
-sys.path.insert(0, os.path.abspath("../"))
 
 project = 'SyMBac'
 copyright = '2022, Georgeos Hardo'
@@ -24,6 +23,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    'matplotlib.sphinxext.plot_directive',
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.napoleon'
 ]
