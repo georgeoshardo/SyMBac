@@ -14,6 +14,7 @@ Read the preprint_, SyMBac: Synthetic Micrographs for Accurate Segmentation of B
 Contents
 --------
 
+
 .. toctree::
    :caption: Introduction
    :maxdepth: 3
