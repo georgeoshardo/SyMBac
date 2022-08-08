@@ -38,8 +38,12 @@ Contents
 .. toctree:: 
    :caption: API reference
    :maxdepth: 3
-   
+
+   symbac_cell_geometry
    symbac_general_drawing
+   symbac_misc
+   symbac_phase_contrast_drawing
+   symbac_PSF
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 

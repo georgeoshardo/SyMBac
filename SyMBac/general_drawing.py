@@ -128,6 +128,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     cell_properties : list
         The final property list used to actually draw a scene of cells. The input to draw_scene
     """
+    
     cell_properties = []
     for cell in cell_timeseries_lists:
         body, shape = (cell.body, cell.shape)

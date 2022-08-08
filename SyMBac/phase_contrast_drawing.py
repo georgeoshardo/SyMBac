@@ -345,7 +345,7 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         A tuple of parameters which characterises the error between the intensities in the real image and the synthetic
         image, in this order: (mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,
         cell_var_error,device_var_error). I have given an example of their calculation in the example notebooks.
-y_border_expansioon_coefficient : int
+    y_border_expansioon_coefficient : int
         Another offset-like argument. Multiplies the size of the image on each side by this value. 3 is a good starting
         value because you want the image to be relatively larger than the PSF which you are convolving over it.
     x_border_expansioon_coefficient : int
