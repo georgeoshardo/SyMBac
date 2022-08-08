@@ -17,6 +17,7 @@ def update_pm_cells(cells):
             daughter_details = cell.create_pm_cell()
             if len(daughter_details) > 2: # Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
                 daughter = Cell(**daughter_details)
+                cell.daughter = daughter
                 cells.append(daughter)
         else:
             cell.create_pm_cell()
@@ -56,9 +57,9 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
     update_cell_positions(cells)
 
     #print(str(len(cells))+" cells")
-    if x[0] > 250:
+    if x[0] > 30:
         cell_timeseries.append(deepcopy(cells))
-    if x[0] == sim_length+250:
+    if x[0] == sim_length+30:
         with open(save_dir+"/cell_timeseries.p", "wb") as f:
             pickle.dump(cell_timeseries, f)
         with open(save_dir+"/space_timeseries.p", "wb") as f:

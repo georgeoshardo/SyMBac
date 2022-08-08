@@ -52,6 +52,7 @@ class Cell:
         width_var,
         width_mean,
         parent = None,
+        daughter = None, 
     ):
         
         """
@@ -111,7 +112,8 @@ class Cell:
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000)
-        self.parent = parent        
+        self.parent = parent
+        self.daughter = daughter     
         
         
         
