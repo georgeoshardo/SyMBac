@@ -92,7 +92,7 @@ def generate_curve_props(cell_timeseries):
     
     Returns
     -------
-    A numpy array of unique curvature properties for each cell in the simulation
+    outupt : A numpy array of unique curvature properties for each cell in the simulation
     """
 
     # Get unique cell IDs

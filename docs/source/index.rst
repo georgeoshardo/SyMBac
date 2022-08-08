@@ -1,5 +1,3 @@
-.. _Omnipose: https://www.biorxiv.org/content/10.1101/2021.11.03.467199v4
-
 SyMBac Documentation
 ====================
 
@@ -37,7 +35,11 @@ Contents
 
    Drawing_Phase_Contrast_100x_oil
 
-
+.. toctree:: 
+   :caption: API reference
+   :maxdepth: 3
+   
+   symbac_general_drawing
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 
@@ -45,3 +47,4 @@ Contents
 
 .. _DeLTA: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1007673
 
+.. _Omnipose: https://www.biorxiv.org/content/10.1101/2021.11.03.467199v4

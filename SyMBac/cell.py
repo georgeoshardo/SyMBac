@@ -95,6 +95,10 @@ class Cell:
             
         For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html
         Cell class has been tested and works with pymunk version 6.0.0
+
+        Returns
+        -------
+        outupt : None
         """
         self.dt = dt
         self.growth_rate_constant = growth_rate_constant
