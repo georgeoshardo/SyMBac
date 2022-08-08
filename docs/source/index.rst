@@ -17,12 +17,27 @@ Contents
 --------
 
 .. toctree::
-   
+   :caption: Introduction
+   :maxdepth: 3
+
    intro
    installation
    faqs
+
+.. toctree:: 
+   :caption: Detailed walkthrough
+   :maxdepth: 3
+
    cell_growth_simulation
    scene_generation
+
+.. toctree::
+   :caption: Examples
+   :maxdepth: 3
+
+   Drawing_Phase_Contrast_100x_oil
+
+
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 
