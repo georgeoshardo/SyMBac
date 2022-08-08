@@ -117,7 +117,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         max_length_mean=cell_max_length * scale_factor,
         max_length_var=max_length_var * np.sqrt(scale_factor),
         width_var=width_var * np.sqrt(scale_factor),
-        width_mean=cell_width * scale_factor
+        width_mean=cell_width * scale_factor,
+        parent = None
     )
 
     window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)

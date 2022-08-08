@@ -50,7 +50,8 @@ class Cell:
         max_length_mean,
         max_length_var,
         width_var,
-        width_mean
+        width_mean,
+        parent = None,
     ):
         
         """
@@ -110,7 +111,7 @@ class Cell:
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000)
-        
+        self.parent = parent        
         
         
         
@@ -147,7 +148,8 @@ class Cell:
                 "max_length_mean": self.max_length_mean,
                 "max_length_var": self.max_length_var,
                 "width_var": self.width_var,
-                "width_mean": self.width_mean
+                "width_mean": self.width_mean,
+                "parent": self
             }
             return daughter_details
         else:
