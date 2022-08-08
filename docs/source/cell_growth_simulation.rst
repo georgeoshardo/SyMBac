@@ -1,3 +1,4 @@
+============================
 Bacterial growth simulations
 ============================
 
@@ -30,7 +31,7 @@ Mother machine simulations are handled with ``run_simulation``, which is in the 
    resize_amount = 3 #This is the "upscaling" factor for the simulation and the entire image generation process.
    pix_mic_conv = 0.0655 #e.g: 0.108379937 micron/pix for 60x, 0.0655 micron/pix for 100x
    scale = pix_mic_conv / resize_amount #The scale of the simulation
-   sim_length = 100 #Number of timesteps to simulate
+   sim_length = 300 #Number of timesteps to simulate
 
 
    cell_timeseries, space = run_simulation(
@@ -60,18 +61,37 @@ The next step is identifying all unique cells within the simulation and assignin
     main_segments = get_trench_segments(space) #Returns a pandas dataframe contianing information about the trench position and geometry for drawing.
     ID_props = generate_curve_props(cell_timeseries)
 
-Next we will collate all the properties for each cell in each timepoint into one variable called ``cell_timeseries_properties``. This is achievd by calling the ``gen_cell_props_for_draw``, and passing in each ``SyMBac.cell.Cell`` object, aloing with the ``ID_props`` variable from above. It will return, for each cell, the length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult (the last 4 being the ID props of each unique cell). This data allows us to redraw every cell onto a NumPy array and render an unconvolved raw image.
+Next we will collate all the properties for each cell in each timepoint into one variable called ``cell_timeseries_properties``. This is achievd by calling the ``gen_cell_props_for_draw``, and passing in each ``SyMBac.cell.Cell`` object, aloing with the ``ID_props`` variable from above. It will return, for each cell, the length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult (the last 4 being the ID props of each unique cell). This data allows us to redraw every cell onto a NumPy array and render an unconvolved raw image. We do the next few steps in parallel using ``joblib.Parallel`` to speed things up.
 
 .. code-block:: python
    :caption: Generating the cell properties to draw the scene.
 
-    from joblib import Parallel, delayed
+    from joblib import Parallel, delayed #Importing joblig in order to process all cells in parallel
     from tqdm.notebook import tqdm
     from SyMBac.general_drawing import generate_curve_props, gen_cell_props_for_draw, get_space_size, convolve_rescale
     from SyMbac.general
 
     cell_timeseries_properties = Parallel(n_jobs=-1)(
         delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(cell_timeseries, desc='Timeseries Properties'))
+
+.. plot::
+   
+   import mahotas
+   import mahotas.demos
+   import numpy as np
+   from pylab import imshow, gray, show
+   from os import path
+
+   photo = mahotas.demos.load('luispedro', as_grey=True)
+   photo = photo.astype(np.uint8)
+
+   gray()
+   imshow(photo)
+   show()
+
+
+Next we will move onto generating the scenes, which is the process of converting this cell simulation data into images...
+
 
 
 .. _Pymunk: http://www.pymunk.org/en/latest/

@@ -119,7 +119,7 @@ class Cell:
         
 
     def create_pm_cell(self):
-        if self.is_dividing() == True:
+        if self.is_dividing():
             new_length = self.length/2
             daughter_length = self.length - new_length
             self.length = new_length

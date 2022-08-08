@@ -19,7 +19,7 @@ Contents
    installation
    faqs
    cell_growth_simulation
-   modules
+   scene_generation
 
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4

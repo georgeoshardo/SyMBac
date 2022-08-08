@@ -108,7 +108,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         length=cell_max_length * scale_factor,
         width=cell_width * scale_factor,
         resolution=60,
-        position=(20 + 35, 40),
+        position=(20 + 35, 10),
         angle=0.8,
         space=space,
         dt=1 / 60,
@@ -120,6 +120,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         width_mean=cell_width * scale_factor,
         parent = None
     )
+
 
     window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
     options = DrawOptions()
