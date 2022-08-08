@@ -131,3 +131,9 @@ dmypy.json
 #Hidden files
 
 !/.gitignore
+
+# sphinx
+
+build
+docs/build
+docs/api/api
