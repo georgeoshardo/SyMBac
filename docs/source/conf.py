@@ -23,7 +23,6 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
-    'matplotlib.sphinxext.plot_directive',
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.napoleon'
 ]
