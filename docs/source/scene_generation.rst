@@ -10,10 +10,12 @@ The first thing we need to do is load in the important data we saved from the pr
     :caption: Necessary imports, and loading in ``cell_timeseries_properties`` which we generated in :ref:`cell_growth_simulations`
 
     from SyMBac.PSF import get_condensers
-    from SyMBac.general_drawing import get_space_size
+    from SyMBac.general_drawing import get_space_size, convolve_rescale
     from joblib import Parallel, delayed
     from tqdm.notebook import tqdm
-    from SyMBac.phase_contrast_drawing import draw_scene, generate_PC_OPL
+    from SyMBac.phase_contrast_drawing import draw_scene, generate_PC_OPL, make_images_same_shape
+    from SyMBac.misc import get_sample_images
+
     import pickle
     import matplotlib.pyplot as plt
 
@@ -103,10 +105,14 @@ We can visualise what a scene (right) and its corresponding masks (right) look l
     ax2.imshow(scenes[-1][1])
     plt.show()
 
-
-
 ..  image:: images/scene_generation/scene_example.png
    :width: 100px
+
+Now we need to load in a real image, this will be used to optimise the synthetic image. We provide real image samples in ``SyMBac.misc.get_sample_images``. Here we use a 100x phase contrast image of *E. coli*. 
+
+.. note:: 
+    - Ensure that the real image you load in is representative of the type of data you want to generate.
+    - Ensure that you load in a real image as a NumPy array, and that it has even dimensions (otherwise you will get odd results if you try to fourier match).
 
 .. code-block:: python
     :caption: Loading a real image
@@ -118,6 +124,26 @@ We can visualise what a scene (right) and its corresponding masks (right) look l
 
 .. image:: images/scene_generation/real_image.png
    :width: 50px
+
+Next we will actually generate the fist truly synthetic image. We first generate a single sample, just to ensure we do not raise any errors, and to ensure that it is possible to generate a matching image given the chosen trench dimensions and real image dimensions. There are 5 parameters which need to be specified, described below and in the image below:
+
+- *media_multiplier*: The value to multiply the intensity of the media (area between cells and device)
+- *cell_multiplier*: The value to multiply the intensity of the cells' pixels by.
+- *device_multiplier*: The value to multiply the device (PDMS) pixels by.
+- *y_border_expansion_coefficient*: A multiplier to fractionally scale the y dimension of the image by. Generally good to make this bigger than 1.5
+- *x_border_expansion_coefficient*: A multiplier to fractionally scale the x dimension of the image by.
+
+.. note:: 
+    If the border_expansion_coefficient parameters are too small, you will be given an error asking you to increase their size. This may happen for any number of reasons, such as having a slightly too long trench in your simulation which just clips off the top of the image. Additionally, by expanding the borders of the image, we can more accurately convolve the PSF over the image withuot dealing with edge effects near the trench.
+
+We now call a function called ``generate_PC_OPL`` from ``SyMBac.phase_contrast_drawing``. This takes the above parameters, along with predefined offset, the scene and accompanying mask, along with two parameters, called *defocus* and *fluorescence*. The latter, when ``True``, will simply switch off the trench and swap the phase contrast PSF for the fluorescence one. *defocus* as a numerical parameter which simulates out of focus effects in the image. 
+
+.. note:: 
+    It is not important to get any paramters perfect at this point, this is merely a test of whether the real image and synthetic image parameters are set correctly to enable ``generate_PC_OPL`` to be called later to generate synthetic images with optimised parameters.   
+
+Finally we call ``convolve_rescale`` from ``SyMBac.general_drawing``, which will convolve the kernel with the scene (with the expanded dimensions), at the upscaled resolution (the ``resize_amount`` argument), then resample it back down to the real image's pixel size. 
+
+After this, ``make_images_same_shape`` from ``SyMBac.phase_contrast_drawing`` is called which will trim the expanded convolved image down to the same shape as the real image.
 
 .. code-block:: python
     :caption: Generating a single sample of a synthetic image
