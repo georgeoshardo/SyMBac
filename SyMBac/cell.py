@@ -118,6 +118,7 @@ class Cell:
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000)
         self.lysis_p = lysis_p
+        self.parent = None
         
         
         
@@ -156,7 +157,8 @@ class Cell:
                 "max_length_var": self.max_length_var,
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
-                "lysis_p": self.lysis_p
+                "lysis_p": self.lysis_p,
+                "parent": self
             }
             return daughter_details
         else:
