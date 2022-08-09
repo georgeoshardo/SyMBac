@@ -140,3 +140,6 @@ docs/api/api
 
 # pyCharm stuff
 .idea/
+
+# vscode stuff
+.vscode
