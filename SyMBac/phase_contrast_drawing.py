@@ -51,7 +51,7 @@ def get_trench_segments(space):
 
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_var, width_var, lysis_p, save_dir):
+                   phys_iters, max_length_var, width_var, save_dir, lysis_p = 0):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -82,10 +82,10 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         Variance of the maximum cell length
     width_var : float
         Variance of the maximum cell width
-    lysis_p : float
-        probability of cell lysis
     save_dir : str
         Location to save simulation outupt
+    lysis_p : float
+        probability of cell lysis
         
     Returns
     -------
