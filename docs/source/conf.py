@@ -25,7 +25,8 @@ extensions = [
     'sphinx.ext.intersphinx',
     'matplotlib.sphinxext.plot_directive',
     'sphinx.ext.autosectionlabel',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode'
 ]
 
 autoapi_dirs = ['../../SyMBac']
