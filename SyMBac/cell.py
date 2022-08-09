@@ -118,7 +118,8 @@ class Cell:
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000)
         self.lysis_p = lysis_p
-        self.parent = None
+        self.parent = parent
+        self.daughter
         
         
         
