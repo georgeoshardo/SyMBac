@@ -52,7 +52,8 @@ class Cell:
         width_var,
         width_mean,
         parent = None,
-        daughter = None, 
+        daughter = None,
+        lysis_p = 0
     ):
         
         """
@@ -116,14 +117,16 @@ class Cell:
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000)
+        self.lysis_p = lysis_p
         self.parent = parent
-        self.daughter = daughter     
+        self.daughter
+        
         
         
         
 
     def create_pm_cell(self):
-        if self.is_dividing():
+        if self.is_dividing() == True:
             new_length = self.length/2
             daughter_length = self.length - new_length
             self.length = new_length
@@ -155,6 +158,7 @@ class Cell:
                 "max_length_var": self.max_length_var,
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
+                "lysis_p": self.lysis_p,
                 "parent": self
             }
             return daughter_details

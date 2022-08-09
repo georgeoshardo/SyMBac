@@ -3,6 +3,8 @@ import pymunk
 from SyMBac.cell import Cell
 from copy import deepcopy
 import pickle
+from scipy.stats import norm
+
 def create_space():
     return pymunk.Space()
 
@@ -39,13 +41,19 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
     #new_cells = []
+    graveyard = []
     for cell in cells:
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
+            graveyard.append([cell, "outside"])
+            cells.remove(cell)
+        elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
+            graveyard.append([cell, "lysis"])
             cells.remove(cell)
         else:
             pass
             #new_cells.append(cell)
     #cells = deepcopy(new_cells)
+    graveyard = deepcopy(graveyard)
 
     wipe_space(space)
 

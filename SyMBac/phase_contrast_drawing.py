@@ -51,7 +51,7 @@ def get_trench_segments(space):
 
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_var, width_var, save_dir):
+                   phys_iters, max_length_var, width_var, lysis_p, save_dir):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -82,6 +82,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         Variance of the maximum cell length
     width_var : float
         Variance of the maximum cell width
+    lysis_p : float
+        probability of cell lysis
     save_dir : str
         Location to save simulation outupt
         
@@ -118,7 +120,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         max_length_var=max_length_var * np.sqrt(scale_factor),
         width_var=width_var * np.sqrt(scale_factor),
         width_mean=cell_width * scale_factor,
-        parent = None
+        parent=None,
+        lysis_p=lysis_p
     )
 
 
@@ -591,7 +594,7 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length,
-                           burn_in, n_samples, save_dir):
+                           burn_in, n_samples, save_dir, in_series=False):
     """
     Generates the training data from a Jupyter interactive output of generate_test_comparison
     
@@ -616,7 +619,8 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
         The number of training images to generate
     save_dir : str
         The save directory of the training data
-    
+    in_series : bool
+
     """
 
     media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, \
@@ -640,12 +644,16 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
     current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
-    def generate_samples(z):
+    def generate_samples(z, in_series=False):
         _media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * media_multiplier
         _cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * cell_multiplier
         _device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * device_multiplier
         _sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * sigma
-        _scene_no = np.random.randint(burn_in, sim_length - 2)
+        if in_series:
+            _scene_no = z % (sim_length - 2)
+            # can maybe re-run run_simulation and draw_scene when this loops back to 0
+        else:
+            _scene_no = np.random.randint(burn_in, sim_length - 2)
         if randomise_hist_match:
             _match_histogram = np.random.choice([True, False])
         else:
@@ -674,7 +682,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
             mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
             ## TODO: change parallel if not using GPU
 
-    Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in
+    Parallel(n_jobs=1)(delayed(generate_samples)(z, in_series=in_series) for z in
                        tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
 
 

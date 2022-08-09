@@ -137,3 +137,6 @@ dmypy.json
 build
 docs/build
 docs/api/api
+
+# pyCharm stuff
+.idea/
