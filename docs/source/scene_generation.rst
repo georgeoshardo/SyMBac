@@ -30,6 +30,9 @@ The first thing we need to do is load in the important data we saved from the pr
     main_segments = pickle.load(main_segments_file)
     main_segments_file.close()
 
+PSF generation
+^^^^^^^^^^^^^^^^
+
 The next thing we must do is define the optical parameters which define the microscope simulation. You should know what phase contrast condensor you are using, you have the choice between the 'Ph1', 'Ph2', 'Ph3', 'Ph4', and 'PhF' condensors. 
 
 .. note::
@@ -72,6 +75,9 @@ The next thing we must do is define the optical parameters which define the micr
 
 ..  image:: images/scene_generation/PC_PSF.png
    :width: 150px
+
+Scene drawing
+^^^^^^^^^^^^^^^^
 
 Now we can use the ``draw_scene`` function to extract information from the simulation and redraw the cells as an image, applying transformations as necessary. We have some additional parameters which need specifying.
 

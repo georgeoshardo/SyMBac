@@ -1,15 +1,7 @@
 SyMBac Documentation
 ====================
 
-.. image:: https://readthedocs.org/projects/symbac/badge/?version=latest
-   :target: https://symbac.readthedocs.io/en/latest/?badge=latest
-   :alt: Documentation Status
 
-.. image:: https://pepy.tech/badge/symbac
-   :target: https://pepy.tech/project/symbac
-
-.. image:: https://badge.fury.io/py/symbac.svg
-   :target: https://badge.fury.io/py/symbac
 
 SyMBac (Synthetic Micrographs of Bacteria) is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming. 
 
@@ -60,6 +52,17 @@ Contents
    symbac_misc
    symbac_phase_contrast_drawing
    symbac_PSF
+
+
+.. image:: https://readthedocs.org/projects/symbac/badge/?version=latest
+   :target: https://symbac.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+
+.. image:: https://pepy.tech/badge/symbac
+   :target: https://pepy.tech/project/symbac
+
+.. image:: https://badge.fury.io/py/symbac.svg
+   :target: https://badge.fury.io/py/symbac
 
 .. _preprint: https://www.biorxiv.org/content/10.1101/2021.07.21.453284v4
 
