@@ -119,14 +119,14 @@ class Cell:
         self.ID = np.random.randint(0,100_000_000)
         self.lysis_p = lysis_p
         self.parent = parent
-        self.daughter
+        self.daughter = daughter
         
         
         
         
 
     def create_pm_cell(self):
-        if self.is_dividing() == True:
+        if self.is_dividing():
             new_length = self.length/2
             daughter_length = self.length - new_length
             self.length = new_length
