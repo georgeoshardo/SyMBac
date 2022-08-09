@@ -4,6 +4,9 @@ Scene generation / Scene drawing
 
 This tutorial describes the generation of synthetic images. Please make sure you've generated some cell simulation data from the :ref:`cell_growth_simulations` part of these docs. 
 
+Synthetic mother machine images
+-----------------------------------
+
 The first thing we need to do is load in the important data we saved from the previous section. This includes the ``cell_timeseries_properties`` object (which defines each cell's properties in every timepoint), and the ``main_segments`` object, which defines the trench geometry.
 
 .. code-block:: python

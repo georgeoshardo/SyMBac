@@ -24,11 +24,16 @@ Contents
    faqs
 
 .. toctree:: 
-   :caption: Detailed walkthrough
+   :caption: Detailed guide: Mother Machine
    :maxdepth: 3
 
    cell_growth_simulation
    scene_generation
+
+.. toctree:: 
+   :caption: Detailed guide: Agar Pad
+   :maxdepth: 3
+
 
 .. toctree::
    :caption: Examples
