@@ -82,6 +82,8 @@ Scene drawing
 Now we can use the ``draw_scene`` function to extract information from the simulation and redraw the cells as an image, applying transformations as necessary. We have some additional parameters which need specifying.
 
 - *do_transformation*: Whether or not to use each cell's transformation attributes to bend or morph the cells to increase realism. 
+
+
 .. warning:: 
     In extreme cases (very narrow trenches), setting this to *do_transformation* to ``True`` will cause clipping with the mother machine wall.
 
@@ -210,6 +212,61 @@ We use napari to load the real image, and create three layers above it, called `
         <iframe src="https://www.youtube.com/embed/sPC3nV_5DfM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 75%; height: 75%;"></iframe>
     </div>
 
+We then collate the output of this annotation into the means and variances of each individual image component, and we can subsequently save the information to a pickle so we don't need to redraw on the image every time we want to run the code.
 
+.. code-block:: python
+    :caption: Collating image parameters and saving them
+
+
+    real_media_mean = real_resize[np.where(media_label.data)].mean()
+    real_cell_mean = real_resize[np.where(cell_label.data)].mean()
+    real_device_mean = real_resize[np.where(device_label.data)].mean()
+    real_means = np.array((real_media_mean, real_cell_mean, real_device_mean))
+
+    real_media_var = real_resize[np.where(media_label.data)].var()
+    real_cell_var = real_resize[np.where(cell_label.data)].var()
+    real_device_var = real_resize[np.where(device_label.data)].var()
+    real_vars = np.array((real_media_var, real_cell_var, real_device_var))
+
+    image_params = (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars)
+
+    import pickle
+    image_params_file = open('image_params.p', 'wb')
+    pickle.dump(image_params, image_params_file)
+    image_params_file.close()
+
+    ## For opening pregenerated image parameters
+    #image_params_file = open("image_params.p", "rb")
+    #image_params = pickle.load(image_params_file)
+    #image_params_file.close()
+
+Finally, we will use the manual optimiser to generate a realistic image. The output from the optimiser will then be used to generate an entire dataset of synthetic images. Below the code is a video demonstrating the optimisation process.
+
+.. code-block:: python
+    :caption: Collating image parameters and saving them
+
+    from SyMBac.optimisation import manual_optimise
+
+    params = manual_optimise(
+        scenes = scenes, 
+        scale = scale, 
+        offset = offset, 
+        main_segments = main_segments, 
+        kernel_params = kernel_params, 
+        min_sigma = min_sigma,
+        resize_amount = resize_amount, 
+        real_image = real_image, 
+        image_params = image_params, 
+        x_border_expansion_coefficient = x_border_expansion_coefficient, 
+        y_border_expansion_coefficient = y_border_expansion_coefficient
+    )
+    
+    params # Ensure you actually call the params object like this. 
+
+.. raw:: html
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto; margin-bottom: 2em;">
+        <iframe src="https://www.youtube.com/embed/PeeyotMQAQU" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 75%; height: 75%;"></iframe>
+    </div>
 
 .. _Omnipose: https://github.com/kevinjohncutler/omnipose

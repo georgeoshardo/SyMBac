@@ -55,6 +55,7 @@ Contents
    symbac_general_drawing
    symbac_misc
    symbac_phase_contrast_drawing
+   symbac_optimisation
    symbac_PSF
 
 

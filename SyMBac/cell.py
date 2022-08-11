@@ -19,7 +19,7 @@ class Cell:
         x,y coords of cell centroid
     angle : float
         rotation in radians of cell (counterclockwise)
-    space : pymunk.space.Space
+    space : pymunk.Space
         The pymunk space of the cell
     dt : float
         Timestep the cell experiences every iteration

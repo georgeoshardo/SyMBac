@@ -6,7 +6,9 @@ import pickle
 from scipy.stats import norm
 
 def create_space():
-    return pymunk.Space()
+    space = pymunk.Space(threaded=True)
+    space.threads = 2
+    return space
 
 def update_cell_lengths(cells):
     for cell in cells:
