@@ -271,7 +271,14 @@ Finally, we will use the manual optimiser to generate a realistic image. The out
 
 Finally, we generate our training data using :func:`~SyMBac.phase_contrast_drawing.generate_training_data`. The important parameters to recognise are:
 
-- *sample_amount*: This is a percentage by which all continuous parameters :func:`~SyMBac.optimisation.manual_optimise` can be randomly scaled during the synthesis process. For example, a value of 0.05 will randomly scale all continuous parameters by :math:`X \sim U(0.95, 1.05)`
+- *sample_amount*: This is a percentage by which all continuous parameters :func:`~SyMBac.optimisation.manual_optimise` can be randomly scaled during the synthesis process. For example, a value of 0.05 will randomly scale all continuous parameters by :math:`X \sim U(0.95, 1.05)` Higher values will generate more variety in the training data (but too high values may result in unrealistic images).
+- *randomise_hist_match*: Whether to randomise the switching on and off of histogram matching.
+- *randomise_noise_match*: Whether to randomise the switching on and off of noise matching.
+- *sim_length*: The length of the simulation
+- *burn_in*: The number of frames at the beginning of the simulation to ignore. Useful if you do not want images of single cells to appear in your training data.
+- *n_samples*: The number of random training samples to generate.
+- *save_dir*: The save directory of the images. Will output two folders, ``convolutions`` and ``masks``.
+- *in_series*: Whether or not to shuffle the simulation while generating training samples.
 
 .. note::
     When running :func:`~SyMBac.phase_contrast_drawing.generate_training_data`, you may choose to set ``in_series=True``. This will generate training data whereby each image is taken sequentially from the simulation. This useful if you want train a tracking model, where you need the frames to be in order. If you choose to set ``in_series=True``, then it is a good idea to choose a low value of ``sample_amount``, typically less than 0.05 is sensible. This reduces the frame-to-frame variability. 
