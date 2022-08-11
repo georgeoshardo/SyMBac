@@ -16,7 +16,7 @@ The first thing we need to do is load in the important data we saved from the pr
     from SyMBac.general_drawing import get_space_size, convolve_rescale
     from joblib import Parallel, delayed
     from tqdm.notebook import tqdm
-    from SyMBac.phase_contrast_drawing import draw_scene, generate_PC_OPL, make_images_same_shape
+    from SyMBac.phase_contrast_drawing import draw_scene, generate_PC_OPL, make_images_same_shape, generate_training_data
     from SyMBac.misc import get_sample_images
 
     import pickle
@@ -39,7 +39,7 @@ The next thing we must do is define the optical parameters which define the micr
 
    If you only intend to generate fluorescence images, then you can choose any condenser key you want. It will not change the simulation.
 
-- *W, R, diameter*: The ``get_condensers()`` function returns a dictionary of condensers for which you can pick a key from the above list. This will in turn return the dimensions of the chosen condenser. 
+- *W, R, diameter*: The :func:`~SyMBac.PSF.get_condensers` function returns a dictionary of condensers for which you can pick a key from the above list. This will in turn return the dimensions of the chosen condenser. 
 - *radius*: The radius of the PSF convolution kernel to be generated. Must be an even number.
 - *λ*: The average wavelength of the illumination light source.
 - *resize_amount*: This is the "upscaling" factor for the simulation and the entire image generation process. Must be the same as the value defined in :ref:`simple_simulation`
@@ -79,7 +79,7 @@ The next thing we must do is define the optical parameters which define the micr
 Scene drawing
 ^^^^^^^^^^^^^^^^
 
-Now we can use the ``draw_scene`` function to extract information from the simulation and redraw the cells as an image, applying transformations as necessary. We have some additional parameters which need specifying.
+Now we can use the :func:`~SyMBac.phase_contrast_drawing.draw_scene` function to extract information from the simulation and redraw the cells as an image, applying transformations as necessary. We have some additional parameters which need specifying.
 
 - *do_transformation*: Whether or not to use each cell's transformation attributes to bend or morph the cells to increase realism. 
 
@@ -89,9 +89,9 @@ Now we can use the ``draw_scene`` function to extract information from the simul
 
 - *offset*: This is a parameter which ensures that cells never touch the edge of the image after being transformed. In general this can be left as is (30), but you will recieve an error if it needs increasing.
 - *label_masks*: This controls whether the output training masks will be binary or labeled. Binary masks are used to train U-net, wheras labeled masks are used to train Omnipose_
-- *space_size*: The size of the space used in the simulation, governing how large the image shall be. This is typically autocalculated using the ``get_space_size`` function. 
+- *space_size*: The size of the space used in the simulation, governing how large the image shall be. This is typically autocalculated using the :func:`~SyMBac.general_drawing.get_space_size` function. 
 
-After defining these arguments, we can pass them to ``draw_scene``, which will produce a list of scenes and corresponding masks for the entire simulation. Here we run this in parallel, for increased speed.
+After defining these arguments, we can pass them to :func:`~SyMBac.phase_contrast_drawing.draw_scene`, which will produce a list of scenes and corresponding masks for the entire simulation. Here we run this in parallel, for increased speed.
 
 .. code-block:: python
     :caption: Setting up scene generation parameters
@@ -119,7 +119,7 @@ We can visualise what a scene (right) and its corresponding masks (right) look l
 ..  image:: images/scene_generation/scene_example.png
    :width: 100px
 
-Now we need to load in a real image, this will be used to optimise the synthetic image. We provide real image samples in ``SyMBac.misc.get_sample_images``. Here we use a 100x phase contrast image of *E. coli*. 
+Now we need to load in a real image, this will be used to optimise the synthetic image. We provide real image samples in :func:`~SyMBac.misc.get_sample_images`. Here we use a 100x phase contrast image of *E. coli*. 
 
 .. note:: 
     - Ensure that the real image you load in is representative of the type of data you want to generate.
@@ -147,14 +147,14 @@ Next we will actually generate the fist truly synthetic image. We first generate
 .. note:: 
     If the border_expansion_coefficient parameters are too small, you will be given an error asking you to increase their size. This may happen for any number of reasons, such as having a slightly too long trench in your simulation which just clips off the top of the image. Additionally, by expanding the borders of the image, we can more accurately convolve the PSF over the image withuot dealing with edge effects near the trench.
 
-We now call a function called ``generate_PC_OPL`` from ``SyMBac.phase_contrast_drawing``. This takes the above parameters, along with predefined offset, the scene and accompanying mask, along with two parameters, called *defocus* and *fluorescence*. The latter, when ``True``, will simply switch off the trench and swap the phase contrast PSF for the fluorescence one. *defocus* as a numerical parameter which simulates out of focus effects in the image. 
+We now call a function called :func:`~SyMBac.phase_contrast_drawing.generate_PC_OPL`. This takes the above parameters, along with predefined offset, the scene and accompanying mask, along with two parameters, called *defocus* and *fluorescence*. The latter, when ``True``, will simply switch off the trench and swap the phase contrast PSF for the fluorescence one. *defocus* as a numerical parameter which simulates out of focus effects in the image. 
 
 .. note:: 
-    It is not important to get any paramters perfect at this point, this is merely a test of whether the real image and synthetic image parameters are set correctly to enable ``generate_PC_OPL`` to be called later to generate synthetic images with optimised parameters.   
+    It is not important to get any parameters perfect at this point, this is merely a test of whether the real image and synthetic image parameters are set correctly to enable :func:`~SyMBac.phase_contrast_drawing.generate_PC_OPL` to be called later to generate synthetic images with optimised parameters.   
 
-Finally we call ``convolve_rescale`` from ``SyMBac.general_drawing``, which will convolve the kernel with the scene (with the expanded dimensions), at the upscaled resolution (the ``resize_amount`` argument), then resample it back down to the real image's pixel size. 
+Finally we call :func:`~SyMBac.general_drawing.convolve_rescale` from , which will convolve the kernel with the scene (with the expanded dimensions), at the upscaled resolution (the ``resize_amount`` argument), then resample it back down to the real image's pixel size. 
 
-After this, ``make_images_same_shape`` from ``SyMBac.phase_contrast_drawing`` is called which will trim the expanded convolved image down to the same shape as the real image.
+After this, :func:`~SyMBac.general_drawing.make_images_same_shape`  is called which will trim the expanded convolved image down to the same shape as the real image.
 
 .. code-block:: python
     :caption: Generating a single sample of a synthetic image
@@ -243,7 +243,7 @@ We then collate the output of this annotation into the means and variances of ea
 Finally, we will use the manual optimiser to generate a realistic image. The output from the optimiser will then be used to generate an entire dataset of synthetic images. Below the code is a video demonstrating the optimisation process.
 
 .. code-block:: python
-    :caption: Collating image parameters and saving them
+    :caption: Running the manual optimiser
 
     from SyMBac.optimisation import manual_optimise
 
@@ -268,5 +268,27 @@ Finally, we will use the manual optimiser to generate a realistic image. The out
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto; margin-bottom: 2em;">
         <iframe src="https://www.youtube.com/embed/PeeyotMQAQU" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 75%; height: 75%;"></iframe>
     </div>
+
+Finally, we generate our training data using :func:`~SyMBac.phase_contrast_drawing.generate_training_data`. The important parameters to recognise are:
+
+- *sample_amount*: This is a percentage by which all continuous parameters :func:`~SyMBac.optimisation.manual_optimise` can be randomly scaled during the synthesis process. For example, a value of 0.05 will randomly scale all continuous parameters by :math:`X \sim U(0.95, 1.05)`
+
+.. note::
+    When running :func:`~SyMBac.phase_contrast_drawing.generate_training_data`, you may choose to set ``in_series=True``. This will generate training data whereby each image is taken sequentially from the simulation. This useful if you want train a tracking model, where you need the frames to be in order. If you choose to set ``in_series=True``, then it is a good idea to choose a low value of ``sample_amount``, typically less than 0.05 is sensible. This reduces the frame-to-frame variability. 
+
+.. code-block:: python
+    :caption: Generating the training data
+
+    generate_training_data(
+        interactive_output = params, 
+        sample_amount = 0.05, 
+        randomise_hist_match = False, 
+        randomise_noise_match = True, 
+        sim_length = 1000, 
+        burn_in = 100, 
+        n_samples =  300, 
+        save_dir = "/tmp/", 
+        in_series=False
+    )
 
 .. _Omnipose: https://github.com/kevinjohncutler/omnipose
