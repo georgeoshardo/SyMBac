@@ -49,8 +49,7 @@ def unet_weight_map(y, wc=None, w0=10, sigma=5):
     Generate weight maps as specified in the U-Net paper
     for boolean mask.
 
-    "U-Net: Convolutional Networks for Biomedical Image Segmentation"
-    https://arxiv.org/pdf/1505.04597.pdf
+    
 
     Parameters
     ----------
@@ -68,8 +67,22 @@ def unet_weight_map(y, wc=None, w0=10, sigma=5):
     -------
     Numpy array
         Training weights. A 2D array of shape (image_height, image_width).
-    """
 
+
+
+    References
+    ----------
+    Taken from the original U-net paper [1]_
+    
+    .. [1] Ronneberger, O., Fischer, P., Brox, T. (2015). 
+       U-Net: Convolutional Networks for Biomedical Image Segmentation. 
+       In: Navab, N., Hornegger, J., Wells, W., Frangi, A. (eds) 
+       Medical Image Computing and Computer-Assisted Intervention – 
+       MICCAI 2015. MICCAI 2015. Lecture Notes in Computer Science(), 
+       vol 9351. Springer, Cham. https://doi.org/10.1007/978-3-319-24574-4_28
+
+    """
+ 
     labels = label(y)
     no_labels = labels == 0
     label_ids = sorted(np.unique(labels))[1:]

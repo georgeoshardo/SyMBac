@@ -187,6 +187,29 @@ After this, ``make_images_same_shape`` from ``SyMBac.phase_contrast_drawing`` is
 ..  image:: images/scene_generation/int_and_dims.png
    :width: 200px
 
+Next we shall extract some pixels from the real image which we will use to optimise the synthetic image. We will extract the pixel intensities and variances from the 3 important regions of the image. The cells, the device, and the media. These are the same three aforementioned intensities for which we "guessed" some parameters in the previous code block. 
+
+We use napari to load the real image, and create three layers above it, called ``media_label``, ``cell_label``, and ``device_label``. We will then select each layer and draw over the relevant regions of the image.
+
+.. note:: 
+    You do not need to completely draw over all the cells, the entire device, or all the media gaps between the cells. Simply getting a representative sample of pixels is generally enough. See the video below for a visual demonstration.
+
+.. code-block:: python
+    :caption: Using napari to extract pixel information from the real image.
+
+    import napari
+
+    viewer = napari.view_image(real_resize)
+    media_label = viewer.add_labels(np.zeros(real_resize.shape).astype(int), name = "media")
+    cell_label = viewer.add_labels(np.zeros(real_resize.shape).astype(int), name = "cell")
+    device_label = viewer.add_labels(np.zeros(real_resize.shape).astype(int), name = "device")
+
+.. raw:: html
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto; margin-bottom: 2em;">
+        <iframe src="https://www.youtube.com/embed/sPC3nV_5DfM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 75%; height: 75%;"></iframe>
+    </div>
+
 
 
 .. _Omnipose: https://github.com/kevinjohncutler/omnipose

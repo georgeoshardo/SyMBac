@@ -24,7 +24,7 @@ if importlib.util.find_spec("cupy") is None:
 
         Parameters
         ----------
-        image : 2D numpy array
+        image : numpy.ndarray
             The image
         kernel : 2D numpy array
             The kernel
@@ -85,9 +85,9 @@ def generate_curve_props(cell_timeseries):
     """
     Generates individual cell curvature properties. 3 parameters for each cell, which are passed to a cosine function to modulate the cell's curvature. 
     
-    Paramters
+    Parameters
     ---------
-    cell_timeseries : list
+    cell_timeseries : list(cell_properties)
         The output of run_simulation()
     
     Returns

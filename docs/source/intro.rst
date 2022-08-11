@@ -1,7 +1,7 @@
 Introduction
 ============
 
-For a quick understanding of what SyMBac is, withuot reading the preprint_, then read this page.
+For a quick understanding of what SyMBac is, without reading the preprint_, then read this page.
 
 
 What is it?
@@ -33,7 +33,6 @@ Additionally:
 - SyMBac is very fast at generating training data compared to humans:
    
    .. image:: images/index/paper_figures/human_speed_comparison.png
-    :align: left
     :width: 400px
 
 - The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:

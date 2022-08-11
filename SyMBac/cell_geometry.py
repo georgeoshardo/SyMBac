@@ -1,6 +1,6 @@
 import numpy as np
 def circ(theta, start, radius):
-    y = radius * np.cos(theta) +radius
+    y = radius * np.cos(theta) + radius
     x = radius * np.sin(theta) + start + radius
     return x, y
 
@@ -22,13 +22,14 @@ def wall(thickness, start, end, t_or_b, resolution):
         Number of points defining the cell wall geometry
     Returns
     -------
-    2-tuple of 1D numpy arrays
+    tuple(Numpy Array, Numpy Array)
         return[0] is the wall's x coordinates
         return[0] is the wall's y coordiantes
         
-    Example
-    -------
+    Examples
+    --------
     Create two cell walls of length 10, 3 apart
+
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> top_wall = wall(3,0,10,0,20)
@@ -59,9 +60,10 @@ def get_vertices(cell_length, cell_width, angle, resolution):
     -------
     list of lists containing cell x and y coords
     
-    Example
-    -------
+    Examples
+    --------
     Create a cell of length 10+4 rotated by 1 radian with a resolution of 20:
+    
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> verts = get_vertices(10,4,1,20)
@@ -93,8 +95,10 @@ def get_vertices(cell_length, cell_width, angle, resolution):
 def centroid(vertices):
     """Return the centroid of a list of vertices 
     
-    Keyword arguments:
-    vertices -- A list of tuples containing x,y coordinates.
+    Parameters
+    ----------
+    vertices : list(tuple)
+        A list of tuples containing x,y coordinates.
 
     """
     return np.sum(vertices,axis=0)/len(vertices)

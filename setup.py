@@ -13,9 +13,7 @@ setup(
     packages = ['SyMBac', 'SyMBac.external', 'SyMBac.sample_images', 'SyMBac.external.DeLTA'],
     package_data = {'': ['sample_images/*.tiff']},
     include_package_data = True,
-    long_description = (this_directory / "README.md").read_text(), #"SyMBac is a tool to generate synthetic phase
-    # contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother
-    # machine, however support for bacteria growing in monolayers (and maybe even biofilms!) is coming.",
+    long_description = (this_directory / "README.md").read_text(), 
     long_description_content_type = 'text/markdown',
     install_requires = [
         'tensorflow==2.8.0',
@@ -23,12 +21,12 @@ setup(
         'tifffile==2021.10.12',
         'scikit-image==0.18.3' ,
         'matplotlib==3.4.3',
-        "tqdm==4.62.3",
+        "tqdm",
         "pandas==1.3.4",
         "natsort==7.1.1",
         "jupyterlab",
         "ipywidgets",
-        "joblib==1.1.0",
+        "joblib",
         "napari[all]",
         "pymunk==6.2.0",
         "pyglet==1.5.21",
@@ -45,6 +43,7 @@ setup(
         'Operating System :: Microsoft :: Windows',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Topic :: Scientific/Engineering :: Image Processing',
         'Topic :: Scientific/Engineering'
