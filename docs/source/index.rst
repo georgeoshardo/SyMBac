@@ -45,8 +45,8 @@ Contents
    :caption: Examples
    :maxdepth: 3
 
-   Drawing_Phase_Contrast_100x_oil
-
+   Drawing Phase Contrast 100x <examples/Drawing_Phase_Contrast_100x_oil.ipynb>
+   
 .. toctree:: 
    :caption: API reference
    :maxdepth: 3

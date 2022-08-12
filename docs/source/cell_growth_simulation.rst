@@ -5,6 +5,9 @@
 Bacterial growth simulations
 ============================
 
+You can download the code blocks on this page as a notebook_.
+
+.. _notebook: docs_notebooks/run_simulation.ipynb
 
 
 SyMBac contains two simulation backends. The first one uses the 2D physics library Pymunk_, and is the default simulator working with mother machine images. I am also in the process of adding experimental support for the CellModeller_ simulator, which is currently used for the 2D monolayer growth of cells on agar pads. In time I hope that CellModeller will entirely replace the Pymunk backend. 

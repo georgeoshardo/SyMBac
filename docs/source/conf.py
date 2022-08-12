@@ -6,6 +6,7 @@ import sys
 from sphinx_automodapi import automodsumm
 from sphinx_automodapi.utils import find_mod_objs
 sys.path.insert(0, os.path.abspath('../..'))
+sys.path.insert(0, os.path.abspath('../../examples'))
 
 
 project = 'SyMBac'
@@ -26,10 +27,13 @@ extensions = [
     'matplotlib.sphinxext.plot_directive',
     'sphinx.ext.autosectionlabel',
     'sphinx.ext.napoleon',
-    'sphinx.ext.viewcode'
+    'sphinx.ext.viewcode',
+    "nbsphinx",
+    "sphinx_copybutton"
 ]
 
 autoapi_dirs = ['../../SyMBac']
+nbsphinx_execute = 'never'
 
 
 intersphinx_mapping = {

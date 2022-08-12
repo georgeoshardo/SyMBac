@@ -2,6 +2,11 @@
 Scene generation / Scene drawing
 ===================================
 
+You can download the code blocks on this page as a notebook_.
+
+.. _notebook: docs_notebooks/scene_generation.ipynb
+
+
 This tutorial describes the generation of synthetic images. Please make sure you've generated some cell simulation data from the :ref:`cell_growth_simulations` part of these docs. 
 
 Synthetic mother machine images

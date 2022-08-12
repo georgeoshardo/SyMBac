@@ -13,9 +13,6 @@ def manual_optimise(scenes, scale, offset, main_segments, kernel_params, min_sig
     """
     Generate an interactive iPython cell to manually optimise the image similarity between the simulation and a real image.
 
-
-
-
     Parameters
     ----------
     scenes: list(tuple(numpy.ndarray, numpy.ndarray))
