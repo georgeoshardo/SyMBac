@@ -49,7 +49,6 @@ def get_trench_segments(space):
     main_segments = trench_segment_props.sort_values("area", ascending=False).iloc[0:2]
     return main_segments
 
-
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir, lysis_p = 0):
     """
@@ -159,7 +158,6 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     #    if x > 250:
     #        cell_timeseries.append(deepcopy(cells))
     return cell_timeseries, space
-
 
 def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                     y_border_expansion_coefficient, x_border_expansion_coefficient, fluorescence, defocus):
@@ -293,7 +291,6 @@ def generate_PC_OPL(main_segments, offset, scene, mask, media_multiplier, cell_m
                                                                                x_border_expansion_coefficient,
                                                                                fluorescence, defocus)
     return expanded_scene, expanded_scene_no_cells, expanded_mask
-
 
 def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85, scene_no=-1,
                              scale=None, match_fourier=False, match_histogram=True, match_noise=False, offset=30,
@@ -500,7 +497,6 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         plt.close()
     else:
         return noisy_img, expanded_mask_resized_reshaped.astype(int)
-
 
 def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks):
     """
