@@ -644,13 +644,13 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
     current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
-    def generate_samples(z, in_series=False):
+    def generate_samples(z):
         _media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * media_multiplier
         _cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * cell_multiplier
         _device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * device_multiplier
         _sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * sigma
         if in_series:
-            _scene_no = z % (sim_length - 2)
+            _scene_no = burn_in + z % (sim_length - 2)
             # can maybe re-run run_simulation and draw_scene when this loops back to 0
         else:
             _scene_no = np.random.randint(burn_in, sim_length - 2)
@@ -682,7 +682,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
             mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
             ## TODO: change parallel if not using GPU
 
-    Parallel(n_jobs=1)(delayed(generate_samples)(z, in_series=in_series) for z in
+    Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in
                        tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
 
 
