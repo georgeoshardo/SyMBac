@@ -53,9 +53,11 @@ def get_sample_images():
 
     Ecoli100x = misc_load_img("sample_images/sample_100x.tiff")
     Ecoli100x_stationary = misc_load_img("sample_images/sample_100x_stationary.tiff")
+    Ecoli_DeLTA = misc_load_img("sample/sample_DeLTA.tiff")
     return {
         "E. coli 100x": Ecoli100x,
-        "E. coli 100x stationary": Ecoli100x_stationary
+        "E. coli 100x stationary": Ecoli100x_stationary,
+        "E. coli DeLTA": Ecoli_DeLTA
     }
 
 
