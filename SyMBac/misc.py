@@ -48,7 +48,7 @@ def get_sample_images():
     Returns
     -------
     dict
-        A dict with sample images, current keys are: "E. coli 100x" and "E. coli 100x stationary"
+        A dict with sample images, current keys are: "E. coli 100x", "E. coli 100x stationary", "E. coli DeLTA"
     """
 
     Ecoli100x = misc_load_img("sample_images/sample_100x.tiff")
