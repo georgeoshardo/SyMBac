@@ -36,6 +36,9 @@ def wipe_space(space):
             space.remove(body)
             space.remove(poly)        
 
+def update_cell_parents(cells, new_cells):
+    for i in range(len(cells)):
+        cells[i].update_parent(id(new_cells[i]))
 
 
 def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
@@ -43,19 +46,19 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
     #new_cells = []
-    graveyard = []
+    #graveyard = []
     for cell in cells:
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
-            graveyard.append([cell, "outside"])
+            #graveyard.append([cell, "outside"])
             cells.remove(cell)
         elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
-            graveyard.append([cell, "lysis"])
+            #graveyard.append([cell, "lysis"])
             cells.remove(cell)
         else:
             pass
             #new_cells.append(cell)
     #cells = deepcopy(new_cells)
-    graveyard = deepcopy(graveyard)
+    #graveyard = deepcopy(graveyard)
 
     wipe_space(space)
 
@@ -68,7 +71,12 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
 
     #print(str(len(cells))+" cells")
     if x[0] > 1:
+        #copy_cells = deepcopy(cells)
+
         cell_timeseries.append(deepcopy(cells))
+        copy_cells = cell_timeseries[-1]
+        update_cell_parents(cells, copy_cells)
+        #del copy_cells
     if x[0] == sim_length-1:
         with open(save_dir+"/cell_timeseries.p", "wb") as f:
             pickle.dump(cell_timeseries, f)
