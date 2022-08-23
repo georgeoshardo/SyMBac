@@ -159,7 +159,7 @@ class Cell:
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
                 "lysis_p": self.lysis_p,
-                "parent": self
+                "parent": self.parent
             }
             return daughter_details
         else:
@@ -190,6 +190,9 @@ class Cell:
     def update_position(self):
         self.position = self.body.position
         self.angle = self.body.angle
+
+    def update_parent(self, parent):
+        self.parent = parent
 
     def get_angle(self):
         return self.body.angle
