@@ -484,14 +484,14 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         ax3.plot(device_error)
         ax3.legend(["Mean error", "Media error", "Cell error", "Device error"])
         ax3.set_title("Intensity Error")
-
+        ax3.hlines(0, ax3.get_xlim()[0], ax3.get_xlim()[1], color = "k", linestyles="dotted")
         ax4.plot(mean_var_error)
         ax4.plot(media_var_error)
         ax4.plot(cell_var_error)
         ax4.plot(device_var_error)
         ax4.legend(["Mean error", "Media error", "Cell error", "Device error"])
         ax4.set_title("Variance Error")
-
+        ax4.hlines(0, ax4.get_xlim()[0], ax4.get_xlim()[1], color = "k", linestyles="dotted")
         fig.tight_layout()
         plt.show()
         plt.close()
@@ -684,8 +684,8 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
 # from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
 def cart2pol(x, y):
-    rho = np.sqrt(x ** 2 + y ** 2)
     phi = np.arctan2(y, x)
+    rho = np.sqrt(x ** 2 + y ** 2)
     return phi, rho
 
 

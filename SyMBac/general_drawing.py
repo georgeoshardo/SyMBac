@@ -10,7 +10,7 @@ from skimage.transform import rescale
 from skimage.transform import rotate
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
-perc_diff = lambda a, b: abs(a - b) / ((a + b) / 2)
+perc_diff = lambda a, b: (a - b) / b * 100
 
 if importlib.util.find_spec("cupy") is None:
     from scipy.signal import convolve2d as cuconvolve

@@ -46,7 +46,8 @@ Contents
    :maxdepth: 3
 
    Drawing Phase Contrast 100x <examples/Drawing_Phase_Contrast_100x_oil.ipynb>
-   
+   Training data for omnipose <examples/omnipose_training_data_generator.ipynb>
+
 .. toctree:: 
    :caption: API reference
    :maxdepth: 3
