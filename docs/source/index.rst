@@ -45,8 +45,7 @@ Contents
    :caption: Examples
    :maxdepth: 3
 
-   Drawing Phase Contrast 100x <examples/Drawing_Phase_Contrast_100x_oil.ipynb>
-   Training data for omnipose <examples/omnipose_training_data_generator.ipynb>
+   Training Omnipose <examples/omnipose_training_data_generator.ipynb>
 
 .. toctree:: 
    :caption: API reference
@@ -62,7 +61,6 @@ Contents
 
 .. image:: https://readthedocs.org/projects/symbac/badge/?version=latest
    :target: https://symbac.readthedocs.io/en/latest/?badge=latest
-   :alt: Documentation Status
 
 .. image:: https://pepy.tech/badge/symbac
    :target: https://pepy.tech/project/symbac
