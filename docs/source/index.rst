@@ -43,9 +43,10 @@ Contents
 
 .. toctree::
    :caption: Examples
-   :maxdepth: 3
+   :maxdepth: 1
 
    Training Omnipose <examples/omnipose_training_data_generator.ipynb>
+   Segmenting with Omnipose <examples/seg_with_omnipose.ipynb>
 
 .. toctree:: 
    :caption: API reference
