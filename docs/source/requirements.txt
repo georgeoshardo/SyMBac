@@ -1,3 +1,4 @@
 sphinx_automodapi
 matplotlib
 nbsphinx
+sphinx_copybutton
