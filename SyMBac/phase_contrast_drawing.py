@@ -19,11 +19,13 @@ from skimage.color import rgb2gray
 from numpy import fft
 from PIL import Image
 import copy
-
+from cupyx.scipy.ndimage import convolve as cuconvolve
 from SyMBac.cell import Cell
 from SyMBac.general_drawing import convolve_rescale, make_images_same_shape, perc_diff, raster_cell, transform_func
 from SyMBac.scene_functions import create_space, step_and_update
 from SyMBac.trench_geometry import trench_creator
+import psfmodels as psfm
+import cupy as cp
 
 
 def get_trench_segments(space):
@@ -297,7 +299,7 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
                              debug_plot=False, noise_var=0.001, main_segments=None, scenes=None, kernel_params=None,
                              resize_amount=None, real_image=None, image_params=None, error_params=None,
                              x_border_expansion_coefficient=None, y_border_expansion_coefficient=None,
-                             fluorescence=False, defocus=3.0):
+                             fluorescence=False, fluo_3D=False, camera_noise=False, camera_params=None, defocus=3.0):
     """
 
     Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image. 
@@ -392,8 +394,34 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA, n=n, sigma=sigma, λ=λ)
         if defocus > 0:
             kernel = gaussian_filter(kernel, defocus, mode="reflect")
+    
+    if fluorescence and fluo_3D: #Full 3D PSF model
+        def generate_deviation_from_CL(centreline, thickness):
+            return np.arange(thickness)+centreline - int(np.ceil(thickness/2))
+        def gen_3D_coords_from_2D(centreline, thickness):
+            return np.where(test_cells==thickness) + (generate_deviation_from_CL(centreline, thickness),)
 
-    convolved = convolve_rescale(expanded_scene, kernel, 1 / resize_amount, rescale_int=True)
+        volume_shape = expanded_scene.shape[0:] + (int(expanded_scene.max()),)
+        test_cells = np.round(expanded_scene)
+        centreline = int(expanded_scene.max()/2)
+        cells_3D = np.zeros(volume_shape)
+        for t in range(int(expanded_scene.max()*2)):
+            test_coords = gen_3D_coords_from_2D(centreline, t)
+            for x, y in zip(test_coords[0], (test_coords[1])):
+                for z in test_coords[2]:
+                    cells_3D[x,y,z] = 1
+        cells_3D = np.moveaxis(cells_3D, -1, 0)
+        psf = psfm.make_psf(volume_shape[2], radius*2, dxy=scale, dz=scale, pz=0, ni=n, wvl=λ, NA = NA)
+        convolved = np.zeros(cells_3D.shape)
+        for x in range(len(cells_3D)):
+            temp_conv = cuconvolve(cp.array(cells_3D[x]), cp.array(psf[x])).get()
+            convolved[x] = temp_conv
+        convolved = convolved.sum(axis=0)
+        convolved = rescale(convolved, 1 / resize_amount, anti_aliasing=False)
+        convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, 1))
+    else:
+        convolved = convolve_rescale(expanded_scene, kernel, 1 / resize_amount, rescale_int=True)
+    
     real_resize, expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
     fftim1 = fft.fftshift(fft.fft2(real_resize))
     angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
@@ -414,9 +442,16 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         matched = match_histograms(matched, real_resize, multichannel=False)
     else:
         pass
-
-    noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
-    noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0, var=noise_var, clip=False)
+    
+    if camera_noise: #Camera noise simulation
+        baseline, sensitivity, dark_noise = camera_params
+        rng = np.random.default_rng(2)
+        matched = matched/(matched.max()/400) / sensitivity
+        matched = rng.poisson(matched)
+        noisy_img = matched + rng.normal(loc = baseline, scale=dark_noise, size=matched.shape)
+    else: #Ad hoc noise mathcing
+        noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
+        noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0, var=noise_var, clip=False)
 
     if match_noise:
         noisy_img = match_histograms(noisy_img, real_resize, multichannel=False)
