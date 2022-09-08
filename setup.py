@@ -31,7 +31,8 @@ setup(
         "pymunk==6.2.0",
         "pyglet==1.5.21",
         "raster-geometry==0.1.4.1",
-        "matplotlib-scalebar==0.7.2"
+        "matplotlib-scalebar==0.7.2",
+        "psfmodels"
         ],
 
     classifiers = [

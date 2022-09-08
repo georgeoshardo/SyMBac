@@ -386,14 +386,7 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
     real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = image_params
     mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error, device_var_error = error_params
 
-    if fluorescence:
-        kernel = get_fluorescence_kernel(radius=radius, scale=scale, NA=NA, n=n, Lambda=λ)[0]
-        if defocus > 0:
-            kernel = gaussian_filter(kernel, defocus, mode="reflect")
-    else:
-        kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA, n=n, sigma=sigma, λ=λ)
-        if defocus > 0:
-            kernel = gaussian_filter(kernel, defocus, mode="reflect")
+
     
     if fluorescence and fluo_3D: #Full 3D PSF model
         def generate_deviation_from_CL(centreline, thickness):
@@ -420,6 +413,14 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
         convolved = rescale(convolved, 1 / resize_amount, anti_aliasing=False)
         convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, 1))
     else:
+        if fluorescence:
+            kernel = get_fluorescence_kernel(radius=radius, scale=scale, NA=NA, n=n, Lambda=λ)[0]
+            if defocus > 0:
+                kernel = gaussian_filter(kernel, defocus, mode="reflect")
+        else:
+            kernel = get_phase_contrast_kernel(R=R, W=W, radius=radius, scale=scale, NA=NA, n=n, sigma=sigma, λ=λ)
+            if defocus > 0:
+                kernel = gaussian_filter(kernel, defocus, mode="reflect")
         convolved = convolve_rescale(expanded_scene, kernel, 1 / resize_amount, rescale_int=True)
     
     real_resize, expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
@@ -446,7 +447,7 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
     if camera_noise: #Camera noise simulation
         baseline, sensitivity, dark_noise = camera_params
         rng = np.random.default_rng(2)
-        matched = matched/(matched.max()/400) / sensitivity
+        matched = matched/(matched.max()/real_image.max()) / sensitivity
         matched = rng.poisson(matched)
         noisy_img = matched + rng.normal(loc = baseline, scale=dark_noise, size=matched.shape)
     else: #Ad hoc noise mathcing
@@ -625,7 +626,7 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
 
 def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length,
-                           burn_in, n_samples, save_dir, in_series=False):
+                           burn_in, n_samples, save_dir, in_series=False, seed=False):
     """
     Generates the training data from a Jupyter interactive output of generate_test_comparison
     
@@ -651,13 +652,17 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     save_dir : str
         The save directory of the training data
     in_series : bool
+        Whether the images should be randomly sampled, or rendered in the order that the simulation was run in.
+    seed : float
+        Optional arg, if specified then the numpy random seed will be set for the rendering, allows reproducible rendering results.
 
     """
-
+    if seed:
+        np.random.seed(seed)
     media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, \
     match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, \
     image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence, \
-    defocus = list(
+    fluo_3D, camera_noise, camera_params, defocus = list(
         interactive_output.kwargs.values())
     debug_plot = False
     try:
@@ -699,7 +704,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
                                                    offset, debug_plot, noise_var, main_segments, scenes, kernel_params,
                                                    resize_amount, real_image, image_params, error_params,
                                                    x_border_expansion_coefficient, y_border_expansion_coefficient,
-                                                   fluorescence, defocus)
+                                                   fluorescence, fluo_3D, camera_noise, camera_params, defocus)
 
         syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
         syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
@@ -715,6 +720,7 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
 
     Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in
                        tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
+
 
 
 # from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
