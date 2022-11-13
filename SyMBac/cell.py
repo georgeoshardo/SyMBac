@@ -53,7 +53,8 @@ class Cell:
         width_mean,
         parent = None,
         daughter = None,
-        lysis_p = 0
+        lysis_p = 0,
+        pinching_sep = 0
     ):
         
         """
@@ -120,6 +121,7 @@ class Cell:
         self.lysis_p = lysis_p
         self.parent = parent
         self.daughter = daughter
+        self.pinching_sep = pinching_sep
         
         
         
@@ -130,6 +132,7 @@ class Cell:
             new_length = self.length/2
             daughter_length = self.length - new_length
             self.length = new_length
+            self.pinching_sep = 0
             cell_vertices = self.calculate_vertex_list()
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
@@ -159,7 +162,8 @@ class Cell:
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
                 "lysis_p": self.lysis_p,
-                "parent": self.parent
+                "parent": self.parent,
+                "pinching_sep": 0
             }
             return daughter_details
         else:
@@ -186,6 +190,8 @@ class Cell:
 
     def update_length(self):
         self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.7,1.3)
+        self.pinching_sep = max(0, self.length - self.max_length + self.width)
+        self.pinching_sep = min(self.pinching_sep, self.width - 1)
 
     def update_position(self):
         self.position = self.body.position
