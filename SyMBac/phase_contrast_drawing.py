@@ -534,7 +534,7 @@ def generate_test_comparison(media_multiplier=75, cell_multiplier=1.7, device_mu
     else:
         return noisy_img, expanded_mask_resized_reshaped.astype(int)
 
-def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks):
+def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):
     """
     Draws a raw scene (no trench) of cells, and returns accompanying masks for training data.
     
@@ -567,12 +567,16 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     space_masks_nolabel = np.zeros(space_size)
     colour_label = [1]
 
+    space_masks = np.zeros(space_size)
+    if label_masks == False:
+        space_masks = space_masks.astype(bool)
+
     for properties in cell_properties:
-        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult = properties
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation = properties
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
-        OPL_cell = raster_cell(length=length, width=width)
+        OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
 
         if do_transformation:
             OPL_cell_2 = np.zeros((OPL_cell.shape[0], int(OPL_cell.shape[1] * 2)))
@@ -681,9 +685,13 @@ def generate_training_data(interactive_output, sample_amount, randomise_hist_mat
     current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
     def generate_samples(z):
+        np.random.seed(0)
         _media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * media_multiplier
+        np.random.seed(1)
         _cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * cell_multiplier
+        np.random.seed(0)
         _device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * device_multiplier
+        np.random.seed(1)
         _sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * sigma
         if in_series:
             _scene_no = burn_in + z % (sim_length - 2)

@@ -142,6 +142,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         farthest_vertices = find_farthest_vertices(vertices)
         length = get_distance(farthest_vertices[0], farthest_vertices[1])
         width = cell.width
+        separation = cell.pinching_sep
         # angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
         angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],
                            (farthest_vertices[0] - farthest_vertices[1])[0])
@@ -149,11 +150,12 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
 
         ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.ID][0]
         phase_mult = 20
-        cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult])
+        cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult,
+                                separation])
     return cell_properties
 
 
-def raster_cell(length, width):
+def raster_cell(length, width, separation, pinching=True):
     L = int(np.rint(length))
     W = int(np.rint(width))
     new_cell = np.zeros((L, W))
@@ -163,6 +165,7 @@ def raster_cell(length, width):
     I_cyl = np.sqrt(R ** 2 - (x_cyl - R) ** 2)
     L_cyl = L - W
     new_cell[int(W / 2):-int(W / 2), :] = I_cyl
+
 
     x_sphere = np.arange(0, int(W / 2), 1)
     sphere_Rs = np.sqrt((R) ** 2 - (x_sphere - R) ** 2)
@@ -174,6 +177,17 @@ def raster_cell(length, width):
         I_cyl = np.sqrt(R_ ** 2 - (x_cyl - R_) ** 2)
         new_cell[c, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
         new_cell[L - c - 1, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
+
+    if separation > 1 and pinching:
+        S = int(np.rint(separation))
+        new_cell[int((L-S) / 2):-int((L-S) / 2), :] = 0
+        for c in range(int(S/2)):
+            R__ = sphere_Rs[-c-1]
+            x_cyl_ = np.arange(0, R__, 1)
+            I_cyl_ = np.sqrt(R__ ** 2 - (x_cyl_ - R__) ** 2)
+            new_cell[int((L-S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
+            new_cell[int((L+S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
+                (I_cyl_, I_cyl_[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
 
