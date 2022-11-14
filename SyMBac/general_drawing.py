@@ -6,8 +6,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 from skimage.exposure import rescale_intensity
+from skimage.morphology import opening
+from skimage.segmentation import find_boundaries
 from skimage.transform import rescale
 from skimage.transform import rotate
+
+from build.lib.SyMBac.phase_contrast_drawing import generate_PC_OPL
+
+from build.lib.SyMBac.PSF import get_phase_contrast_kernel
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
@@ -190,6 +196,103 @@ def raster_cell(length, width, separation, pinching=True):
                 (I_cyl_, I_cyl_[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
+
+
+def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):
+    """
+    Draws a raw scene (no trench) of cells, and returns accompanying masks for training data.
+
+    Parameters
+    ----------
+    cell properties : list
+        A list of cell properties for that frame
+    do_transformation : bool
+        True if you want cells to be bent, false and cells remain straight as in the simulation
+    space_size : tuple
+        The xy size of the numpy array in which the space is rendered. If too small then cells will not fit. recommend using the get_space_size() function to find the correct space size for your simulation
+    offset : int
+        A necessary parameter which offsets the drawing a number of pixels from the left hand side of the image. 30 is a good number, but if the cells are very thick, then might need increasing.
+    label_masks : bool
+        If true returns cell masks which are labelled (good for instance segmentation). If false returns binary masks only. I recommend leaving this as True, because you can always binarise the masks later if you want.
+
+    Returns
+    -------
+    space, space_masks : 2D numpy array, 2D numpy array
+
+    space : 2D numpy array
+        Not to be confused with the pyglet object calledspace in some other functions. Simply a 2D numpy array with an image of cells from the input frame properties
+    space_masks : 2D numy array
+        The masks (labelled or bool) for that scene.
+
+    """
+    space_size = np.array(space_size)  # 1000, 200 a good value
+    space = np.zeros(space_size)
+    space_masks_label = np.zeros(space_size)
+    space_masks_nolabel = np.zeros(space_size)
+    colour_label = [1]
+
+    space_masks = np.zeros(space_size)
+    if label_masks == False:
+        space_masks = space_masks.astype(bool)
+
+    for properties in cell_properties:
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation = properties
+        position = np.array(position)
+        x = np.array(position).astype(int)[0] + offset
+        y = np.array(position).astype(int)[1] + offset
+        OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
+
+        if do_transformation:
+            OPL_cell_2 = np.zeros((OPL_cell.shape[0], int(OPL_cell.shape[1] * 2)))
+            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
+            OPL_cell_2[:,
+            midpoint - int(OPL_cell.shape[1] / 2):midpoint - int(OPL_cell.shape[1] / 2) + OPL_cell.shape[1]] = OPL_cell
+            roll_coords = np.array(range(OPL_cell_2.shape[0]))
+            freq_mult = (OPL_cell_2.shape[0])
+            amp_mult = OPL_cell_2.shape[1] / 10
+            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
+            roll_amounts = sin_transform_cell(roll_coords, amp_mult, freq_mult, phase_mult)
+            for B in roll_coords:
+                OPL_cell_2[B, :] = np.roll(OPL_cell_2[B, :], roll_amounts[B])
+            OPL_cell = (OPL_cell_2)
+
+        rotated_OPL_cell = rotate(OPL_cell, -angle, resize=True, clip=False, preserve_range=True, center=(x, y))
+        cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
+        offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
+        offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
+        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
+        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
+        space[
+        y - cell_y:y + cell_y + offset_y,
+        x - cell_x:x + cell_x + offset_x
+        ] += rotated_OPL_cell
+
+        def get_mask(label_masks):
+
+            if label_masks:
+                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                 rotated_OPL_cell > 0) * \
+                                                                                                         colour_label[0]
+                colour_label[0] += 1
+                return space_masks_label
+            else:
+                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                   rotated_OPL_cell > 0) * 1
+                return space_masks_nolabel
+                # space_masks = opening(space_masks,np.ones((2,11)))
+
+        label_mask = get_mask(True).astype(int)
+        nolabel_mask = get_mask(False).astype(int)
+        label_mask_fixed = np.where(nolabel_mask > 1, 0, label_mask)
+        if label_masks:
+            space_masks = label_mask_fixed
+        else:
+            mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
+            space_masks = np.where(mask_borders, 0, label_mask_fixed)
+            space_masks = opening(space_masks)
+            space_masks = space_masks.astype(bool)
+        space = space * space_masks.astype(bool)
+    return space, space_masks
 
 
 def get_distance(vertex1, vertex2):
@@ -384,3 +487,45 @@ def get_space_size(cell_timeseries_properties):
             if max_y_ > max_y:
                 max_y = max_y_
     return (int(1.2 * max_y), int(1.5 * max_x))
+
+class PSF_kernel:
+    def __init__(self, radius, wavelength, NA, n, resize_amount, pix_mic_conv, apo_sigma, mode):
+        self.radius = radius
+        self.wavelength = wavelength
+        self.NA = NA
+        self.n = n
+        self.resize_amount = resize_amount
+        self.pix_mic_conv = pix_mic_conv
+        self.apo_sigma
+        self.mode = mode
+
+    def render_PSF(self, mode):
+        
+
+class Renderer:
+    def __init__(self, simulation, mode):
+
+        media_multiplier = 30
+        cell_multiplier = 1
+        device_multiplier = -50
+        y_border_expansion_coefficient = 2
+        x_border_expansion_coefficient = 2
+
+        temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = generate_PC_OPL(
+            main_segments=simulation.main_segments,
+            offset=simulation.offset,
+            scene=simulation.OPL_scenes,
+            mask=simulation.masks,
+            media_multiplier=media_multiplier,
+            cell_multiplier=cell_multiplier,
+            device_multiplier=cell_multiplier,
+            y_border_expansion_coefficient=y_border_expansion_coefficient,
+            x_border_expansion_coefficient=x_border_expansion_coefficient,
+            fluorescence=True,
+            defocus=30
+        )
+
+        ### Generate temporary image to make same shape
+        temp_kernel = get_phase_contrast_kernel(*kernel_params)
+        convolved = convolve_rescale(temp_expanded_scene, temp_kernel, 1 / simulation.resize_amount, rescale_int=True)
+        real_resize, expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
