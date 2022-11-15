@@ -1,5 +1,5 @@
 import unittest
-from SyMBac.general_drawing import generate_curve_props, gen_cell_props_for_draw, get_space_size
+from SyMBac.drawing import generate_curve_props, gen_cell_props_for_draw, get_space_size
 from SyMBac.phase_contrast_drawing import *
 from SyMBac.PSF import get_phase_contrast_kernel, get_condensers
 from SyMBac.misc import get_sample_images

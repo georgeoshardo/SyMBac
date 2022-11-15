@@ -1,6 +1,6 @@
 from ipywidgets import interactive, fixed
 import importlib
-from SyMBac.phase_contrast_drawing import generate_test_comparison
+from SyMBac.drawing import generate_test_comparison
 
 if importlib.util.find_spec("cupy") is None:
     manual_update = True

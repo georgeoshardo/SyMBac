@@ -5,7 +5,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from scipy.stats import norm
 from SyMBac.cell import Cell
-from SyMBac.general_drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
+from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 from pymunk.pyglet_util import DrawOptions
 import pymunk
@@ -28,7 +28,7 @@ class Simulation:
         self.phys_iters = phys_iters
         self.resize_amount = resize_amount
         self.save_dir = save_dir
-
+        self.offset = 30
 
     def run_simulation(self, show_window = True):
         self.cell_timeseries, self.space = run_simulation(
@@ -47,7 +47,7 @@ class Simulation:
             show_window = show_window
         )  # growth phase
 
-    def draw_simulation_OPL(self, do_transformation = True, offset = 30, label_masks = True):
+    def draw_simulation_OPL(self, do_transformation = True, label_masks = True):
         self.main_segments = get_trench_segments(self.space)
         ID_props = generate_curve_props(self.cell_timeseries)
 
@@ -57,7 +57,7 @@ class Simulation:
         space_size = get_space_size(self.cell_timeseries_properties)
 
         scenes = Parallel(n_jobs=13)(delayed(draw_scene)(
-        cell_properties, do_transformation, space_size, offset, label_masks) for cell_properties in tqdm(
+        cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
             self.cell_timeseries_properties, desc='Scene Draw:'))
         self.OPL_scenes = [_[0] for _ in scenes]
         self.masks = [_[1] for _ in scenes]

@@ -30,9 +30,11 @@ def histogram_intersection(h1, h2, bins):
         sm += min(h1[i], h2[i])
     return sm
 
-
+import warnings
 def misc_load_img(dir):
-    return tifffile.imread(BytesIO(pkgutil.get_data(__name__, dir)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return tifffile.imread(BytesIO(pkgutil.get_data(__name__, dir)))
 
 
 def get_sample_images():

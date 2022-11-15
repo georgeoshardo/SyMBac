@@ -1,7 +1,84 @@
 import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib_scalebar.scalebar import ScaleBar
 from scipy.special import jv
+import psfmodels as psfm
+import warnings
 
-def get_fluorescence_kernel(Lambda,NA,n,radius,scale):
+class Camera:
+    def __init__(self, baseline, sensitivity, dark_noise):
+        self.baseline, self.sensitivity, self.dark_noise = baseline, sensitivity, dark_noise
+
+    def render_dark_image(self, size, plot=True):
+        rng = np.random.default_rng(2)
+        dark_img = rng.normal(loc = self.baseline, scale=self.dark_noise, size=size)
+        dark_img = rng.poisson(dark_img)
+        if plot:
+            plt.imshow(dark_img, cmap="Greys_r")
+            plt.colorbar()
+            plt.axis("off")
+            plt.show()
+        return dark_img
+
+
+class PSF_generator:
+    def __init__(self, radius, wavelength, NA, n, apo_sigma, mode, condenser=None, z_height=None, resize_amount=None, pix_mic_conv=None, scale=None):
+        self.radius = radius
+        self.wavelength = wavelength
+        self.NA = NA
+        self.n = n
+        if scale:
+            self.scale = scale
+        else:
+            self.resize_amount = resize_amount
+            self.pix_mic_conv = pix_mic_conv
+            self.scale = self.pix_mic_conv / self.resize_amount
+        self.apo_sigma = apo_sigma
+        self.mode = mode
+        self.condenser = condenser
+        if condenser:
+            self.condenser = get_condensers()["Ph3"]
+            self.W, self.R, self.diameter = self.condenser
+
+        self.z_height = z_height
+        self.min_sigma = 0.42 * 0.6 / 6 / self.scale  # micron#
+
+    def calculate_PSF(self):
+        if "phase contrast" in self.mode.lower():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.kernel = get_phase_contrast_kernel(R=self.R, W=self.W, radius=self.radius, scale=self.scale, NA=self.NA, n=self.n, sigma=self.apo_sigma, wavelength=self.wavelength)
+
+        elif "simple fluo" in self.mode.lower():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.kernel = get_fluorescence_kernel(radius=self.radius, scale=self.scale, NA=self.NA, n=self.n, wavelength=self.wavelength)
+
+        elif "3d fluo" in self.mode.lower():
+            assert self.z_height, "For 3D fluorescence, you must specify a Z height"
+            self.kernel = psfm.make_psf(self.z_height, self.radius*2, dxy=self.scale, dz=self.scale, pz=0, ni=self.n, wvl=self.wavelength, NA = self.NA)
+
+        else:
+            raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
+
+    def plot_PSF(self):
+        if "3d fluo" in self.mode.lower():
+            fig, axes = plt.subplots(1, 3)
+            for dim, ax in enumerate(axes.flatten()):
+                ax.axis("off")
+                ax.imshow((self.kernel.mean(axis=dim)))
+                scalebar = ScaleBar(self.scale, "um", length_fraction=0.3)
+                ax.add_artist(scalebar)
+            plt.show()
+        else:
+            fig, ax = plt.subplots()
+            ax.axis("off")
+            ax.imshow(self.kernel)
+            scalebar = ScaleBar(self.scale, "um", length_fraction=0.25)
+            ax.add_artist(scalebar)
+            plt.show()
+
+def get_fluorescence_kernel(wavelength,NA,n,radius,scale):
     """
     Returns a 2D numpy array which is an airy-disk approximation of the fluorescence point spread function
     
@@ -25,13 +102,13 @@ def get_fluorescence_kernel(Lambda,NA,n,radius,scale):
    
 
     r = np.arange(-radius,radius+1)
-    kaw = 2* NA/n * np.pi/Lambda
+    kaw = 2* NA/n * np.pi/wavelength
     xx,yy = np.meshgrid(r,r)
     xx, yy = xx*scale, yy*scale
     rr = np.sqrt(xx**2+yy**2) * kaw 
     PSF = (2*jv(1,rr)/(rr))**2
     PSF[radius,radius] = 1
-    return PSF, np.sqrt(xx**2+yy**2)
+    return PSF
 
         
 def somb(x):
@@ -46,7 +123,7 @@ def somb(x):
 
 
 
-def get_phase_contrast_kernel(R,W,radius,scale,NA,n,sigma,λ):
+def get_phase_contrast_kernel(R,W,radius,scale,NA,n,sigma,wavelength):
     """
     Returns a 2D numpy array which is the phase contrast kernel based on microscope parameters
     
@@ -75,7 +152,7 @@ def get_phase_contrast_kernel(R,W,radius,scale,NA,n,sigma,λ):
     """
     scale1 = 1000 # micron per millimeter
     #F = F * scale1 # to microm
-    Lambda = λ # in micron % wavelength of light
+    Lambda = wavelength # in micron % wavelength of light
     R = R * scale1 # to microm
     W = W * scale1 # to microm
     #The corresponding point spread kernel function for the negative phase contrast 
