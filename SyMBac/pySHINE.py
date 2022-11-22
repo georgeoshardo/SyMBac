@@ -3,7 +3,6 @@ from skimage.color import rgb2gray
 import copy
 
 
-# from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
 def cart2pol(x, y):
     rho = np.sqrt(x ** 2 + y ** 2)
     phi = np.arctan2(y, x)
@@ -29,7 +28,7 @@ def sfMatch(images, rescaling=0, tarmag=None):
         im1 = images[x] / 255
         xs1, ys1 = im1.shape
         assert (xs == xs1) and (ys == ys1), 'All images must have the same size.'
-        fftim1 = np.fft.fftshift(np.fft.fft2(im1))
+        fftim1 = fft.fftshift(fft.fft2(im1))
         angs[:, :, x], mags[:, :, x] = cart2pol(np.real(fftim1), np.imag(fftim1))
 
     if tarmag is None:
@@ -61,16 +60,16 @@ def sfMatch(images, rescaling=0, tarmag=None):
         newmag = fftim * cmat
         XX, YY = pol2cart(angs[:, :, x], newmag)
         new = XX + YY * complex(0, 1)
-        output = np.real(np.fft.ifft2(np.fft.ifftshift(new)))
+        output = np.real(fft.ifft2(fft.ifftshift(new)))
         if rescaling == 0:
-            output = (output * 255).astype(np.uint8)
+            output = (output * 255)
         output_images.append(output)
     if rescaling != 0:
-        output_images = rescale(output_images, rescaling)
+        output_images = rescale_shine(output_images, rescaling)
     return output_images
 
 
-def rescale(images, option=1):
+def rescale_shine(images, option=1):
     assert type(images) == type([]), 'The input must be a list.'
     assert option == 1 or option == 2, "Invalid rescaling option"
     numin = len(images)
@@ -89,7 +88,7 @@ def rescale(images, option=1):
     for m in range(numin):
         if option == 1:
             rescaled = (images[m] - the_darkest) / (the_brightest - the_darkest) * 255
-        elif option == 2:
+        else:  # option == 2:
             rescaled = (images[m] - avg_darkest) / (avg_brightest - avg_darkest) * 255
         output_images.append(rescaled.astype(np.uint8))
     return output_images
@@ -101,8 +100,7 @@ def lumMatch(images, mask=None, lum=None):
 
     numin = len(images)
     if (mask is None) and (lum is None):
-        print("HI")
-        M = 0
+        M = 0;
         S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
@@ -115,13 +113,29 @@ def lumMatch(images, mask=None, lum=None):
         for im in range(numin):
             im1 = copy.deepcopy(images[im])
             if np.std(im1) != 0:
-                print("did_std")
                 im1 = (im1 - np.mean(im1)) / np.std(im1) * S + M
             else:
                 im1[:, :] = M
-            output_images.append(im1.astype(np.uint8))
+            output_images.append(im1)
+    elif (mask is None) and (lum is not None):
+        M = 0
+        S = 0
+        for im in range(numin):
+            if len(images[im].shape) == 3:
+                images[im] = rgb2gray(images[im])
+            M = lum[0]
+            S = lum[1]
+        M = M / numin
+        S = S / numin
+        output_images = []
+        for im in range(numin):
+            im1 = copy.deepcopy(images[im])
+            if np.std(im1) != 0:
+                im1 = (im1 - np.mean(im1)) / np.std(im1) * S + M
+            else:
+                im1[:, :] = M
+            output_images.append(im1)
     elif (mask is not None) and (lum is None):
-        print("HI2")
         M = 0
         S = 0
         for im in range(numin):
@@ -145,9 +159,8 @@ def lumMatch(images, mask=None, lum=None):
                 im1[m == 1] = (im1[m == 1] - np.mean(im1[m == 1])) / np.std(im1[m == 1]) * S + M
             else:
                 im1[m == 1] = M
-            output_images.append(im1.astype(np.uint8))
+            output_images.append(im1)
     elif (mask is not None) and (lum is not None):
-        print("HI3")
         M = lum[0]
         S = lum[1]
         output_images = []
@@ -170,5 +183,5 @@ def lumMatch(images, mask=None, lum=None):
                     im1[m == 1] = (im1[m == 1] - np.mean(im1[m == 1])) / np.std(im1[m == 1]) * S + M
                 else:
                     im1[m == 1] = M
-            output_images.append(im1.astype(np.uint8))
+            output_images.append(im1)
     return output_images

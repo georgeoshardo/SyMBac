@@ -3,8 +3,12 @@ import itertools
 import warnings
 import napari
 import numpy as np
-from ipywidgets import interactive, fixed
+import os
+import skimage
 import psfmodels as psfm
+import copy
+
+from ipywidgets import interactive, fixed
 from matplotlib import pyplot as plt
 from skimage.transform import rescale, rotate
 from skimage.util import random_noise
@@ -13,16 +17,12 @@ from skimage.morphology import opening
 from tqdm import tqdm
 from skimage import draw
 from skimage.exposure import match_histograms, rescale_intensity
-from SyMBac.PSF import get_fluorescence_kernel, get_phase_contrast_kernel
-import os
-import skimage
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter
-from skimage.color import rgb2gray
 from numpy import fft
 from PIL import Image
-import copy
 from SyMBac.PSF import PSF_generator
+from SyMBac.pySHINE import cart2pol, sfMatch, lumMatch
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
@@ -30,6 +30,7 @@ perc_diff = lambda a, b: (a - b) / b * 100
 if importlib.util.find_spec("cupy") is None:
     from scipy.signal import convolve2d as cuconvolve
 
+    njobs = -1
     warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
 
 
@@ -64,6 +65,8 @@ if importlib.util.find_spec("cupy") is None:
 else:
     import cupy as cp
     from cupyx.scipy.ndimage import convolve as cuconvolve
+
+    njobs = 1
 
 
     def convolve_rescale(image, kernel, rescale_factor, rescale_int):
@@ -143,7 +146,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     cell_properties : list
         The final property list used to actually draw a scene of cells. The input to draw_scene
     """
-    
+
     cell_properties = []
     for cell in cell_timeseries_lists:
         body, shape = (cell.body, cell.shape)
@@ -181,7 +184,6 @@ def raster_cell(length, width, separation, pinching=True):
     L_cyl = L - W
     new_cell[int(W / 2):-int(W / 2), :] = I_cyl
 
-
     x_sphere = np.arange(0, int(W / 2), 1)
     sphere_Rs = np.sqrt((R) ** 2 - (x_sphere - R) ** 2)
     sphere_Rs = np.rint(sphere_Rs).astype(int)
@@ -195,13 +197,13 @@ def raster_cell(length, width, separation, pinching=True):
 
     if separation > 1 and pinching:
         S = int(np.rint(separation))
-        new_cell[int((L-S) / 2):-int((L-S) / 2), :] = 0
-        for c in range(int(S/2)):
-            R__ = sphere_Rs[-c-1]
+        new_cell[int((L - S) / 2):-int((L - S) / 2), :] = 0
+        for c in range(int(S / 2)):
+            R__ = sphere_Rs[-c - 1]
             x_cyl_ = np.arange(0, R__, 1)
             I_cyl_ = np.sqrt(R__ ** 2 - (x_cyl_ - R__) ** 2)
-            new_cell[int((L-S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
-            new_cell[int((L+S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
+            new_cell[int((L - S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
+            new_cell[int((L + S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
                 (I_cyl_, I_cyl_[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
@@ -510,13 +512,12 @@ class Renderer:
 
     """
 
-
     def __init__(self, simulation, PSF, real_image, camera=None):
         self.real_image = real_image
         self.PSF = PSF
         self.simulation = simulation
         self.real_image = real_image
-        self.camera=camera
+        self.camera = camera
         media_multiplier = 30
         cell_multiplier = 1
         device_multiplier = -50
@@ -553,7 +554,9 @@ class Renderer:
         cell_var_error = []
         device_var_error = []
 
-        self.error_params = (mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error, device_var_error)
+        self.error_params = (
+        mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error,
+        device_var_error)
 
     def select_intensity_napari(self):
         viewer = napari.view_image(self.real_resize)
@@ -561,11 +564,9 @@ class Renderer:
         self.cell_label = viewer.add_labels(np.zeros(self.real_resize.shape).astype(int), name="Cell")
         self.device_label = viewer.add_labels(np.zeros(self.real_resize.shape).astype(int), name="Device")
 
-
     def generate_test_comparison(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
-                                 debug_plot=False, noise_var=0.001,
-                                 resize_amount=None, real_image=None, defocus=3.0):
+                                 debug_plot=False, noise_var=0.001, defocus=3.0):
         """
 
         Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image.
@@ -640,6 +641,12 @@ class Renderer:
         real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = self.image_params
         mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error, device_var_error = self.error_params
 
+        if self.PSF.mode == "phase contrast":
+            self.PSF = PSF_generator(radius=self.PSF.radius, wavelength=self.PSF.wavelength, NA=self.PSF.NA,
+                                     n=self.PSF.n, resize_amount=self.simulation.resize_amount,
+                                     pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
+                                     condenser=self.PSF.condenser)
+            self.PSF.calculate_PSF()
         if self.PSF.mode == "3d fluo":  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
@@ -663,15 +670,15 @@ class Renderer:
                 temp_conv = cuconvolve(cp.array(cells_3D[x]), cp.array(psf[x])).get()
                 convolved[x] = temp_conv
             convolved = convolved.sum(axis=0)
-            convolved = rescale(convolved, 1 / resize_amount, anti_aliasing=False)
+            convolved = rescale(convolved, 1 / self.simulation.resize_amount, anti_aliasing=False)
             convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, 1))
         else:
             kernel = self.PSF.kernel
             if defocus > 0:
                 kernel = gaussian_filter(kernel, defocus, mode="reflect")
-            convolved = convolve_rescale(expanded_scene, kernel, 1 / resize_amount, rescale_int=True)
+            convolved = convolve_rescale(expanded_scene, kernel, 1 / self.simulation.resize_amount, rescale_int=True)
 
-        real_resize, expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
+        real_resize, expanded_resized = make_images_same_shape(self.real_image, convolved, rescale_int=True)
         fftim1 = fft.fftshift(fft.fft2(real_resize))
         angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
 
@@ -695,7 +702,7 @@ class Renderer:
         if self.camera:  # Camera noise simulation
             baseline, sensitivity, dark_noise = self.camera.baseline, self.camera.sensitivity, self.camera.dark_noise
             rng = np.random.default_rng(2)
-            matched = matched / (matched.max() / real_image.max()) / sensitivity
+            matched = matched / (matched.max() / self.real_image.max()) / sensitivity
             matched = rng.poisson(matched)
             noisy_img = matched + rng.normal(loc=baseline, scale=dark_noise, size=matched.shape)
         else:  # Ad hoc noise mathcing
@@ -709,32 +716,36 @@ class Renderer:
         noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
 
         ## getting the cell mask to the right shape
-        expanded_mask_resized = rescale(expanded_mask, 1 / resize_amount, anti_aliasing=False, preserve_range=True,
+        expanded_mask_resized = rescale(expanded_mask, 1 / self.simulation.resize_amount, anti_aliasing=False,
+                                        preserve_range=True,
                                         order=0)
         if len(np.unique(expanded_mask_resized)) > 2:
-            _, expanded_mask_resized_reshaped = make_images_same_shape(real_image, expanded_mask_resized,
+            _, expanded_mask_resized_reshaped = make_images_same_shape(self.real_image, expanded_mask_resized,
                                                                        rescale_int=False)
         else:
-            _, expanded_mask_resized_reshaped = make_images_same_shape(real_image, expanded_mask_resized,
+            _, expanded_mask_resized_reshaped = make_images_same_shape(self.real_image, expanded_mask_resized,
                                                                        rescale_int=True)
 
         expanded_media_mask = rescale(
             (expanded_scene_no_cells == device_multiplier) ^ (expanded_scene - expanded_scene_no_cells).astype(bool),
-            1 / resize_amount, anti_aliasing=False)
-        real_resize, expanded_media_mask = make_images_same_shape(real_image, expanded_media_mask, rescale_int=True)
+            1 / self.simulation.resize_amount, anti_aliasing=False)
+        real_resize, expanded_media_mask = make_images_same_shape(self.real_image, expanded_media_mask,
+                                                                  rescale_int=True)
         just_media = expanded_media_mask * noisy_img
 
         expanded_cell_pseudo_mask = (expanded_scene - expanded_scene_no_cells).astype(bool)
-        expanded_cell_pseudo_mask = rescale(expanded_cell_pseudo_mask, 1 / resize_amount, anti_aliasing=False)
+        expanded_cell_pseudo_mask = rescale(expanded_cell_pseudo_mask, 1 / self.simulation.resize_amount,
+                                            anti_aliasing=False)
 
-        real_resize, expanded_cell_pseudo_mask = make_images_same_shape(real_image, expanded_cell_pseudo_mask,
+        real_resize, expanded_cell_pseudo_mask = make_images_same_shape(self.real_image, expanded_cell_pseudo_mask,
                                                                         rescale_int=True)
         just_cells = expanded_cell_pseudo_mask * noisy_img
 
         expanded_device_mask = expanded_scene_no_cells
 
-        expanded_device_mask = rescale(expanded_device_mask, 1 / resize_amount, anti_aliasing=False)
-        real_resize, expanded_device_mask = make_images_same_shape(real_image, expanded_device_mask, rescale_int=True)
+        expanded_device_mask = rescale(expanded_device_mask, 1 / self.simulation.resize_amount, anti_aliasing=False)
+        real_resize, expanded_device_mask = make_images_same_shape(self.real_image, expanded_device_mask,
+                                                                   rescale_int=True)
         just_device = expanded_device_mask * noisy_img
 
         simulated_means = np.array([just_media[np.where(just_media)].mean(), just_cells[np.where(just_cells)].mean(),
@@ -832,14 +843,17 @@ class Renderer:
 
         def get_OPL_image(scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                           y_border_expansion_coefficient, x_border_expansion_coefficient, defocus):
-            print(self.simulation)
-            segment_1_top_left = (0 + self.simulation.offset, int(self.simulation.main_segments.iloc[0]["bb"][0] + self.simulation.offset))
+            segment_1_top_left = (
+            0 + self.simulation.offset, int(self.simulation.main_segments.iloc[0]["bb"][0] + self.simulation.offset))
             segment_1_bottom_right = (
-                int(self.simulation.main_segments.iloc[0]["bb"][3] + self.simulation.offset), int(self.simulation.main_segments.iloc[0]["bb"][2] + self.simulation.offset))
+                int(self.simulation.main_segments.iloc[0]["bb"][3] + self.simulation.offset),
+                int(self.simulation.main_segments.iloc[0]["bb"][2] + self.simulation.offset))
 
-            segment_2_top_left = (0 + self.simulation.offset, int(self.simulation.main_segments.iloc[1]["bb"][0] + self.simulation.offset))
+            segment_2_top_left = (
+            0 + self.simulation.offset, int(self.simulation.main_segments.iloc[1]["bb"][0] + self.simulation.offset))
             segment_2_bottom_right = (
-                int(self.simulation.main_segments.iloc[1]["bb"][3] + self.simulation.offset), int(self.simulation.main_segments.iloc[1]["bb"][2] + self.simulation.offset))
+                int(self.simulation.main_segments.iloc[1]["bb"][3] + self.simulation.offset),
+                int(self.simulation.main_segments.iloc[1]["bb"][2] + self.simulation.offset))
 
             if "fluo" in self.PSF.mode.lower():
                 test_scene = np.zeros(scene.shape)
@@ -851,7 +865,8 @@ class Renderer:
                 rr, cc = draw.rectangle(start=segment_2_top_left, end=segment_2_bottom_right, shape=test_scene.shape)
                 test_scene[rr, cc] = 1 * media_multiplier
                 circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1]) / 2
-                radius = (segment_1_top_left[1] - self.simulation.offset - (segment_2_bottom_right[1] - self.simulation.offset)) / 2
+                radius = (segment_1_top_left[1] - self.simulation.offset - (
+                            segment_2_bottom_right[1] - self.simulation.offset)) / 2
                 circ_midpoint_x = (self.simulation.offset) + radius
 
                 rr, cc = draw.rectangle(start=segment_2_top_left, end=(circ_midpoint_x, segment_1_top_left[1]),
@@ -912,7 +927,8 @@ class Renderer:
                                                                                x_border_expansion_coefficient,
                                                                                defocus)
         if expanded_scene is None:
-            self.simulation.main_segments = self.simulation.main_segments.reindex(index=self.simulation.main_segments.index[::-1])
+            self.simulation.main_segments = self.simulation.main_segments.reindex(
+                index=self.simulation.main_segments.index[::-1])
             expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(scene, mask,
                                                                                    media_multiplier, cell_multiplier,
                                                                                    device_multiplier,
@@ -933,9 +949,9 @@ class Renderer:
         self.real_device_var = self.real_resize[np.where(self.device_label.data)].var()
         self.real_vars = np.array((self.real_media_var, self.real_cell_var, self.real_device_var))
 
-        self.image_params = (self.real_media_mean, self.real_cell_mean, self.real_device_mean, self.real_means, self.real_media_var, self.real_cell_var, self.real_device_var, self.real_vars)
-
-
+        self.image_params = (
+        self.real_media_mean, self.real_cell_mean, self.real_device_mean, self.real_means, self.real_media_var,
+        self.real_cell_var, self.real_device_var, self.real_vars)
 
         self.params = interactive(
             self.generate_test_comparison,
@@ -946,309 +962,111 @@ class Renderer:
             sigma=(self.PSF.min_sigma, self.PSF.min_sigma * 20, self.PSF.min_sigma / 20),
             scene_no=(0, len(self.simulation.OPL_scenes) - 1, 1),
             noise_var=(0, 0.01, 0.0001),
-            scale=fixed(self.PSF.scale),
             match_fourier=[True, False],
             match_histogram=[True, False],
             match_noise=[True, False],
-            offset=fixed(self.simulation.offset),
-            main_segments=fixed(self.simulation.main_segments),
             debug_plot=fixed(True),
-            scenes=fixed(self.simulation.OPL_scenes),
-            kernel=fixed(self.PSF),
-            resize_amount=fixed(self.simulation.resize_amount),
-            real_image=fixed(self.real_image),
-            image_params=fixed(self.image_params),
-            x_border_expansion_coefficient=fixed(self.x_border_expansion_coefficient),
-            y_border_expansion_coefficient=fixed(self.y_border_expansion_coefficient),
-            defocus=(0, 20, 0.1)
+            defocus=(0, 20, 0.1),
         )
 
         return self.params
 
+    def generate_training_data(self, sample_amount, randomise_hist_match, randomise_noise_match,
+                               burn_in, n_samples, save_dir, in_series=False, seed=False):
+        """
+        Generates the training data from a Jupyter interactive output of generate_test_comparison
 
+        Parameters
+        ----------
+        sample_amount : float
+            The percentage sampling variance (drawn from a uniform distribution) to vary intensities by. For example, a
+            sample_amount of 0.05 will randomly sample +/- 5% above and below the chosen intensity for cells,
+            media and device. Can be used to create a little bit of variance in the final training data.
+        randomise_hist_match : bool
+            If true, histogram matching is randomly turned on and off each time a training sample is generated
+        randomise_noise_match : bool
+            If true, noise matching is randomly turned on and off each time a training sample is generated
+        burn_in : int
+            Number of frames to wait before generating training data. Can be used to ignore the start of the simulation
+            where the trench only has 1 cell in it.
+        n_samples : int
+            The number of training images to generate
+        save_dir : str
+            The save directory of the training data
+        in_series : bool
+            Whether the images should be randomly sampled, or rendered in the order that the simulation was run in.
+        seed : float
+            Optional arg, if specified then the numpy random seed will be set for the rendering, allows reproducible rendering results.
 
+        """
+        if seed:
+            np.random.seed(seed)
 
+        try:
+            os.mkdir(save_dir)
+        except:
+            pass
+        try:
+            os.mkdir(save_dir + "/convolutions")
+        except:
+            pass
+        try:
+            os.mkdir(save_dir + "/masks")
+        except:
+            pass
 
+        current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
-
-
-def generate_training_data(interactive_output, sample_amount, randomise_hist_match, randomise_noise_match, sim_length,
-                           burn_in, n_samples, save_dir, in_series=False, seed=False):
-    """
-    Generates the training data from a Jupyter interactive output of generate_test_comparison
-
-    Parameters
-    ----------
-    interactive_output : ipywidgets.widgets.interaction.interactive
-        The slider object generated by :func:`~SyMBac.optimisation.manual_optimise` after you have finished tweaking parameters
-    sample_amount : float
-        The percentage sampling variance (drawn from a uniform distribution) to vary intensities by. For example, a
-        sample_amount of 0.05 will randomly sample +/- 5% above and below the chosen intensity for cells,
-        media and device. Can be used to create a little bit of variance in the final training data.
-    randomise_hist_match : bool
-        If true, histogram matching is randomly turned on and off each time a training sample is generated
-    randomise_noise_match : bool
-        If true, noise matching is randomly turned on and off each time a training sample is generated
-    sim_length : int
-        the length of the simulation which was run
-    burn_in : int
-        Number of frames to wait before generating training data. Can be used to ignore the start of the simulation
-        where the trench only has 1 cell in it.
-    n_samples : int
-        The number of training images to generate
-    save_dir : str
-        The save directory of the training data
-    in_series : bool
-        Whether the images should be randomly sampled, or rendered in the order that the simulation was run in.
-    seed : float
-        Optional arg, if specified then the numpy random seed will be set for the rendering, allows reproducible rendering results.
-
-    """
-    if seed:
-        np.random.seed(seed)
-    media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, scale, match_fourier, match_histogram, \
-    match_noise, offset, debug_plot, noise_var, main_segments, scenes, kernel_params, resize_amount, real_image, \
-    image_params, error_params, x_border_expansion_coefficient, y_border_expansion_coefficient, fluorescence, \
-    fluo_3D, camera_noise, camera_params, defocus = list(
-        interactive_output.kwargs.values())
-    debug_plot = False
-    try:
-        os.mkdir(save_dir)
-    except:
-        pass
-    try:
-        os.mkdir(save_dir + "/convolutions")
-    except:
-        pass
-    try:
-        os.mkdir(save_dir + "/masks")
-    except:
-        pass
-
-    current_file_num = len(os.listdir(save_dir + "/convolutions"))
-
-    def generate_samples(z):
-        np.random.seed(0)
-        _media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * media_multiplier
-        np.random.seed(1)
-        _cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * cell_multiplier
-        np.random.seed(0)
-        _device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * device_multiplier
-        np.random.seed(1)
-        _sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * sigma
-        if in_series:
-            _scene_no = burn_in + z % (sim_length - 2)
-            # can maybe re-run run_simulation and draw_scene when this loops back to 0
-        else:
-            _scene_no = np.random.randint(burn_in, sim_length - 2)
-        if randomise_hist_match:
-            _match_histogram = np.random.choice([True, False])
-        else:
-            _match_histogram = match_histogram
-        if randomise_noise_match:
-            _match_noise = np.random.choice([True, False])
-        else:
-            _match_noise = match_noise
-
-        syn_image, mask = generate_test_comparison(_media_multiplier, _cell_multiplier, _device_multiplier, _sigma,
-                                                   _scene_no, scale, match_fourier, _match_histogram, _match_noise,
-                                                   offset, debug_plot, noise_var, main_segments, scenes, kernel_params,
-                                                   resize_amount, real_image, image_params, error_params,
-                                                   x_border_expansion_coefficient, y_border_expansion_coefficient,
-                                                   fluorescence, fluo_3D, camera_noise, camera_params, defocus)
-
-        syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
-        syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
-
-        if (cell_multiplier == 0) or (cell_multiplier == 0.0):
-            mask = np.zeros(mask.shape)
-            mask = Image.fromarray(mask.astype(np.uint8))
-            mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
-        else:
-            mask = Image.fromarray(mask.astype(np.uint8))
-            mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
-            ## TODO: change parallel if not using GPU
-
-    Parallel(n_jobs=1)(delayed(generate_samples)(z) for z in
-                       tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
-
-
-# from https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
-def cart2pol(x, y):
-    phi = np.arctan2(y, x)
-    rho = np.sqrt(x ** 2 + y ** 2)
-    return phi, rho
-
-def pol2cart(phi, rho):
-    x = rho * np.cos(phi)
-    y = rho * np.sin(phi)
-    return x, y
-
-def sfMatch(images, rescaling=0, tarmag=None):
-    assert type(images) == type([]), 'The input must be a list.'
-
-    numin = len(images)
-    xs, ys = images[1].shape
-    angs = np.zeros((xs, ys, numin))
-    mags = np.zeros((xs, ys, numin))
-    for x in range(numin):
-        if len(images[x].shape) == 3:
-            images[x] = rgb2gray(images[x])
-        im1 = images[x] / 255
-        xs1, ys1 = im1.shape
-        assert (xs == xs1) and (ys == ys1), 'All images must have the same size.'
-        fftim1 = fft.fftshift(fft.fft2(im1))
-        angs[:, :, x], mags[:, :, x] = cart2pol(np.real(fftim1), np.imag(fftim1))
-
-    if tarmag is None:
-        tarmag = np.mean(mags, 2)
-
-    xt, yt = tarmag.shape
-    assert (xs == xt) and (ys == yt), 'The target spectrum must have the same size as the images.'
-    f1 = np.linspace(-ys / 2, ys / 2 - 1, ys)
-    f2 = np.linspace(-xs / 2, xs / 2 - 1, xs)
-    XX, YY = np.meshgrid(f1, f2)
-    t, r = cart2pol(XX, YY)
-    if xs % 2 == 1 or ys % 2 == 1:
-        r = np.round(r) - 1
-    else:
-        r = np.round(r)
-    output_images = []
-    for x in range(numin):
-        fftim = mags[:, :, x]
-        a = fftim.T.ravel()
-        accmap = r.T.ravel() + 1
-        a2 = tarmag.T.ravel()
-        en_old = np.array(
-            [np.sum([a[x] for x in y]) for y in [list(np.where(accmap == z)) for z in np.unique(accmap).tolist()]])
-        en_new = np.array(
-            [np.sum([a2[x] for x in y]) for y in [list(np.where(accmap == z)) for z in np.unique(accmap).tolist()]])
-        coefficient = en_new / en_old
-        cmat = coefficient[(r).astype(int)]  # coefficient[r+1]
-        cmat[r > np.floor(np.max((xs, ys)) / 2)] = 0
-        newmag = fftim * cmat
-        XX, YY = pol2cart(angs[:, :, x], newmag)
-        new = XX + YY * complex(0, 1)
-        output = np.real(fft.ifft2(fft.ifftshift(new)))
-        if rescaling == 0:
-            output = (output * 255)
-        output_images.append(output)
-    if rescaling != 0:
-        output_images = rescale_shine(output_images, rescaling)
-    return output_images
-
-def rescale_shine(images, option=1):
-    assert type(images) == type([]), 'The input must be a list.'
-    assert option == 1 or option == 2, "Invalid rescaling option"
-    numin = len(images)
-    brightests = np.zeros((numin, 1))
-    darkests = np.zeros((numin, 1))
-    for n in range(numin):
-        if len(images[n].shape) == 3:
-            images[n] = rgb2gray(images[n])
-        brightests[n] = np.max(images[n])
-        darkests[n] = np.min(images[n])
-    the_brightest = np.max(brightests)
-    the_darkest = np.min(darkests)
-    avg_brightest = np.mean(brightests)
-    avg_darkest = np.mean(darkests)
-    output_images = []
-    for m in range(numin):
-        if option == 1:
-            rescaled = (images[m] - the_darkest) / (the_brightest - the_darkest) * 255
-        else:  # option == 2:
-            rescaled = (images[m] - avg_darkest) / (avg_brightest - avg_darkest) * 255
-        output_images.append(rescaled.astype(np.uint8))
-    return output_images
-
-def lumMatch(images, mask=None, lum=None):
-    assert type(images) == type([]), 'The input must be a list.'
-    assert (mask is None) or type(mask) == type([]), 'The input mask must be a list.'
-
-    numin = len(images)
-    if (mask is None) and (lum is None):
-        M = 0;
-        S = 0
-        for im in range(numin):
-            if len(images[im].shape) == 3:
-                images[im] = rgb2gray(images[im])
-            M = M + np.mean(images[im])
-            S = S + np.std(images[im])
-        M = M / numin
-        S = S / numin
-        output_images = []
-        for im in range(numin):
-            im1 = copy.deepcopy(images[im])
-            if np.std(im1) != 0:
-                im1 = (im1 - np.mean(im1)) / np.std(im1) * S + M
+        def generate_samples(z):
+            np.random.seed(0)
+            media_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs[
+                "media_multiplier"]
+            np.random.seed(1)
+            cell_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs[
+                "cell_multiplier"]
+            np.random.seed(0)
+            device_multiplier = np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs[
+                "device_multiplier"]
+            np.random.seed(1)
+            sigma = np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["sigma"]
+            if in_series:
+                scene_no = burn_in + z % (self.simulation.sim_length - 2)
+                # can maybe re-run run_simulation and draw_scene when this loops back to 0
             else:
-                im1[:, :] = M
-            output_images.append(im1)
-    elif (mask is None) and (lum is not None):
-        M = 0
-        S = 0
-        for im in range(numin):
-            if len(images[im].shape) == 3:
-                images[im] = rgb2gray(images[im])
-            M = lum[0]
-            S = lum[1]
-        M = M / numin
-        S = S / numin
-        output_images = []
-        for im in range(numin):
-            im1 = copy.deepcopy(images[im])
-            if np.std(im1) != 0:
-                im1 = (im1 - np.mean(im1)) / np.std(im1) * S + M
+                scene_no = np.random.randint(burn_in, self.simulation.sim_length - 2)
+            if randomise_hist_match:
+                match_histogram = np.random.choice([True, False])
             else:
-                im1[:, :] = M
-            output_images.append(im1)
-    elif (mask is not None) and (lum is None):
-        M = 0
-        S = 0
-        for im in range(numin):
-            if len(images[im].shape) == 3:
-                images[im] = rgb2gray(images[im])
-            im1 = images[im]
-            assert len(images) == len(mask), "The inputs must have the same length"
-            m = mask[im]
-            assert m.size == images[im].size, "Image and mask are not the same size"
-            assert np.sum(m == 1) > 0, 'The mask must contain some ones.'
-            M = M + np.mean(im1[m == 1])
-            S = S + np.mean(im1[m == 1])
-        M = M / numin
-        S = S / numin
-        output_images = []
-        for im in range(numin):
-            im1 = images[im]
-            if type(mask) == type([]):
-                m = mask[im]
-            if np.std(im1[m == 1]):
-                im1[m == 1] = (im1[m == 1] - np.mean(im1[m == 1])) / np.std(im1[m == 1]) * S + M
+                match_histogram = self.params.kwargs["match_histogram"]
+            if randomise_noise_match:
+                match_noise = np.random.choice([True, False])
             else:
-                im1[m == 1] = M
-            output_images.append(im1)
-    elif (mask is not None) and (lum is not None):
-        M = lum[0]
-        S = lum[1]
-        output_images = []
-        for im in range(numin):
-            if len(images[im].shape) == 3:
-                images[im] = rgb2gray(images[im])
-            im1 = images[im]
-            if len(mask) == 0:
-                if np.std(im1) != 0.0:
-                    im1 = (im1 - np.mean(im1)) / np.std(im1) * S + M
-                else:
-                    im1[:, :] = M
+                match_noise = self.params.kwargs["match_noise"]
+
+            syn_image, mask = self.generate_test_comparison(
+                media_multiplier=media_multiplier,
+                cell_multiplier=cell_multiplier,
+                device_multiplier=device_multiplier,
+                sigma=sigma,
+                scene_no=scene_no,
+                match_fourier=self.params.kwargs["match_fourier"],
+                match_histogram=match_histogram,
+                match_noise=match_noise,
+                debug_plot=False,
+                noise_var=self.params.kwargs["noise_var"],
+                defocus=self.params.kwargs["defocus"]
+            )
+
+            syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
+            syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+
+            if (cell_multiplier == 0) or (cell_multiplier == 0.0):
+                mask = np.zeros(mask.shape)
+                mask = Image.fromarray(mask.astype(np.uint8))
+                mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
             else:
-                if type(mask) == type([]):
-                    assert len(images) == len(mask), "The inputs must have the same length"
-                    m = mask[im]
-                assert m.size == images[im].size, "Image and mask are not the same size"
-                assert np.sum(m == 1) > 0, 'The mask must contain some ones.'
-                if np.std(im1[m == 1]) != 0.0:
-                    im1[m == 1] = (im1[m == 1] - np.mean(im1[m == 1])) / np.std(im1[m == 1]) * S + M
-                else:
-                    im1[m == 1] = M
-            output_images.append(im1)
-    return output_images
+                mask = Image.fromarray(mask.astype(np.uint8))
+                mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+
+        Parallel(n_jobs=njobs)(delayed(generate_samples)(z) for z in
+                               tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))

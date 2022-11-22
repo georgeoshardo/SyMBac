@@ -37,8 +37,7 @@ class PSF_generator:
         self.mode = mode
         self.condenser = condenser
         if condenser:
-            self.condenser = get_condensers()["Ph3"]
-            self.W, self.R, self.diameter = self.condenser
+            self.W, self.R, self.diameter = get_condensers()[condenser]
 
         self.z_height = z_height
         self.min_sigma = 0.42 * 0.6 / 6 / self.scale  # micron#
