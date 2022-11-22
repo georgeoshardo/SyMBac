@@ -1,71 +1,13 @@
 import pickle
 from copy import deepcopy
-
 import numpy as np
-from joblib import Parallel, delayed
 from scipy.stats import norm
 from SyMBac.cell import Cell
-from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 from pymunk.pyglet_util import DrawOptions
 import pymunk
 import pyglet
 from tqdm.autonotebook import tqdm
-import napari
-
-class Simulation:
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir):
-        self.trench_length = trench_length
-        self.trench_width = trench_width
-        self.cell_max_length = cell_max_length
-        self.max_length_var = max_length_var
-        self.cell_width = cell_width
-        self.width_var = width_var
-        self.lysis_p = lysis_p
-        self.sim_length = sim_length
-        self.pix_mic_conv = pix_mic_conv
-        self.gravity = gravity
-        self.phys_iters = phys_iters
-        self.resize_amount = resize_amount
-        self.save_dir = save_dir
-        self.offset = 30
-
-    def run_simulation(self, show_window = True):
-        self.cell_timeseries, self.space = run_simulation(
-            trench_length=self.trench_length,
-            trench_width=self.trench_width,
-            cell_max_length=self.cell_max_length,  # 6, long cells # 1.65 short cells
-            cell_width=self.cell_width,  # 1 long cells # 0.95 short cells
-            sim_length=self.sim_length,
-            pix_mic_conv=self.pix_mic_conv,
-            gravity=self.gravity,
-            phys_iters=self.phys_iters,
-            max_length_var=self.max_length_var,
-            width_var=self.width_var,
-            lysis_p=self.lysis_p,  # this should somehow depends on the time
-            save_dir=self.save_dir,
-            show_window = show_window
-        )  # growth phase
-
-    def draw_simulation_OPL(self, do_transformation = True, label_masks = True):
-        self.main_segments = get_trench_segments(self.space)
-        ID_props = generate_curve_props(self.cell_timeseries)
-
-        self.cell_timeseries_properties = Parallel(n_jobs=-1)(
-            delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(self.cell_timeseries, desc='Timeseries Properties'))
-
-        space_size = get_space_size(self.cell_timeseries_properties)
-
-        scenes = Parallel(n_jobs=13)(delayed(draw_scene)(
-        cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
-            self.cell_timeseries_properties, desc='Scene Draw:'))
-        self.OPL_scenes = [_[0] for _ in scenes]
-        self.masks = [_[1] for _ in scenes]
-
-    def visualise_in_napari(self):
-        viewer = napari.view_image(np.array(self.OPL_scenes), name='OPL scenes')
-        viewer.add_labels(np.array(self.masks), name='Synthetic masks')
-        napari.run()
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir, lysis_p=0, show_window = True):
@@ -85,7 +27,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     cell_max_length : float
         Maximum length a cell can reach before dividing (micron)
     cell_width : float
-        the average cell width in the simmulation (micron)
+        the average cell width in the simulation (micron)
     pix_mic_conv : float
         The micron/pixel size of the image
     gravity : float
@@ -100,7 +42,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     width_var : float
         Variance of the maximum cell width
     save_dir : str
-        Location to save simulation outupt
+        Location to save simulation output
     lysis_p : float
         probability of cell lysis
 
@@ -199,16 +141,34 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     return cell_timeseries, space
 
 def create_space():
+    """
+    Creates a pymunk space
+
+    :return pymunk.Space space: A pymunk space
+    """
+
     space = pymunk.Space(threaded=False)
     #space.threads = 2
     return space
 
 def update_cell_lengths(cells):
+    """
+    Iterates through all cells in the simulation and updates their length according to their growth law.
+
+    :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
+    """
     for cell in cells:
         cell.update_length()
 
 
 def update_pm_cells(cells):
+    """
+    Iterates through all cells in the simulation and updates their pymunk body and shape objects. Contains logic to
+    check for cell division, and create daughters if necessary.
+
+    :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
+
+    """
     for cell in cells:
         if cell.is_dividing():
             daughter_details = cell.create_pm_cell()
@@ -220,22 +180,52 @@ def update_pm_cells(cells):
             cell.create_pm_cell()
 
 def update_cell_positions(cells):
+    """
+    Iterates through all cells in the simulation and updates their positions, keeping the cell object's position
+    synchronised with its corresponding pymunk shape and body inside the pymunk space.
+
+    :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
+    """
     for cell in cells:
         cell.update_position()
 
 def wipe_space(space):
+    """
+    Deletes all cells in the simulation pymunk space.
+
+    :param pymunk.Space space:
+    """
     for body, poly in zip(space.bodies, space.shapes):
         if body.body_type == 0:
             space.remove(body)
             space.remove(poly)
 
 def update_cell_parents(cells, new_cells):
+    """
+    Takes two lists of cells, one in the previous frame, and one in the frame after division, and updates the parents of
+    each cell
+
+    :param list(SyMBac.cell.Cell) cells:
+    :param list(SyMBac.cell.Cell) new_cells:
+    """
     for i in range(len(cells)):
         cells[i].update_parent(id(new_cells[i]))
 
-#'def space_stepper(space, dt, collision_bias, collision_persistence, collision_slop, damping)
-
 def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
+    """
+    Evolves the simulation forward by one timestep
+
+    :param float dt: The simulation timestep
+    :param list(SyMBac.cell.Cell)  cells: A list of all cells in the current timestep
+    :param pymunk.Space space:
+    :param int phys_iters:
+    :param int ylim:
+    :param list cell_timeseries:
+    :param int x:
+    :param int sim_length:
+    :param str save_dir:
+
+    """
     for shape in space.shapes:
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)

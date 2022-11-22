@@ -52,12 +52,14 @@ Contents
    :caption: API reference
    :maxdepth: 3
 
+   symbac_cell
    symbac_cell_geometry
-   symbac_general_drawing
+   symbac_cell_simulation
+   symbac_drawing
    symbac_misc
-   symbac_phase_contrast_drawing
-   symbac_optimisation
    symbac_PSF
+   symbac_pySHINE
+   symbac_simulation
 
 
 .. image:: https://readthedocs.org/projects/symbac/badge/?version=latest
