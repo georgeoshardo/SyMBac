@@ -34,6 +34,8 @@ class Cell:
         """
         Initialising a cell
 
+        For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html Cell class has been tested and works with pymunk version 6.0.0
+
         Parameters
         ----------
         length : float
@@ -69,8 +71,6 @@ class Cell:
         ID : int
             A unique identifier for each cell. At the moment just a number from 0 to 100_000_000 and cross fingers that we get no collisions. 
             
-        For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html
-        Cell class has been tested and works with pymunk version 6.0.0
         """
         self.dt = dt
         self.growth_rate_constant = growth_rate_constant

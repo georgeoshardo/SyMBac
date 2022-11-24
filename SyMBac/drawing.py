@@ -1,33 +1,14 @@
-import importlib
 import itertools
-import warnings
-import napari
 import numpy as np
-import os
-import skimage
-import psfmodels as psfm
-import copy
-
-from ipywidgets import interactive, fixed
 from matplotlib import pyplot as plt
 from skimage.transform import rescale, rotate
-from skimage.util import random_noise
-from joblib import Parallel, delayed
 from skimage.morphology import opening
-from tqdm import tqdm
-from skimage import draw
-from skimage.exposure import match_histograms, rescale_intensity
+from skimage.exposure import rescale_intensity
 from skimage.segmentation import find_boundaries
-from scipy.ndimage import gaussian_filter
-from numpy import fft
 from PIL import Image
-from SyMBac.PSF import PSF_generator
-from SyMBac.pySHINE import cart2pol, sfMatch, lumMatch
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
-
-
 
 def generate_curve_props(cell_timeseries):
     """
@@ -36,7 +17,7 @@ def generate_curve_props(cell_timeseries):
     Parameters
     ---------
     cell_timeseries : list(cell_properties)
-        The output of SyMBac.Simulation.run_simulation()
+        The output of :meth:`SyMBac.simulation.Simulation.run_simulation()`
     
     Returns
     -------
@@ -104,6 +85,23 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
 
 
 def raster_cell(length, width, separation, pinching=True):
+    """
+    Produces a rasterised image of a cell with the intensiity of each pixel corresponding to the optical path length
+    (thickness) of the cell at that point.
+
+    :param int length: Cell length in pixels
+    :param int width: Cell width in pixels
+    :param int separation: An int between (0, `width`) controlling how much pinching is happening.
+    :param bool pinching: Controls whether pinching is happening
+
+    Returns
+    -------
+
+    cell : np.array
+       A numpy array which contains an OPL image of the cell. Can be converted to a mask by just taking ``cell > 0``.
+
+    """
+
     L = int(np.rint(length))
     W = int(np.rint(width))
     new_cell = np.zeros((L, W))
@@ -150,11 +148,13 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     do_transformation : bool
         True if you want cells to be bent, false and cells remain straight as in the simulation
     space_size : tuple
-        The xy size of the numpy array in which the space is rendered. If too small then cells will not fit. recommend using the get_space_size() function to find the correct space size for your simulation
+        The xy size of the numpy array in which the space is rendered. If too small then cells will not fit. recommend using the :meth:`SyMBac.drawing.get_space_size` function to find the correct space size for your simulation
     offset : int
         A necessary parameter which offsets the drawing a number of pixels from the left hand side of the image. 30 is a good number, but if the cells are very thick, then might need increasing.
     label_masks : bool
         If true returns cell masks which are labelled (good for instance segmentation). If false returns binary masks only. I recommend leaving this as True, because you can always binarise the masks later if you want.
+    pinching : bool
+        Whether or not to simulate cell pinching during division
 
     Returns
     -------
@@ -240,16 +240,12 @@ def get_distance(vertex1, vertex2):
     """
     Get euclidian distance between two sets of vertices.
 
-    Parameters
-    ----------
-    vertex1 : 2-tuple
-        x,y coordinates of a vertex
-    vertex2 : 2-tuple
-        x,y coordinates of a vertex
 
-    Returns
-    -------
-    float : absolute distance between two points
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+
+    :return: Absolute distance between two points
+    :rtype: float
     """
     return abs(np.sqrt((vertex1[0] - vertex2[0]) ** 2 + (vertex1[1] - vertex2[1]) ** 2))
 
@@ -259,12 +255,12 @@ def find_farthest_vertices(vertex_list):
 
     Parameters
     ----------
-    vertex_list : list(2-tuple, 2-tuple ... )
+    vertex_list : list(tuple(float, float))
         List of pairs of vertices [(x,y), (x,y), ...]
 
     Returns
     -------
-    array(2-tuple, 2-tuple)
+    array(tuple(float, float))
         The two vertices maximally far apart
     """
     vertex_combs = list(itertools.combinations(vertex_list, 2))
@@ -280,7 +276,13 @@ def find_farthest_vertices(vertex_list):
 
 def get_midpoint(vertex1, vertex2):
     """
-    Get the midpoint between two vertices
+
+    Get the midpoint between two vertices.
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Midpoint between vertex 1 and 2
+    :rtype: tuple(float, float)
     """
     x_mid = (vertex1[0] + vertex2[0]) / 2
     y_mid = (vertex1[1] + vertex2[1]) / 2
@@ -290,6 +292,11 @@ def get_midpoint(vertex1, vertex2):
 def vertices_slope(vertex1, vertex2):
     """
     Get the slope between two vertices
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Slope between vertex 1 and 2
+    :rtype: float
     """
     return (vertex1[1] - vertex2[1]) / (vertex1[0] - vertex2[0])
 
@@ -297,6 +304,11 @@ def vertices_slope(vertex1, vertex2):
 def midpoint_intercept(vertex1, vertex2):
     """
     Get the y-intercept of the line connecting two vertices
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Y indercept of line between vertex 1 and 2
+    :rtype: float
     """
     midpoint = get_midpoint(vertex1, vertex2)
     slope = vertices_slope(vertex1, vertex2)
@@ -307,9 +319,9 @@ def midpoint_intercept(vertex1, vertex2):
 def get_centroid(vertices):
     """Return the centroid of a list of vertices 
     
-    Keyword arguments:
-    vertices -- A list of tuples containing x,y coordinates.
-
+    :param list(tuple(float, float)) vertices: List of tuple of vertices where each tuple is (x, y)
+    :return: Centroid of the vertices.
+    :rtype: tuple(float, float)
     """
     return np.sum(vertices, axis=0) / len(vertices)
 
@@ -368,7 +380,7 @@ def scene_plotter(scene_array, output_dir, name, a, matplotlib_draw):
 
 
 def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
-    """ Makes a synthetic image the same shape as the real image"""
+    """ Makes a synthetic image the same shape as the real image """
 
     assert real_image.shape[0] < synthetic_image.shape[
         0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
@@ -412,9 +424,11 @@ def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
 
 
 def get_space_size(cell_timeseries_properties):
-    """Iterates through the simulation timeseries properties, 
-    finds the extreme cell positions and retrieves the required 
-    image size to fit all cells into"""
+    """
+    :param cell_timeseries_properties: A list of cell properties over time. Generated from :meth:`SyMBac.simulation.Simulation.draw_simulation_OPL`
+    :return: Iterates through the simulation timeseries properties, finds the extreme cell positions and retrieves the required image size to fit all cells into.
+    :rtype: tuple(float, float)
+    """
     max_x, max_y = 0, 0
     for timepoint in cell_timeseries_properties:
         for cell in timepoint:

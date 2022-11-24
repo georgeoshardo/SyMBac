@@ -47,5 +47,4 @@ setup(
         'Topic :: Scientific/Engineering :: Image Processing',
         'Topic :: Scientific/Engineering'
     ],
-    test_suite = "tests.test_phase_contrast_drawing",
 )

@@ -99,10 +99,35 @@ else:
 
 class Renderer:
     """
+    Instantiates a renderer, which given a simulation, PSF, real image, and optionally a camera, generates the synthetic data
+
+    Example:
+
+    >>> from SyMBac.renderer import Renderer
+    >>> my_renderer = Renderer(my_simulation, my_kernel, real_image, my_camera)
+    >>> my_renderer.select_intensity_napari()
+    >>> my_renderer.optimise_synth_image(manual_update=False)
+    >>> my_renderer.generate_training_data(
+            sample_amount=0.2,
+            randomise_hist_match=True,
+            randomise_noise_match=True,
+            burn_in=40,
+            n_samples = 500,
+            save_dir="/tmp/test/",
+            in_series=False
+        )
+
 
     """
 
     def __init__(self, simulation, PSF, real_image, camera=None):
+        """
+
+        :param SyMBac.simulation.Simulation simulation: The SyMBac simulation.
+        :param SyMBac.psf.PSF_generator PSF: The PSF to be applied to the synthetic data.
+        :param np.ndarray real_image: A real image sample
+        :param SyMBac.PSF.Camera camera: (optional) The simulation camera object to be applied to the synthetic data
+        """
         self.real_image = real_image
         self.PSF = PSF
         self.simulation = simulation
@@ -528,6 +553,12 @@ class Renderer:
         return expanded_scene, expanded_scene_no_cells, expanded_mask
 
     def optimise_synth_image(self, manual_update):
+
+        """
+
+        :param bool manual_update: Whether to turn on manual updating. This is recommended if you have no/a slow GPU. Will display a button to allow manual updating of the image optimiser
+        :return: ipywidget object for optimisation of synthetic data
+        """
 
         self.real_media_mean = self.real_resize[np.where(self.media_label.data)].mean()
         self.real_cell_mean = self.real_resize[np.where(self.cell_label.data)].mean()

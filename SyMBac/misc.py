@@ -12,6 +12,12 @@ from skimage.transform import resize
 def resize_mask(mask, resize_shape, ret_label):
     """
     Resize masks while maintaining their connectivity and values
+
+    :param np.ndarray mask: Input mask
+    :param tuple(int, int) resize_shape: Shape to resize the mask to
+    :param bool ret_label: Whether to return labeled or bool masks
+    :return: Resized mask
+    :rtype: np.ndarray
     """
     labeled_mask = label(mask > 0, connectivity=1)
     labeled_mask = resize(labeled_mask, resize_shape, order=0, mode='reflect', cval=0, clip=True, preserve_range=True,

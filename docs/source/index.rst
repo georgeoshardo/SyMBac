@@ -59,6 +59,7 @@ Contents
    symbac_misc
    symbac_PSF
    symbac_pySHINE
+   symbac_renderer
    symbac_simulation
 
 

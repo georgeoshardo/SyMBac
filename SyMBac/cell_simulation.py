@@ -128,9 +128,10 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         pyglet.app.run()
     else:
         for _ in tqdm(range(sim_length)):
-            step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,
-                                           ylim=trench_length, cell_timeseries=cell_timeseries, x=x, sim_length=sim_length,
-                                           save_dir=save_dir)
+            step_and_update(
+                dt=dt, cells=cells, space=space, phys_iters=phys_iters, ylim=trench_length,
+                cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir
+            )
 
     # window.close()
     # phys_iters = phys_iters
@@ -213,17 +214,21 @@ def update_cell_parents(cells, new_cells):
 
 def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
     """
-    Evolves the simulation forward by one timestep
+    Evolves the simulation forward
 
     :param float dt: The simulation timestep
     :param list(SyMBac.cell.Cell)  cells: A list of all cells in the current timestep
-    :param pymunk.Space space:
-    :param int phys_iters:
-    :param int ylim:
-    :param list cell_timeseries:
-    :param int x:
-    :param int sim_length:
-    :param str save_dir:
+    :param pymunk.Space space: The simulations's pymunk space.
+    :param int phys_iters: The number of physics iteration in each timestep
+    :param int ylim: The y coordinate threshold beyond which to delete cells
+    :param list cell_timeseries: A list to store the cell's properties each time the simulation steps forward
+    :param int list: A list with a single value to store the simulation's progress.
+    :param int sim_length: The number of timesteps to run.
+    :param str save_dir: The directory to save the simulation information.
+
+    Returns
+    -------
+    cells : list(SyMBac.cell.Cell)
 
     """
     for shape in space.shapes:

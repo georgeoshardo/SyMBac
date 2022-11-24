@@ -16,6 +16,14 @@ def pol2cart(phi, rho):
 
 
 def sfMatch(images, rescaling=0, tarmag=None):
+    """
+    Match the rotational fourier spectrum of a stack of images. For documentation see [1]_
+
+    References
+    ----------
+    .. [1] Willenbockel, V., Sadr, J., Fiset, D. et al. Controlling low-level image properties: The SHINE toolbox. Behavior Research Methods 42, 671–684 (2010). https://doi.org/10.3758/BRM.42.3.671
+
+    """
     assert type(images) == type([]), 'The input must be a list.'
 
     numin = len(images)
@@ -70,6 +78,15 @@ def sfMatch(images, rescaling=0, tarmag=None):
 
 
 def rescale_shine(images, option=1):
+    """
+    Rescale the intensity of a stack of images. For documentation see [1]_
+
+    References
+    ----------
+    .. [1] Willenbockel, V., Sadr, J., Fiset, D. et al. Controlling low-level image properties: The SHINE toolbox. Behavior Research Methods 42, 671–684 (2010). https://doi.org/10.3758/BRM.42.3.671
+
+    """
+
     assert type(images) == type([]), 'The input must be a list.'
     assert option == 1 or option == 2, "Invalid rescaling option"
     numin = len(images)
@@ -95,6 +112,14 @@ def rescale_shine(images, option=1):
 
 
 def lumMatch(images, mask=None, lum=None):
+    """
+    Match the luminosity of a stack of images. For documentation see [1]_
+
+    References
+    ----------
+    .. [1] Willenbockel, V., Sadr, J., Fiset, D. et al. Controlling low-level image properties: The SHINE toolbox. Behavior Research Methods 42, 671–684 (2010). https://doi.org/10.3758/BRM.42.3.671
+
+    """
     assert type(images) == type([]), 'The input must be a list.'
     assert (mask is None) or type(mask) == type([]), 'The input mask must be a list.'
 
