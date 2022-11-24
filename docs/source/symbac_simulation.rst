@@ -1,7 +1,7 @@
-SyMBac.cell
+SyMBac.simulation
 ==========================
 
-.. autoclass:: SyMBac.cell.Cell
+.. autoclass:: SyMBac.simulation.Simulation
     :members:
 
     .. automethod:: __init__

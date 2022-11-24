@@ -29,7 +29,8 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     "nbsphinx",
-    "sphinx_copybutton"
+    "sphinx_copybutton",
+    "sphinx.ext.mathjax"
 ]
 
 autoapi_dirs = ['../../SyMBac']

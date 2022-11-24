@@ -1,7 +1,7 @@
-SyMBac.cell
+SyMBac.renderer
 ==========================
 
-.. autoclass:: SyMBac.cell.Cell
+.. autoclass:: SyMBac.renderer.Renderer
     :members:
 
     .. automethod:: __init__

@@ -1,85 +1,14 @@
-import importlib
 import itertools
-import warnings
-
-import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
+from matplotlib import pyplot as plt
+from skimage.transform import rescale, rotate
+from skimage.morphology import opening
 from skimage.exposure import rescale_intensity
-from skimage.transform import rescale
-from skimage.transform import rotate
+from skimage.segmentation import find_boundaries
+from PIL import Image
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
-
-if importlib.util.find_spec("cupy") is None:
-    from scipy.signal import convolve2d as cuconvolve
-
-    warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
-
-
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size. 
-
-        Parameters
-        ----------
-        image : numpy.ndarray
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
-
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
-
-        output = cuconvolve(image, kernel, mode="same")
-        # output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
-
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
-else:
-    import cupy as cp
-    from cupyx.scipy.ndimage import convolve as cuconvolve
-
-
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size. 
-
-        Parameters
-        ----------
-        image : 2D numpy array
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
-
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
-
-        output = cuconvolve(cp.array(image), cp.array(kernel))
-        output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
-
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
-
 
 def generate_curve_props(cell_timeseries):
     """
@@ -88,7 +17,7 @@ def generate_curve_props(cell_timeseries):
     Parameters
     ---------
     cell_timeseries : list(cell_properties)
-        The output of run_simulation()
+        The output of :meth:`SyMBac.simulation.Simulation.run_simulation()`
     
     Returns
     -------
@@ -128,7 +57,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     cell_properties : list
         The final property list used to actually draw a scene of cells. The input to draw_scene
     """
-    
+
     cell_properties = []
     for cell in cell_timeseries_lists:
         body, shape = (cell.body, cell.shape)
@@ -156,6 +85,23 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
 
 
 def raster_cell(length, width, separation, pinching=True):
+    """
+    Produces a rasterised image of a cell with the intensiity of each pixel corresponding to the optical path length
+    (thickness) of the cell at that point.
+
+    :param int length: Cell length in pixels
+    :param int width: Cell width in pixels
+    :param int separation: An int between (0, `width`) controlling how much pinching is happening.
+    :param bool pinching: Controls whether pinching is happening
+
+    Returns
+    -------
+
+    cell : np.array
+       A numpy array which contains an OPL image of the cell. Can be converted to a mask by just taking ``cell > 0``.
+
+    """
+
     L = int(np.rint(length))
     W = int(np.rint(width))
     new_cell = np.zeros((L, W))
@@ -165,7 +111,6 @@ def raster_cell(length, width, separation, pinching=True):
     I_cyl = np.sqrt(R ** 2 - (x_cyl - R) ** 2)
     L_cyl = L - W
     new_cell[int(W / 2):-int(W / 2), :] = I_cyl
-
 
     x_sphere = np.arange(0, int(W / 2), 1)
     sphere_Rs = np.sqrt((R) ** 2 - (x_sphere - R) ** 2)
@@ -180,32 +125,127 @@ def raster_cell(length, width, separation, pinching=True):
 
     if separation > 1 and pinching:
         S = int(np.rint(separation))
-        new_cell[int((L-S) / 2):-int((L-S) / 2), :] = 0
-        for c in range(int(S/2)):
-            R__ = sphere_Rs[-c-1]
+        new_cell[int((L - S) / 2):-int((L - S) / 2), :] = 0
+        for c in range(int(S / 2)):
+            R__ = sphere_Rs[-c - 1]
             x_cyl_ = np.arange(0, R__, 1)
             I_cyl_ = np.sqrt(R__ ** 2 - (x_cyl_ - R__) ** 2)
-            new_cell[int((L-S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
-            new_cell[int((L+S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
+            new_cell[int((L - S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
+            new_cell[int((L + S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
                 (I_cyl_, I_cyl_[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
+
+
+def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):
+    """
+    Draws a raw scene (no trench) of cells, and returns accompanying masks for training data.
+
+    Parameters
+    ----------
+    cell properties : list
+        A list of cell properties for that frame
+    do_transformation : bool
+        True if you want cells to be bent, false and cells remain straight as in the simulation
+    space_size : tuple
+        The xy size of the numpy array in which the space is rendered. If too small then cells will not fit. recommend using the :meth:`SyMBac.drawing.get_space_size` function to find the correct space size for your simulation
+    offset : int
+        A necessary parameter which offsets the drawing a number of pixels from the left hand side of the image. 30 is a good number, but if the cells are very thick, then might need increasing.
+    label_masks : bool
+        If true returns cell masks which are labelled (good for instance segmentation). If false returns binary masks only. I recommend leaving this as True, because you can always binarise the masks later if you want.
+    pinching : bool
+        Whether or not to simulate cell pinching during division
+
+    Returns
+    -------
+    space, space_masks : 2D numpy array, 2D numpy array
+
+    space : 2D numpy array
+        Not to be confused with the pyglet object calledspace in some other functions. Simply a 2D numpy array with an image of cells from the input frame properties
+    space_masks : 2D numy array
+        The masks (labelled or bool) for that scene.
+
+    """
+    space_size = np.array(space_size)  # 1000, 200 a good value
+    space = np.zeros(space_size)
+    space_masks_label = np.zeros(space_size)
+    space_masks_nolabel = np.zeros(space_size)
+    colour_label = [1]
+
+    space_masks = np.zeros(space_size)
+    if label_masks == False:
+        space_masks = space_masks.astype(bool)
+
+    for properties in cell_properties:
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation = properties
+        position = np.array(position)
+        x = np.array(position).astype(int)[0] + offset
+        y = np.array(position).astype(int)[1] + offset
+        OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
+
+        if do_transformation:
+            OPL_cell_2 = np.zeros((OPL_cell.shape[0], int(OPL_cell.shape[1] * 2)))
+            midpoint = int(np.median(range(OPL_cell_2.shape[1])))
+            OPL_cell_2[:,
+            midpoint - int(OPL_cell.shape[1] / 2):midpoint - int(OPL_cell.shape[1] / 2) + OPL_cell.shape[1]] = OPL_cell
+            roll_coords = np.array(range(OPL_cell_2.shape[0]))
+            freq_mult = (OPL_cell_2.shape[0])
+            amp_mult = OPL_cell_2.shape[1] / 10
+            sin_transform_cell = transform_func(amp_modif, freq_modif, phase_modif)
+            roll_amounts = sin_transform_cell(roll_coords, amp_mult, freq_mult, phase_mult)
+            for B in roll_coords:
+                OPL_cell_2[B, :] = np.roll(OPL_cell_2[B, :], roll_amounts[B])
+            OPL_cell = (OPL_cell_2)
+
+        rotated_OPL_cell = rotate(OPL_cell, -angle, resize=True, clip=False, preserve_range=True, center=(x, y))
+        cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
+        offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
+        offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
+        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
+        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
+        space[
+        y - cell_y:y + cell_y + offset_y,
+        x - cell_x:x + cell_x + offset_x
+        ] += rotated_OPL_cell
+
+        def get_mask(label_masks):
+
+            if label_masks:
+                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                 rotated_OPL_cell > 0) * \
+                                                                                                         colour_label[0]
+                colour_label[0] += 1
+                return space_masks_label
+            else:
+                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
+                                                                                                                   rotated_OPL_cell > 0) * 1
+                return space_masks_nolabel
+                # space_masks = opening(space_masks,np.ones((2,11)))
+
+        label_mask = get_mask(True).astype(int)
+        nolabel_mask = get_mask(False).astype(int)
+        label_mask_fixed = np.where(nolabel_mask > 1, 0, label_mask)
+        if label_masks:
+            space_masks = label_mask_fixed
+        else:
+            mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
+            space_masks = np.where(mask_borders, 0, label_mask_fixed)
+            space_masks = opening(space_masks)
+            space_masks = space_masks.astype(bool)
+        space = space * space_masks.astype(bool)
+    return space, space_masks
 
 
 def get_distance(vertex1, vertex2):
     """
     Get euclidian distance between two sets of vertices.
 
-    Parameters
-    ----------
-    vertex1 : 2-tuple
-        x,y coordinates of a vertex
-    vertex2 : 2-tuple
-        x,y coordinates of a vertex
 
-    Returns
-    -------
-    float : absolute distance between two points
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+
+    :return: Absolute distance between two points
+    :rtype: float
     """
     return abs(np.sqrt((vertex1[0] - vertex2[0]) ** 2 + (vertex1[1] - vertex2[1]) ** 2))
 
@@ -215,12 +255,12 @@ def find_farthest_vertices(vertex_list):
 
     Parameters
     ----------
-    vertex_list : list(2-tuple, 2-tuple ... )
+    vertex_list : list(tuple(float, float))
         List of pairs of vertices [(x,y), (x,y), ...]
 
     Returns
     -------
-    array(2-tuple, 2-tuple)
+    array(tuple(float, float))
         The two vertices maximally far apart
     """
     vertex_combs = list(itertools.combinations(vertex_list, 2))
@@ -236,7 +276,13 @@ def find_farthest_vertices(vertex_list):
 
 def get_midpoint(vertex1, vertex2):
     """
-    Get the midpoint between two vertices
+
+    Get the midpoint between two vertices.
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Midpoint between vertex 1 and 2
+    :rtype: tuple(float, float)
     """
     x_mid = (vertex1[0] + vertex2[0]) / 2
     y_mid = (vertex1[1] + vertex2[1]) / 2
@@ -246,6 +292,11 @@ def get_midpoint(vertex1, vertex2):
 def vertices_slope(vertex1, vertex2):
     """
     Get the slope between two vertices
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Slope between vertex 1 and 2
+    :rtype: float
     """
     return (vertex1[1] - vertex2[1]) / (vertex1[0] - vertex2[0])
 
@@ -253,6 +304,11 @@ def vertices_slope(vertex1, vertex2):
 def midpoint_intercept(vertex1, vertex2):
     """
     Get the y-intercept of the line connecting two vertices
+
+    :param tuple(float, float) vertex1: Vertex 1
+    :param tuple(float, float) vertex2: Vertex 2
+    :return: Y indercept of line between vertex 1 and 2
+    :rtype: float
     """
     midpoint = get_midpoint(vertex1, vertex2)
     slope = vertices_slope(vertex1, vertex2)
@@ -263,9 +319,9 @@ def midpoint_intercept(vertex1, vertex2):
 def get_centroid(vertices):
     """Return the centroid of a list of vertices 
     
-    Keyword arguments:
-    vertices -- A list of tuples containing x,y coordinates.
-
+    :param list(tuple(float, float)) vertices: List of tuple of vertices where each tuple is (x, y)
+    :return: Centroid of the vertices.
+    :rtype: tuple(float, float)
     """
     return np.sum(vertices, axis=0) / len(vertices)
 
@@ -324,7 +380,7 @@ def scene_plotter(scene_array, output_dir, name, a, matplotlib_draw):
 
 
 def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
-    """ Makes a synthetic image the same shape as the real image"""
+    """ Makes a synthetic image the same shape as the real image """
 
     assert real_image.shape[0] < synthetic_image.shape[
         0], "Real image has a higher diemsion on axis 0, increase y_border_expansion_coefficient"
@@ -368,9 +424,11 @@ def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
 
 
 def get_space_size(cell_timeseries_properties):
-    """Iterates through the simulation timeseries properties, 
-    finds the extreme cell positions and retrieves the required 
-    image size to fit all cells into"""
+    """
+    :param cell_timeseries_properties: A list of cell properties over time. Generated from :meth:`SyMBac.simulation.Simulation.draw_simulation_OPL`
+    :return: Iterates through the simulation timeseries properties, finds the extreme cell positions and retrieves the required image size to fit all cells into.
+    :rtype: tuple(float, float)
+    """
     max_x, max_y = 0, 0
     for timepoint in cell_timeseries_properties:
         for cell in timepoint:
@@ -384,3 +442,5 @@ def get_space_size(cell_timeseries_properties):
             if max_y_ > max_y:
                 max_y = max_y_
     return (int(1.2 * max_y), int(1.5 * max_x))
+
+
