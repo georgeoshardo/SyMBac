@@ -318,6 +318,8 @@ class Renderer:
             baseline, sensitivity, dark_noise = self.camera.baseline, self.camera.sensitivity, self.camera.dark_noise
             rng = np.random.default_rng(2)
             matched = matched / (matched.max() / self.real_image.max()) / sensitivity
+            if match_fourier:
+                matched += abs(matched.min()) # Preserve mean > 0 for rng.poisson(matched)
             matched = rng.poisson(matched)
             noisy_img = matched + rng.normal(loc=baseline, scale=dark_noise, size=matched.shape)
         else:  # Ad hoc noise mathcing

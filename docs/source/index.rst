@@ -32,8 +32,7 @@ Contents
    :caption: Detailed guide: Mother Machine
    :maxdepth: 3
 
-   cell_growth_simulation
-   scene_generation
+   Simple mother machine simulations <examples/simple_mother_machine.ipynb>
 
 .. toctree:: 
    :caption: Detailed guide: Agar Pad

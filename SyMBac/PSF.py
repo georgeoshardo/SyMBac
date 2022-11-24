@@ -130,14 +130,14 @@ class PSF_generator:
             fig, axes = plt.subplots(1, 3)
             for dim, ax in enumerate(axes.flatten()):
                 ax.axis("off")
-                ax.imshow((self.kernel.mean(axis=dim)))
+                ax.imshow((self.kernel.mean(axis=dim)), cmap="Greys_r")
                 scalebar = ScaleBar(self.scale, "um", length_fraction=0.3)
                 ax.add_artist(scalebar)
             plt.show()
         else:
             fig, ax = plt.subplots()
             ax.axis("off")
-            ax.imshow(self.kernel)
+            ax.imshow(self.kernel, cmap="Greys_r")
             scalebar = ScaleBar(self.scale, "um", length_fraction=0.25)
             ax.add_artist(scalebar)
             plt.show()
@@ -242,7 +242,7 @@ class PSF_generator:
         kernel = kernel / np.max(kernel)
         kernel[radius, radius] = 1
         kernel = -kernel / np.sum(kernel)
-        gaussian = gaussian_2D(radius * 2 + 1, sigma)
+        gaussian = PSF_generator.gaussian_2D(radius * 2 + 1, sigma)
         kernel = kernel * gaussian
         return kernel
 
