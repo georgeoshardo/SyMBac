@@ -137,6 +137,7 @@ dmypy.json
 build
 docs/build
 docs/api/api
+docs/source/exampes/data/
 
 # pyCharm stuff
 .idea/
@@ -145,5 +146,4 @@ docs/api/api
 .vscode
 
 #
-for_reviewers/
-docs/source/exampes/data/
+/for_reviewers/
