@@ -29,16 +29,16 @@ Contents
    faqs
 
 .. toctree:: 
-   :caption: Detailed guide: Mother Machine
+   :caption: Guide: Mother Machine
    :maxdepth: 3
 
-   Simple mother machine simulations <examples/simple_mother_machine.ipynb>
+   Mother machine simulations <examples/simple_mother_machine.ipynb>
 
 .. toctree:: 
-   :caption: Detailed guide: Agar Pad
+   :caption: Guide: Agar Pad
    :maxdepth: 3
 
-
+   Agar pad simulations <examples/agar_pad.ipynb>
 
 .. toctree::
    :caption: Examples
@@ -47,19 +47,26 @@ Contents
    Training Omnipose <examples/omnipose_training_data_generator.ipynb>
    Segmenting with Omnipose <examples/seg_with_omnipose.ipynb>
 
+.. toctree::
+   :caption: Classes reference
+   :maxdepth: 3
+
+   symbac_cell
+   symbac_PSF
+   symbac_renderer
+   symbac_simulation
+
 .. toctree:: 
    :caption: API reference
    :maxdepth: 3
 
-   symbac_cell
    symbac_cell_geometry
    symbac_cell_simulation
    symbac_drawing
    symbac_misc
-   symbac_PSF
    symbac_pySHINE
-   symbac_renderer
-   symbac_simulation
+
+
 
 
 .. image:: https://readthedocs.org/projects/symbac/badge/?version=latest
