@@ -199,7 +199,7 @@ class Cell:
 
         self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.5,1.3)
         self.pinching_sep = max(0, self.length - self.max_length + self.width)
-        self.pinching_sep = min(self.pinching_sep, self.width - 1)
+        self.pinching_sep = min(self.pinching_sep, self.width - 2)
 
     def update_position(self):
         """

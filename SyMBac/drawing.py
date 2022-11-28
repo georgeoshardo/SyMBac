@@ -123,16 +123,15 @@ def raster_cell(length, width, separation, pinching=True):
         new_cell[c, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
         new_cell[L - c - 1, int(W / 2) - sphere_Rs[c]:int(W / 2) + sphere_Rs[c]] = np.concatenate((I_cyl, I_cyl[::-1]))
 
-    if separation > 1 and pinching:
+    if separation > 2 and pinching:
         S = int(np.rint(separation))
-        new_cell[int((L - S) / 2):-int((L - S) / 2), :] = 0
-        for c in range(int(S / 2)):
+        new_cell[int((L - S) / 2) + 1:-int((L - S) / 2) - 1, :] = 0
+        for c in range(int((S+1) / 2)):
             R__ = sphere_Rs[-c - 1]
             x_cyl_ = np.arange(0, R__, 1)
             I_cyl_ = np.sqrt(R__ ** 2 - (x_cyl_ - R__) ** 2)
-            new_cell[int((L - S) / 2) + c, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
-            new_cell[int((L + S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate(
-                (I_cyl_, I_cyl_[::-1]))
+            new_cell[int((L-S) / 2) + c + 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
+            new_cell[-int((L-S) / 2) - c - 1, int(W / 2) - R__:int(W / 2) + R__] = np.concatenate((I_cyl_, I_cyl_[::-1]))
     new_cell = new_cell.astype(int)
     return new_cell
 
