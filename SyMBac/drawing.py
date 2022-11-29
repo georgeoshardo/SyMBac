@@ -1,4 +1,6 @@
 import itertools
+import random
+
 import numpy as np
 from matplotlib import pyplot as plt
 from skimage.transform import rescale, rotate
@@ -84,7 +86,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     return cell_properties
 
 
-def raster_cell(length, width, separation, pinching=True):
+def raster_cell(length, width, separation, pinching=True, FL = False):
     """
     Produces a rasterised image of a cell with the intensiity of each pixel corresponding to the optical path length
     (thickness) of the cell at that point.
@@ -135,6 +137,27 @@ def raster_cell(length, width, separation, pinching=True):
     new_cell = new_cell.astype(int)
     return new_cell
 
+
+def OPL_to_FL(cell, density):
+    """
+
+    :param np.ndarray cell: A 2D numpy array consisting of a rasterised cell
+    :param float density: Number of fluorescent molecules per volume element to sample in the cell
+    :return: A cell with fluorescent reporters sampled in it
+    :rtypes: np.ndarray
+    """
+
+    cell_normalised = (cell/cell.sum())
+    i,j = np.indices(cell_normalised.shape, sparse=True)
+    i, j = i.flatten(), j.flatten()
+    indices = list(itertools.product(i, j))
+    weights = list(cell_normalised.flatten())
+    n_molecules = int(density * np.sum(cell))
+    choices = random.choices(indices, weights=weights, k=n_molecules)
+    FL_cell = np.zeros(cell.shape)
+    for c in choices:
+        FL_cell[c] += 1
+    return FL_cell
 
 def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):
     """

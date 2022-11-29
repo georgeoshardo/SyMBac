@@ -62,5 +62,5 @@ plot_include_source = True
 numpydoc_class_members_toctree = True
 numpydoc_xref_param_type = True
 numpydoc_validation_checks = {"all", "GL01", "SA04", "RT03"}
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "source/exampes/data/*"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "source/examples/data/*", "source/examples/data/masks/", "source/examples/data/scenes/"]
 pygments_style = "sphinx"

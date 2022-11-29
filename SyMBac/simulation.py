@@ -138,7 +138,7 @@ class Simulation:
 
         space_size = get_space_size(self.cell_timeseries_properties)
 
-        scenes = Parallel(n_jobs=13)(delayed(draw_scene)(
+        scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
         cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
             self.cell_timeseries_properties, desc='Scene Draw:'))
         self.OPL_scenes = [_[0] for _ in scenes]

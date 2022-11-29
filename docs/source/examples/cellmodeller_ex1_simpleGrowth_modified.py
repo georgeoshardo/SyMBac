@@ -35,7 +35,7 @@ def init(cell):
     cell.killFlag = False
     cell_geom = (2000,)
     cell.force = np.zeros(cell_geom)
-    cell.radius = 2
+    #cell.radius = 4
 
 
 def update(cells):
@@ -49,11 +49,10 @@ def update(cells):
             # Remove cells from the simulation if they are more than 15 units from the centre.
             #if (abs(cell.pos[1]) > 15):
             #    cell.killFlag = True
-            if r > 15:
+            if r > 25:
                 cell.killFlag = True
         gr = cell.strainRate / 0.05
         cgr = gr - 0.5
-
 
 def divide(parent, d1, d2):
     # Specify target cell size that triggers cell division
