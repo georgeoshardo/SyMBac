@@ -1,5 +1,5 @@
 sphinx_automodapi
-matplotlib
+matplotlib==3.4.3
 nbsphinx
 sphinx_copybutton
-matplotlib-scalebar
+matplotlib-scalebar==0.7.2
