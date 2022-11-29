@@ -21,6 +21,7 @@ version = '0.2.0'
 extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
+    'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'matplotlib.sphinxext.plot_directive',
