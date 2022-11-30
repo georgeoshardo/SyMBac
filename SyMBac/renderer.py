@@ -183,7 +183,6 @@ class Renderer:
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
                                  debug_plot=False, noise_var=0.001, defocus=3.0):
         """
-
         Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image.
 
         Parameters
@@ -219,13 +218,11 @@ class Renderer:
             A sample real image from the experiment you are trying to replicate
         image_params : tuple
             A tuple of parameters which describe the intensities and variances of the real image, in this order:
-            (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var,
-                real_vars).
+            (real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars).
         error_params : tuple
             A tuple of parameters which characterises the error between the intensities in the real image and the synthetic
             image, in this order: (mean_error,media_error,cell_error,device_error,mean_var_error,media_var_error,
             cell_var_error,device_var_error). I have given an example of their calculation in the example notebooks.
-
         fluorescence : bool
             If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF).
         defocus : float
@@ -237,7 +234,6 @@ class Renderer:
             The final simulated microscope image
         expanded_mask_resized_reshaped : 2D numpy array
             The final image's accompanying masks
-
         """
 
         expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
