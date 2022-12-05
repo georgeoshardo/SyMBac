@@ -70,7 +70,7 @@ class PSF_generator:
     """
 
     def __init__(self, radius, wavelength, NA, n, apo_sigma, mode, condenser=None, z_height=None, resize_amount=None,
-                 pix_mic_conv=None, scale=None):
+                 pix_mic_conv=None, scale=None, offset = 0):
         """
         :param int radius: Radius of the PSF.
         :param float wavelength: Wavelength of imaging light in micron.
@@ -83,6 +83,7 @@ class PSF_generator:
         :param int resize_amount: Upscaling factor, typically chosen to be 3.
         :param float pix_mic_conv: Micron per pixel conversion factor. E.g approx 0.1 for 60x on some cameras.
         :param float scale: If not provided will be calculated as ``self.pix_mic_conv / self.resize_amount``.
+        :param float offset: A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.``.
         """
         self.radius = radius
         self.wavelength = wavelength
@@ -102,6 +103,7 @@ class PSF_generator:
 
         self.z_height = z_height
         self.min_sigma = 0.42 * 0.6 / 6 / self.scale  # micron#
+        self.offset = offset
 
     def calculate_PSF(self):
         if "phase contrast" in self.mode.lower():
@@ -109,18 +111,18 @@ class PSF_generator:
                 warnings.simplefilter("ignore")
                 self.kernel = self.get_phase_contrast_kernel(R=self.R, W=self.W, radius=self.radius, scale=self.scale,
                                                              NA=self.NA, n=self.n, sigma=self.apo_sigma,
-                                                             wavelength=self.wavelength)
+                                                             wavelength=self.wavelength, offset = self.offset)
 
         elif "simple fluo" in self.mode.lower():
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 self.kernel = self.get_fluorescence_kernel(radius=self.radius, scale=self.scale, NA=self.NA, n=self.n,
-                                                           wavelength=self.wavelength)
+                                                           wavelength=self.wavelength, offset = self.offset)
 
         elif "3d fluo" in self.mode.lower():
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
             self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=0, ni=self.n,
-                                        wvl=self.wavelength, NA=self.NA)
+                                        wvl=self.wavelength, NA=self.NA) + self.offset
 
         else:
             raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
@@ -143,7 +145,7 @@ class PSF_generator:
             plt.show()
 
     @staticmethod
-    def get_fluorescence_kernel(wavelength, NA, n, radius, scale):
+    def get_fluorescence_kernel(wavelength, NA, n, radius, scale, offset = 0):
         """
         Returns a 2D numpy array which is an airy-disk approximation of the fluorescence point spread function
 
@@ -159,6 +161,8 @@ class PSF_generator:
             The radius of the PSF to be rendered in pixels
         scale : float
             The pixel size of the image to be rendered (micron/pix)
+        offset : float
+            A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.
 
         Returns
         -------
@@ -172,6 +176,7 @@ class PSF_generator:
         rr = np.sqrt(xx ** 2 + yy ** 2) * kaw
         PSF = (2 * jv(1, rr) / (rr)) ** 2
         PSF[radius, radius] = 1
+        PSF += offset
         return PSF
 
     @staticmethod
@@ -191,7 +196,7 @@ class PSF_generator:
         return z
 
     @staticmethod
-    def get_phase_contrast_kernel(R, W, radius, scale, NA, n, sigma, wavelength):
+    def get_phase_contrast_kernel(R, W, radius, scale, NA, n, sigma, wavelength, offset = 0):
         """
         Returns a 2D numpy array which is the phase contrast kernel based on microscope parameters
 
@@ -214,6 +219,8 @@ class PSF_generator:
             radius of a 2D gaussian of the same size as the PSF (in pixels) which is multiplied by the PSF to simulate apodisation of the PSF
         λ : float
             The mean wavelength of the imaging light (in micron)
+        offset : float
+            A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.
 
         Returns
         -------
@@ -244,6 +251,7 @@ class PSF_generator:
         kernel = -kernel / np.sum(kernel)
         gaussian = PSF_generator.gaussian_2D(radius * 2 + 1, sigma)
         kernel = kernel * gaussian
+        kernel += offset
         return kernel
 
     @staticmethod

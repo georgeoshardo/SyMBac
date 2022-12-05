@@ -1,4 +1,5 @@
 import CellModeller
+import noise
 from CellModeller.Simulator import Simulator
 import os
 import numpy as np
@@ -156,8 +157,12 @@ class ColonySimulation:
 
         self.get_simulation_dirs()
         pickles_flat = [item for sublist in self.pickles for item in sublist]
+
         self.get_max_scene_size()
 
         all_cellmodeller_properties = [self.get_cellmodeller_properties(self.pickle_opener(_)) for _ in pickles_flat]
 
-        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, i+1, False, FL, density, random_distribution(*distribution_args)) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
+        zero_pads = np.ceil(np.log10(len(pickles_flat))).astype(int)
+
+        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1).zfill(zero_pads), False, FL, density, random_distribution(*distribution_args)) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
+
