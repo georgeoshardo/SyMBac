@@ -1,3 +1,7 @@
+import random
+from itertools import cycle
+import os
+
 import numpy as np
 import noise
 from PIL import Image
@@ -5,6 +9,7 @@ from glob import glob
 
 from scipy.ndimage import gaussian_filter
 from skimage.exposure import rescale_intensity
+from skimage.transform import rescale
 from skimage.util import random_noise
 
 from SyMBac.renderer import convolve_rescale
@@ -57,6 +62,8 @@ class ColonyRenderer:
     def OPL_loader(self, idx):
         return np.array(Image.open(self.OPL_dirs[idx]))
 
+    def mask_loader(self, idx):
+        return np.array(Image.open(self.mask_dirs[idx]))
 
     def render_scene(self, idx):
         scene = self.OPL_loader(idx)
@@ -67,13 +74,42 @@ class ColonyRenderer:
 
         convolved = convolve_rescale(scene, temp_kernel, 1/self.resize_amount, rescale_int=True)
 
+        if "phase" in self.PSF.mode.lower():
+            bg = self.random_perlin_generator()
+            convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(1000,3000), np.random.uniform(1,3), mode="reflect")
 
-        bg = self.random_perlin_generator()
-
-        convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(1000,3000), np.random.uniform(1,3), mode="reflect")
         convolved = random_noise((convolved), mode="poisson")
         convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False)
 
         convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
 
         return convolved
+
+    def generate_random_samples(self, n, roll_prob, savedir):
+        try:
+            os.mkdir(f"{savedir}")
+        except:
+            pass
+        try:
+            os.mkdir(f"{savedir}/masks/")
+        except:
+            pass
+        try:
+            os.mkdir(f"{savedir}/synth_imgs")
+        except:
+            pass
+        for i, (OPL_dir, mask_dir) in enumerate(zip(cycle(self.OPL_dirs), cycle(self.mask_dirs))):
+            sample = self.render_scene(i)
+            mask = self.mask_loader(i)
+            rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
+
+            if np.random.rand() > roll_prob:
+                n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+                sample = np.roll(sample, amount, axis=n_axis_to_roll)
+                rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
+
+            Image.fromarray(sample).save(f"{savedir}/synth_imgs/{i}.png")
+            Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{i}.png")
+
+            if i > n:
+                break

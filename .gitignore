@@ -138,6 +138,7 @@ build
 docs/build
 docs/api/api
 docs/source/examples/data/
+docs/source/examples/training_data/
 
 # pyCharm stuff
 .idea/

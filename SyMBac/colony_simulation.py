@@ -108,10 +108,12 @@ class ColonySimulation:
         self.scene_shape = tuple(np.array(scene_shapes).max(axis=0))
         return self.scene_shape
 
-    def draw_scene(self, cellmodeller_properties, save = False, savename = False, return_save = False, FL = False, density = 1, random_distribution = np.random.uniform(0.99,1.01)):
+    def draw_scene(self, cellmodeller_properties, save = False, savename = False, return_save = False, FL = False, density = 1, random_distribution = "uniform", distribution_args = (1,1)):
         space = np.zeros(self.scene_shape)
         mask = np.zeros(self.scene_shape)
         mask_counter = 1
+        if random_distribution == "uniform":
+            density_modifiers = [np.random.uniform(*distribution_args) for _ in range(len(cellmodeller_properties))]
         for c in range(len(cellmodeller_properties)):
             position = cellmodeller_properties[c][3]
             offset = np.ceil(np.mean(self.scene_shape) / 2).astype(int)
@@ -124,7 +126,7 @@ class ColonySimulation:
             offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
             offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
             if FL:
-                FL_cell = OPL_to_FL(rotated_OPL_cell, density*random_distribution)
+                FL_cell = OPL_to_FL(rotated_OPL_cell, density*density_modifiers[c])
                 space[
                     y - cell_y:y + cell_y + offset_y,
                     x - cell_x:x + cell_x + offset_x
@@ -133,7 +135,7 @@ class ColonySimulation:
                 space[
                     y - cell_y:y + cell_y + offset_y,
                     x - cell_x:x + cell_x + offset_x
-                ] += (rotated_OPL_cell) * random_distribution * 0.5
+                ] += (rotated_OPL_cell)
             mask[
                 y - cell_y:y + cell_y + offset_y,
                 x - cell_x:x + cell_x + offset_x
@@ -153,7 +155,7 @@ class ColonySimulation:
         else:
             return space, mask
 
-    def draw_simulation_OPL(self, n_jobs, FL = False, density = 1, random_distribution = np.random.uniform, distribution_args = (0.99,1.01)):
+    def draw_simulation_OPL(self, n_jobs, FL = False, density = 1, random_distribution = "uniform", distribution_args = (0.99,1.01)):
 
         self.get_simulation_dirs()
         pickles_flat = [item for sublist in self.pickles for item in sublist]
@@ -164,5 +166,5 @@ class ColonySimulation:
 
         zero_pads = np.ceil(np.log10(len(pickles_flat))).astype(int)
 
-        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1).zfill(zero_pads), False, FL, density, random_distribution(*distribution_args)) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
+        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1).zfill(zero_pads), False, FL, density, random_distribution, distribution_args) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
 
