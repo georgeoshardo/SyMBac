@@ -11,6 +11,7 @@ from scipy.ndimage import gaussian_filter
 from skimage.exposure import rescale_intensity
 from skimage.transform import rescale
 from skimage.util import random_noise
+from tqdm.auto import tqdm
 
 from SyMBac.renderer import convolve_rescale
 
@@ -98,7 +99,7 @@ class ColonyRenderer:
             os.mkdir(f"{savedir}/synth_imgs")
         except:
             pass
-        for i, (OPL_dir, mask_dir) in enumerate(zip(cycle(self.OPL_dirs), cycle(self.mask_dirs))):
+        for i in tqdm(range(len(self.OPL_dirs))):
             sample = self.render_scene(i)
             mask = self.mask_loader(i)
             rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)

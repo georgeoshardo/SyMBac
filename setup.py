@@ -30,7 +30,8 @@ setup(
         "pyglet==1.5.21",
         "raster-geometry==0.1.4.1",
         "matplotlib-scalebar==0.7.2",
-        "psfmodels"
+        "psfmodels",
+        "numba==0.56.4"
         ],
 
     classifiers = [
