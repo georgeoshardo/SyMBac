@@ -9,7 +9,7 @@ from tqdm.autonotebook import tqdm
 from joblib import Parallel, delayed
 from PIL import Image
 from skimage.transform import rotate
-
+from natsort import natsorted
 from SyMBac.drawing import raster_cell, OPL_to_FL
 
 
@@ -72,7 +72,7 @@ class ColonySimulation:
         return properties
 
     def get_simulation_dirs(self):
-        self.simulation_dirs = glob(f"data/{self.save_dir}/*")
+        self.simulation_dirs = natsorted(glob(f"data/{self.save_dir}/*"))
         return self.simulation_dirs
 
     def get_simulation_pickles(self):
@@ -81,8 +81,8 @@ class ColonySimulation:
             pickles.append(
                 glob(f"{dir}/*.pickle")
             )
-        self.pickles = pickles
-        self.pickles_flat = [item for sublist in self.pickles for item in sublist]
+        self.pickles = natsorted(pickles)
+        self.pickles_flat = natsorted([item for sublist in self.pickles for item in sublist])
         return self.pickles
 
     def pickle_opener(self, dir):
