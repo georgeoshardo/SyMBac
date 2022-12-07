@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 from matplotlib import pyplot as plt
+from numba import njit
 from skimage.transform import rescale, rotate
 from skimage.morphology import opening
 from skimage.exposure import rescale_intensity
@@ -138,6 +139,7 @@ def raster_cell(length, width, separation, pinching=True, FL = False):
     return new_cell
 
 
+@njit
 def OPL_to_FL(cell, density):
     """
 
@@ -148,15 +150,17 @@ def OPL_to_FL(cell, density):
     """
 
     cell_normalised = (cell/cell.sum())
-    i,j = np.indices(cell_normalised.shape, sparse=True)
-    i, j = i.flatten(), j.flatten()
-    indices = list(itertools.product(i, j))
-    weights = list(cell_normalised.flatten())
+    i, j = np.arange(cell_normalised.shape[0]), np.arange(cell_normalised.shape[1])
+    indices = [] #needed for njit
+    for ii in i:
+        for jj in j:
+            indices.append((ii,jj))
+    weights = cell_normalised.flatten()
     n_molecules = int(density * np.sum(cell))
-    choices = random.choices(indices, weights=weights, k=n_molecules)
+    choices = np.searchsorted(np.cumsum(weights), np.random.rand(n_molecules)) # workaround for np.random.choice from
     FL_cell = np.zeros(cell.shape)
     for c in choices:
-        FL_cell[c] += 1
+        FL_cell[indices[c]] += 1
     return FL_cell
 
 def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):

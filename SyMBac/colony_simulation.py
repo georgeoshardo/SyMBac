@@ -82,6 +82,7 @@ class ColonySimulation:
                 glob(f"{dir}/*.pickle")
             )
         self.pickles = pickles
+        self.pickles_flat = [item for sublist in self.pickles for item in sublist]
         return self.pickles
 
     def pickle_opener(self, dir):
@@ -155,16 +156,22 @@ class ColonySimulation:
         else:
             return space, mask
 
+    def draw_OPL_from_idx(self,idx, FL = False, density = 1, random_distribution = "uniform", distribution_args = (0.99, 1.01)):
+        cellmodeller_properties = self.get_cellmodeller_properties(
+            self.pickle_opener(
+                self.pickles_flat[idx]
+            )
+        )
+        return self.draw_scene(cellmodeller_properties, False, False, False, FL, density, random_distribution, distribution_args)
+
     def draw_simulation_OPL(self, n_jobs, FL = False, density = 1, random_distribution = "uniform", distribution_args = (0.99,1.01)):
 
         self.get_simulation_dirs()
-        pickles_flat = [item for sublist in self.pickles for item in sublist]
-
         self.get_max_scene_size()
 
-        all_cellmodeller_properties = [self.get_cellmodeller_properties(self.pickle_opener(_)) for _ in pickles_flat]
+        all_cellmodeller_properties = [self.get_cellmodeller_properties(self.pickle_opener(_)) for _ in self.pickles_flat]
 
-        zero_pads = np.ceil(np.log10(len(pickles_flat))).astype(int)
-
-        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1).zfill(zero_pads), False, FL, density, random_distribution, distribution_args) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
+        zero_pads = np.ceil(np.log10(len(self.pickles_flat))).astype(int)
+        n_files = len(glob("data/scenes/*.png"))
+        Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1+n_files).zfill(zero_pads), False, FL, density, random_distribution, distribution_args) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
 
