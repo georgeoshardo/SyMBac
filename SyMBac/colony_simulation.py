@@ -99,7 +99,7 @@ class ColonySimulation:
         return scene_shape
 
     def get_max_scene_size(self):
-        pickles_flat = [item for sublist in self.pickles for item in sublist]
+        pickles_flat = natsorted([item for sublist in self.pickles for item in sublist])
         scene_shapes = []
 
         for _ in pickles_flat:
