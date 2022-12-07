@@ -100,7 +100,7 @@ class ColonyRenderer:
         except:
             pass
         zero_pads = np.ceil(np.log10(n)).astype(int)
-        for j, i in enumerate(cycle(range(len(self.OPL_dirs)))):
+        for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n):
             sample = self.render_scene(i)
             mask = self.mask_loader(i)
             rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
