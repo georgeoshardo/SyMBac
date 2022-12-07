@@ -79,7 +79,7 @@ class ColonySimulation:
         pickles = []
         for dir in self.get_simulation_dirs():
             pickles.append(
-                glob(f"{dir}/*.pickle")
+                natsorted(glob(f"{dir}/*.pickle"))
             )
         self.pickles = natsorted(pickles)
         self.pickles_flat = natsorted([item for sublist in self.pickles for item in sublist])
@@ -172,6 +172,6 @@ class ColonySimulation:
         all_cellmodeller_properties = [self.get_cellmodeller_properties(self.pickle_opener(_)) for _ in self.pickles_flat]
 
         n_files = len(glob("data/scenes/*.png"))
-        zero_pads = np.ceil(np.log10(len(self.pickles_flat)+n_files)).astype(int) + 2
+        zero_pads = np.ceil(np.log10(len(self.pickles_flat))).astype(int) + 2
         Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1+n_files).zfill(zero_pads), False, FL, density, random_distribution, distribution_args) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
 
