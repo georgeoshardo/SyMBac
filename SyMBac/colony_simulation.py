@@ -171,7 +171,7 @@ class ColonySimulation:
 
         all_cellmodeller_properties = [self.get_cellmodeller_properties(self.pickle_opener(_)) for _ in self.pickles_flat]
 
-        zero_pads = np.ceil(np.log10(len(self.pickles_flat))).astype(int)
         n_files = len(glob("data/scenes/*.png"))
+        zero_pads = np.ceil(np.log10(len(self.pickles_flat)+n_files)).astype(int)
         Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1+n_files).zfill(zero_pads), False, FL, density, random_distribution, distribution_args) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
 
