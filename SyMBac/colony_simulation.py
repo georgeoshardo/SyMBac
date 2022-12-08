@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 from PIL import Image
 from skimage.transform import rotate
 from natsort import natsorted
-from SyMBac.drawing import raster_cell, OPL_to_FL
+from SyMBac.drawing import raster_cell, OPL_to_FL, clean_up_mask
 
 
 class ColonySimulation:
@@ -142,6 +142,7 @@ class ColonySimulation:
                 x - cell_x:x + cell_x + offset_x
             ] += ((rotated_OPL_cell) > 1) * mask_counter
             mask_counter += 1
+        mask =  clean_up_mask(mask)
         if save and not savename:
             raise Exception("Add a savename if you wish to save")
         if save and savename:

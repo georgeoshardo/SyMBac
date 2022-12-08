@@ -4,8 +4,9 @@ import random
 import numpy as np
 from matplotlib import pyplot as plt
 from numba import njit
+from skimage.measure import label
 from skimage.transform import rescale, rotate
-from skimage.morphology import opening
+from skimage.morphology import opening, remove_small_objects
 from skimage.exposure import rescale_intensity
 from skimage.segmentation import find_boundaries
 from PIL import Image
@@ -470,3 +471,5 @@ def get_space_size(cell_timeseries_properties):
     return (int(1.2 * max_y), int(1.5 * max_x))
 
 
+def clean_up_mask(mask):
+    return remove_small_objects(label(mask))

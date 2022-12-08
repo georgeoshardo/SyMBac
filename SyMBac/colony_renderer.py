@@ -9,10 +9,13 @@ from glob import glob
 
 from scipy.ndimage import gaussian_filter
 from skimage.exposure import rescale_intensity
+from skimage.measure import label
+from skimage.morphology import remove_small_objects
 from skimage.transform import rescale
 from skimage.util import random_noise
 from tqdm.auto import tqdm
 
+from SyMBac.drawing import clean_up_mask
 from SyMBac.renderer import convolve_rescale
 
 
@@ -115,3 +118,4 @@ class ColonyRenderer:
 
             if j > n:
                 break
+
