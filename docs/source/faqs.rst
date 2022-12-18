@@ -15,3 +15,18 @@ FAQs
 - **I'm getting libGL MESA-LOADER errors**
 
   - See this `StackExchange link <https://unix.stackexchange.com/questions/655495/trying-to-run-pygame-on-my-conda-environment-on-my-fresh-manjaro-install-and-ge>`_.
+
+- **I'm getting a libGL error**
+
+  - E.g:
+  
+  .. code-block:: bash
+    
+      libGL error: MESA-LOADER: failed to open swrast: /usr/lib/dri/swrast_dri.so: cannot open shared object file: No such file or directory (search paths /usr/lib/x86_64-linux-gnu/dri:\$${ORIGIN}/dri:/usr/lib/dri, suffix _dri) libGL error: failed to load driver: swrast
+
+  
+  - Try running:
+
+  .. code-block:: bash
+
+    export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
