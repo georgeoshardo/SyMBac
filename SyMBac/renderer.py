@@ -258,7 +258,7 @@ class Renderer:
                                      pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
                                      condenser=self.PSF.condenser)
             self.PSF.calculate_PSF()
-        if self.PSF.mode == "3d fluo":  # Full 3D PSF model
+        if self.PSF.mode.lower() == "3d fluo":  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
 
