@@ -74,7 +74,8 @@ class ColonyRenderer:
         scene = rescale_intensity(scene, out_range=(0, 1))
 
         temp_kernel = self.PSF.kernel
-        temp_kernel = gaussian_filter(temp_kernel, 8.7, mode="reflect")
+        if "phase" in self.PSF.mode.lower():
+        	temp_kernel = gaussian_filter(temp_kernel, 8.7, mode="reflect")
 
         convolved = convolve_rescale(scene, temp_kernel, 1/self.resize_amount, rescale_int=True)
 

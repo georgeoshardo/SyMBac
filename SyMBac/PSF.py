@@ -170,7 +170,7 @@ class PSF_generator:
         """
 
         r = np.arange(-radius, radius + 1)
-        kaw = 2 * NA / n * np.pi / wavelength
+        kaw = 2 * NA / n * np.pi / wavelength #np.tan(np.arcsin(NA/n))
         xx, yy = np.meshgrid(r, r)
         xx, yy = xx * scale, yy * scale
         rr = np.sqrt(xx ** 2 + yy ** 2) * kaw
