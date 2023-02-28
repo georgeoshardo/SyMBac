@@ -73,7 +73,7 @@ class TestExample(unittest.TestCase):
             mask=scenes[0][1],
             media_multiplier=media_multiplier,
             cell_multiplier=cell_multiplier,
-            device_multiplier=cell_multiplier,
+            device_multiplier=device_multiplier,
             y_border_expansion_coefficient=y_border_expansion_coefficient,
             x_border_expansion_coefficient=x_border_expansion_coefficient,
             fluorescence=False,

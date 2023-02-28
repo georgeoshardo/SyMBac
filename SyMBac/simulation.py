@@ -36,7 +36,7 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, objective):
         """
         Initialising a Simulation object
 
@@ -72,6 +72,8 @@ class Simulation:
         resize_amount : int
             This is the "upscaling" factor for the simulation and the entire image generation process. Must be kept constant
             across the image generation pipeline. Starting value of 3 recommended.
+        objective : int
+            The objective magnification of the images you are trying to replicate
         """
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -87,6 +89,7 @@ class Simulation:
         self.resize_amount = resize_amount
         self.save_dir = save_dir
         self.offset = 30
+        self.objective = objective
 
     def run_simulation(self, show_window = True):
         """
