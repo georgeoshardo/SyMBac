@@ -7,6 +7,64 @@ from io import BytesIO
 
 from skimage.segmentation import find_boundaries
 from skimage.transform import resize
+from scipy.interpolate import RegularGridInterpolator
+
+
+def interpolate(original_array, target_shape,method='linear'):
+    """Resize images using interpolation. For mask-like images, use 'nearest' method, for fast interpolation of regular images use 'linear'
+
+    Arguments:
+        original_array -- np.ndarray; image to be resized
+        target_shape -- tuple(int,int); shape to resize the image to
+
+    Keyword Arguments:
+        method -- str; method for use in scipy.interpolate.RegularGridInterpolator. Valid methods are: ['linear','nearest','slinear','cubic','quintic','pchip'] (default: {'linear'})
+
+    Returns:
+        newarr -- np.ndarray; interpolated image with shape target_shape
+    """
+    ts0, ts1 = target_shape
+    ogarr = np.array(original_array)
+    os0, os1 = ogarr.shape
+    if target_shape == ogarr.shape:
+        return ogarr
+    methods = ['linear','nearest','slinear','cubic','quintic','pchip']
+    if method not in methods:
+        raise ValueError(f"{method} is not a valid method. Valid methods are: {methods}.")
+    x, y = np.arange(os0), np.arange(os1)
+    grid = RegularGridInterpolator((x,y), ogarr,method=method)
+    a, b = np.meshgrid(np.linspace(0,int(os0-1),int(ts0)), np.linspace(0,int(os1-1),int(ts1)),indexing='ij')
+    points = np.concatenate((a.reshape(int(ts0),int(ts1),1),b.reshape(int(ts0),int(ts1),1)),axis=-1)
+    newarr = grid(points)
+    return newarr
+
+
+def extend_background(original_array,target_shape,background_array=None):
+    """Extend the background of a trench image so the image has shape target_shape
+
+    Arguments:
+        original_array -- np.ndarray; image to extend the background of
+        target_shape -- tuple(int,int); shape of the new image
+
+    Keyword Arguments:
+        background_array -- np.ndarray; boolean array same shape as original_array, with True for elements which are part of the image background.
+                                        If None, assumes background is around the edges of the image (default: {None})
+
+    Returns:
+        _description_
+    """
+    os0, os1 = original_array.shape
+    ts0, ts1 = target_shape
+    if background_array is None:
+        out = np.median(original_array[-1])*np.zeros([ts0,ts1])
+    else:
+        out = np.mean(original_array[background_array>0]) + np.std(original_array[background_array>0])*np.random.randn(ts0,ts1)/10
+    edge = (ts1-os1)//2
+    try:
+        out[-os0:,edge:-edge] = original_array
+    except:
+        out[-os0:,edge:-edge-1] = original_array
+    return out
 
 
 def resize_mask(mask, resize_shape, ret_label):

@@ -142,6 +142,7 @@ class PSF_generator:
             ax.imshow(self.kernel, cmap="Greys_r")
             scalebar = ScaleBar(self.scale, "um", length_fraction=0.25)
             ax.add_artist(scalebar)
+            ax.set_title(f"apo_sigma: {self.apo_sigma}")
             plt.show()
 
     @staticmethod
