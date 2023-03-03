@@ -246,9 +246,10 @@ class Renderer:
             y_border_expansion_coefficient=self.y_border_expansion_coefficient,
             defocus=defocus
         )
-
-        R, W, radius, scale, NA, n, _, λ = self.PSF.R, self.PSF.W, self.PSF.radius, self.PSF.scale, self.PSF.NA, self.PSF.n, self.PSF.apo_sigma, self.PSF.wavelength
-
+        if self.PSF.mode == "phase contrast":
+            R, W, radius, scale, NA, n, _, λ = self.PSF.R, self.PSF.W, self.PSF.radius, self.PSF.scale, self.PSF.NA, self.PSF.n, self.PSF.apo_sigma, self.PSF.wavelength
+        else:
+            radius, scale, NA, n, _, λ = self.PSF.radius, self.PSF.scale, self.PSF.NA, self.PSF.n, self.PSF.apo_sigma, self.PSF.wavelength
         real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = self.image_params
         mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error, device_var_error = self.error_params
 
@@ -302,11 +303,11 @@ class Renderer:
         if match_histogram and match_fourier:
             matched = sfMatch([real_resize, matched], tarmag=mags)[1]
             matched = lumMatch([real_resize, matched], None, [np.mean(real_resize), np.std(real_resize)])[1]
-            matched = match_histograms(matched, real_resize, multichannel=False)
+            matched = match_histograms(matched, real_resize)
         else:
             pass
         if match_histogram:
-            matched = match_histograms(matched, real_resize, multichannel=False)
+            matched = match_histograms(matched, real_resize)
         else:
             pass
 
@@ -323,7 +324,7 @@ class Renderer:
             noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0, var=noise_var, clip=False)
 
         if match_noise:
-            noisy_img = match_histograms(noisy_img, real_resize, multichannel=False)
+            noisy_img = match_histograms(noisy_img, real_resize)
         else:
             pass
         noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
