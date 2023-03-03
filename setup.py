@@ -16,7 +16,7 @@ setup(
     long_description = (this_directory / "README.md").read_text(), 
     long_description_content_type = 'text/markdown',
     install_requires = [
-        'tifffile',
+        'tifffile==2023.2.3',
         'scikit-image',
         'matplotlib==3.4.3',
         "tqdm",
