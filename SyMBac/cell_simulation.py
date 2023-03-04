@@ -10,7 +10,7 @@ import pyglet
 from tqdm.autonotebook import tqdm
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_var, width_var, save_dir, lysis_p=0, show_window = True):
+                   phys_iters, max_length_var, width_var, save_dir, lysis_p=0, show_window = True, streamlit_mode = False):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -127,11 +127,17 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
                                        save_dir=save_dir)
         pyglet.app.run()
     else:
-        for _ in tqdm(range(sim_length)):
+        if streamlit_mode:
+            import streamlit as st
+            progress_text = "Simulation running"
+            my_bar = st.progress(0, text=progress_text)
+        for _ in tqdm(range(sim_length+2)):
             step_and_update(
                 dt=dt, cells=cells, space=space, phys_iters=phys_iters, ylim=trench_length,
                 cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir
             )
+            if streamlit_mode:
+                my_bar.progress((_)/sim_length, text=progress_text)
 
     # window.close()
     # phys_iters = phys_iters
