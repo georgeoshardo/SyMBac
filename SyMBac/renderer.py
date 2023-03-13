@@ -288,7 +288,7 @@ class Renderer:
                                      pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
                                      condenser=self.PSF.condenser)
             self.PSF.calculate_PSF()
-        if self.PSF.mode == "3d fluo":  # Full 3D PSF model
+        if self.PSF.mode.lower() == "3d fluo":  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
 
@@ -730,6 +730,8 @@ class Renderer:
             else:
                 mask = Image.fromarray(mask.astype(dtype))
                 mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+
+
 
         Parallel(n_jobs=n_jobs)(delayed(generate_samples)(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier) for z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier in
                                tqdm(
