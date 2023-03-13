@@ -11,6 +11,7 @@ def number_input(label, key, value = None, min_value=None, max_value=None, step=
     st.session_state[key] = value
 
 st.set_page_config(page_title="PSF")
+#st.write(st.session_state["pix_mic_conv"])
 
 PSF_tab, camera_tab = st.tabs(["PSF", "Camera"])
 

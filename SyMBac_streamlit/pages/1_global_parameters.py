@@ -3,10 +3,13 @@ import pickle
 
 def number_input(label, key, min_value=None, max_value=None, step=0.01, format_=None):
     value = st.number_input(label = label, min_value = min_value, max_value = max_value, step = step, format = format_)
-    if key not in st.session_state:
-        st.session_state[key] = value
+    #if key not in st.session_state:
+    st.session_state[key] = value
 
 st.set_page_config(page_title="Global paramters", page_icon="📈")
+
+number_input(label = "Pixel size ($\mu m/pix$)", key = "pix_mic_conv", step=0.001, format_="%.3f")
+number_input("Simulation scale factor", "resize_amount")
 
 uploaded_simulation = st.file_uploader("Upload Previous Simulation (no need to define previous values)")
 if uploaded_simulation:
@@ -14,9 +17,7 @@ if uploaded_simulation:
     st.session_state['pix_mic_conv'] = st.session_state["my_simulation"].pix_mic_conv
     st.session_state["resize_amount"] = st.session_state["my_simulation"].resize_amount
 
-
-number_input(label = "Pixel size ($\mu m/pix$)", key = "pix_mic_conv", step=0.001, format_="%.3f")
-number_input("Simulation scale factor", "resize_amount")
+#st.write(st.session_state["pix_mic_conv"])
 
 
 

@@ -9,6 +9,8 @@ def number_input(label, key, value = None, min_value=None, max_value=None, step=
 
 st.set_page_config(page_title="Simulation")
 
+
+
 def customDownloadButton():
     if st.button('Prepare simulation download'):
         data = pickle.dumps(st.session_state["my_simulation"])

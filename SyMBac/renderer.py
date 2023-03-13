@@ -136,8 +136,8 @@ class Renderer:
         media_multiplier = 30
         cell_multiplier = 1
         device_multiplier = -50
-        self.y_border_expansion_coefficient = 2
-        self.x_border_expansion_coefficient = 2
+        self.y_border_expansion_coefficient = 3
+        self.x_border_expansion_coefficient = 3
 
         temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = self.generate_PC_OPL(
             scene=simulation.OPL_scenes[-1],
@@ -592,7 +592,7 @@ class Renderer:
         return self.params
 
     def generate_training_data(self, sample_amount, randomise_hist_match, randomise_noise_match,
-                               burn_in, n_samples, save_dir, in_series=False, seed=False):
+                               burn_in, n_samples, save_dir, in_series=False, seed=False, n_jobs = 1):
         """
         Generates the training data from a Jupyter interactive output of generate_test_comparison
 
@@ -684,5 +684,5 @@ class Renderer:
                 mask = Image.fromarray(mask.astype(np.uint8))
                 mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
 
-        Parallel(n_jobs=njobs)(delayed(generate_samples)(z) for z in
+        Parallel(n_jobs=n_jobs)(delayed(generate_samples)(z) for z in
                                tqdm(range(current_file_num, n_samples + current_file_num), desc="Sample generation"))
