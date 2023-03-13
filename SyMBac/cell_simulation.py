@@ -7,7 +7,7 @@ from SyMBac.trench_geometry import trench_creator, get_trench_segments
 from pymunk.pyglet_util import DrawOptions
 import pymunk
 import pyglet
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir, lysis_p=0, show_window = True, streamlit_mode = False):

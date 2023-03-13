@@ -31,7 +31,14 @@ setup(
         "raster-geometry==0.1.4.1",
         "matplotlib-scalebar==0.7.2",
         "psfmodels",
-        "numba==0.56.4"
+        "numba==0.56.4",
+        "sphinx_automodapi",
+        "sphinx-autobuild",
+        "nbsphinx",
+        "sphinx_copybutton",
+        "sphinx_rtd_theme",
+        "pandoc",
+        "zarr"
         ],
 
     classifiers = [
