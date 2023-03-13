@@ -123,10 +123,10 @@ class PSF_generator:
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
             self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=0, ni=self.n,
                                         wvl=self.wavelength, NA=self.NA) + self.offset
-
+        
         else:
             raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
-
+        self.kernel = self.kernel/self.kernel.max()
     def plot_PSF(self):
         if "3d fluo" in self.mode.lower():
             fig, axes = plt.subplots(1, 3)
@@ -170,7 +170,7 @@ class PSF_generator:
         """
 
         r = np.arange(-radius, radius + 1)
-        kaw = 2 * NA / n * np.pi / wavelength
+        kaw = 2 * NA / n * np.pi / wavelength #np.tan(np.arcsin(NA/n))
         xx, yy = np.meshgrid(r, r)
         xx, yy = xx * scale, yy * scale
         rr = np.sqrt(xx ** 2 + yy ** 2) * kaw
@@ -227,6 +227,8 @@ class PSF_generator:
         2-D numpy array representing the phase contrast PSF
 
         """
+        gaussian = PSF_generator.gaussian_2D(radius * 2 + 1, sigma)
+
         scale1 = 1000  # micron per millimeter
         # F = F * scale1 # to microm
         Lambda = wavelength  # in micron % wavelength of light
@@ -245,12 +247,21 @@ class PSF_generator:
         kernel2 = 2 * (R - W) ** 2 / R ** 2 * jv(1, (R - W) ** 2 / R ** 2 * rr) / rr
         kernel2[radius, radius] = np.nanmax(kernel2)
 
+        kernel1*= gaussian
+        kernel2*= gaussian
+
         kernel = kernel1 - kernel2
+
         kernel = kernel / np.max(kernel)
+
         kernel[radius, radius] = 1
-        kernel = -kernel / np.sum(kernel)
-        gaussian = PSF_generator.gaussian_2D(radius * 2 + 1, sigma)
-        kernel = kernel * gaussian
+
+        if (np.sum(kernel1) > np.sum(kernel2)):
+            kernel = -kernel / np.sum(kernel)
+        else:
+            kernel = kernel / np.sum(kernel)
+            
+            
         kernel += offset
         return kernel
 
