@@ -18,6 +18,8 @@ from tqdm.auto import tqdm
 from SyMBac.drawing import clean_up_mask
 from SyMBac.renderer import convolve_rescale
 
+import cupy as cp
+from joblib import Parallel, delayed
 
 class ColonyRenderer:
     def __init__(self, simulation, PSF, camera = None):
@@ -90,7 +92,9 @@ class ColonyRenderer:
 
         return convolved
 
-    def generate_random_samples(self, n, roll_prob, savedir):
+    def generate_random_samples(self, n, roll_prob, savedir, n_GPUs = 1, n_jobs = 1):
+        if n_GPUs > 1:
+            n_jobs = n_GPUs
         try:
             os.mkdir(f"{savedir}")
         except:
@@ -104,19 +108,38 @@ class ColonyRenderer:
         except:
             pass
         zero_pads = np.ceil(np.log10(n)).astype(int)
-        for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n):
-            sample = self.render_scene(i)
-            mask = self.mask_loader(i)
-            rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
 
-            if np.random.rand() < roll_prob:
-                n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
-                sample = np.roll(sample, amount, axis=n_axis_to_roll)
-                rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
+        def run_on_GPU(j, i, zero_pads, gpu_id):
+             with cp.cuda.Device(gpu_id):
+                sample = self.render_scene(i)
+                mask = self.mask_loader(i)
+                rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
 
-            Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
-            Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+                if np.random.rand() < roll_prob:
+                    n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+                    sample = np.roll(sample, amount, axis=n_axis_to_roll)
+                    rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
 
-            if j > n:
-                break
+                Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+                Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+
+                if j > n:
+                    break
+
+        Parallel(n_jobs=n_jobs, backend="threading")(delayed(run_on_GPU)(j, i, zero_pads, gpu_id) for (j, i), gpu_id in tqdm(zip(enumerate(cycle(range(len(self.OPL_dirs)))), cycle(range(n_GPUs))), total=n)  )
+        #for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n): 
+        #    sample = self.render_scene(i)
+        #    mask = self.mask_loader(i)
+        #    rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)#
+
+        #    if np.random.rand() < roll_prob:
+        #        n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+        #        sample = np.roll(sample, amount, axis=n_axis_to_roll)
+        #        rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)#
+
+        #    Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+        #    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+
+        #    if j > n:
+        #        break
 
