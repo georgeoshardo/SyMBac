@@ -1,5 +1,5 @@
 import random
-from itertools import cycle
+from itertools import cycle, islice
 import os
 
 import numpy as np
