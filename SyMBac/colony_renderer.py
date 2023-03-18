@@ -124,8 +124,8 @@ class ColonyRenderer:
                     Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
                     Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
 
-                if j > n:
-                    break
+                    if j > n:
+                        break
 
         def batched(iterable, n):
             "Batch data into tuples of length n. The last batch may be shorter."
