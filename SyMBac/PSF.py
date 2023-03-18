@@ -123,7 +123,7 @@ class PSF_generator:
         elif "3d fluo" in self.mode.lower():
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
             self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=self.pz, ni=self.n,
-                                        wvl=self.wavelength, NA=self.NA) + self.offset
+                                        wvl=self.wavelength, NA=self.NA, model="scalar") + self.offset
         
         else:
             raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
