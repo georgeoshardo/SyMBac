@@ -6,7 +6,7 @@ import numpy as np
 import noise
 from PIL import Image
 from glob import glob
-
+import tifffile
 from scipy.ndimage import gaussian_filter
 from skimage.exposure import rescale_intensity
 from skimage.measure import label
@@ -35,6 +35,9 @@ class ColonyRenderer:
 
         self.mask_dirs = sorted(glob(f"{self.masks_dir}/*.png"))
         self.OPL_dirs = sorted(glob(f"{self.OPL_dir}/*.png"))
+
+        if "3d" in self.PSF.mode.lower():
+            self.OPL_dirs = sorted(glob(f"{simulation.fluorescent_projections_dir}/*.tif*"))
 
     def perlin_generator(self, scale = 5, octaves = 10, persistence = 1.9, lacunarity = 1.8):
 
@@ -66,33 +69,47 @@ class ColonyRenderer:
 
 
     def OPL_loader(self, idx):
+        if "3d" in self.PSF.mode.lower():
+            return tifffile.imread(self.OPL_dirs[idx])
         return np.array(Image.open(self.OPL_dirs[idx]))
 
     def mask_loader(self, idx):
         return np.array(Image.open(self.mask_dirs[idx]))
 
     def render_scene(self, idx):
-        scene = self.OPL_loader(idx)
-        scene = rescale_intensity(scene, out_range=(0, 1))
+                   
+        scene = self.OPL_loader(idx).astype(np.float16)
+        #scene = rescale_intensity(scene, out_range=(0, 1))
 
-        temp_kernel = self.PSF.kernel
+        kernel = self.PSF.kernel
         if "phase" in self.PSF.mode.lower():
-        	temp_kernel = gaussian_filter(temp_kernel, 8.7, mode="reflect")
+        	kernel = gaussian_filter(kernel, 8.7, mode="reflect")
 
-        convolved = convolve_rescale(scene, temp_kernel, 1/self.resize_amount, rescale_int=True)
+        if "3d" in self.PSF.mode.lower():
+
+            self.PSF.z_height = scene.shape[0]
+            self.PSF.calculate_PSF()
+            kernel = self.PSF.kernel / np.sum(self.PSF.kernel)
+
+            convolved = np.array(
+                [convolve_rescale(scene_slice, PSF_slice/np.sum(PSF_slice), 1/self.resize_amount, rescale_int=False) for scene_slice, PSF_slice in zip(scene, kernel)]
+            )
+        else:
+            convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
 
         if "phase" in self.PSF.mode.lower():
             bg = self.random_perlin_generator()
             convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(1000,3000), np.random.uniform(1,3), mode="reflect")
 
         convolved = random_noise((convolved), mode="poisson")
-        convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False)
+        #convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False)
 
-        convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
+        #convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
+
 
         return convolved
 
-    def generate_random_samples(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, batch_size = 20):
+    def generate_random_samples(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, gpu_fraction=1, batch_size = 20):
         n_GPUs = len(GPUs)
         if n_GPUs > 1:
             n_jobs = n_GPUs
@@ -112,7 +129,7 @@ class ColonyRenderer:
 
         ray.init(num_gpus=n_GPUs)
 
-        @ray.remote(num_gpus=1/n_jobs)
+        @ray.remote(num_gpus=gpu_fraction)
         def run_on_GPU(batch, zero_pads, gpu_id, n_jobs):
             #with cp.cuda.Device(gpu_id):
             s = cp.cuda.Stream(non_blocking = True)
@@ -130,12 +147,17 @@ class ColonyRenderer:
                             sample = np.roll(sample, amount, axis=n_axis_to_roll)
                             rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
     
-                        Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+                        if "3d" in self.PSF.mode.lower():
+                            tifffile.imwrite(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
+                        else:
+                            Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
                         Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
     
                         #if j > n:
                         #    break
-            Parallel(n_jobs=1)(delayed(run_batch)(j, i) for j, i in batch)
+            Parallel(n_jobs=n_jobs)(delayed(run_batch)(j, i) for j, i in batch)
+        
+
 
         def batched(iterable, n):
             "Batch data into tuples of length n. The last batch may be shorter."
@@ -168,4 +190,4 @@ class ColonyRenderer:
 
         #    if j > n:
         #        break
-
+        ray.shutdown()
