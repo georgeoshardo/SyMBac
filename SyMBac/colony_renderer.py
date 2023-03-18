@@ -137,7 +137,8 @@ class ColonyRenderer:
                 yield batch
 
         n_batches = int(np.ceil(n / batch_size))
-        batched_generator = batched(zip(enumerate(cycle(range(len(self.OPL_dirs)))), cycle(range(n_GPUs)), n_batches)
+        batched_generator = batched(zip(enumerate(cycle(range(len(self.OPL_dirs))), cycle(range(n_GPUs)))), n_batches)
+
         Parallel(n_jobs=n_jobs, backend="threading")(delayed(run_on_GPU)(batch, zero_pads, gpu_id) for batch, gpu_id in tqdm(batched_generator, total=n_batches) )
         #for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n): 
         #    sample = self.render_scene(i)
