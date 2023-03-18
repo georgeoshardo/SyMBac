@@ -87,6 +87,21 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
                                 separation])
     return cell_properties
 
+def get_crop_bounds_2D(img, tol=0):
+    mask = img>tol
+    x_idx = np.ix_(mask.any(1),mask.any(0))
+    start_row, stop_row, start_col, stop_col = x_idx[0][0][0], x_idx[0][-1][0], x_idx[1][0][0], x_idx[1][0][-1]
+
+    return (start_row, stop_row), (start_col, stop_col)
+
+def crop_image(img, rows, cols, pad):
+    (start_row, stop_row) = rows
+    (start_col, stop_col) = cols
+    if len(img.shape)==3:
+        return np.pad(img[:,start_row:stop_row, start_col:stop_col], ((0,0),(pad,pad),(pad,pad)))
+    else:
+        return np.pad(img[start_row:stop_row, start_col:stop_col], pad)
+
 
 def raster_cell(length, width, separation, pinching=True, FL = False):
     """

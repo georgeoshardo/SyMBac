@@ -693,7 +693,7 @@ class Renderer:
             
             if in_series:
                 scene_no = (np.arange(burn_in, self.simulation.sim_length).tolist() * n_series_to_sim)[z] #burn_in + z % (self.simulation.sim_length - 2)
-                print(z, scene_no, media_multiplier)
+                # print(z, scene_no, media_multiplier)
                 # can maybe re-run run_simulation and draw_scene when this loops back to 0
             else:
                 scene_no = np.random.randint(burn_in, self.simulation.sim_length - 2)
@@ -733,7 +733,7 @@ class Renderer:
 
 
 
-        Parallel(n_jobs=n_jobs)(delayed(generate_samples)(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier) for z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier in
+        Parallel(n_jobs=n_jobs, backend="threading")(delayed(generate_samples)(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier) for z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier in
                                tqdm(
                                 zip(range(current_file_num, n_samples + current_file_num), media_multiplier_modifiers, cell_multiplier_modifiers, device_multiplier_modifiers, sigma_modifiers)
                                 , desc="Sample generation"))
