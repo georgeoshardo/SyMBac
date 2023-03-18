@@ -110,7 +110,9 @@ class ColonyRenderer:
         zero_pads = np.ceil(np.log10(n)).astype(int)
 
         def run_on_GPU(j, i, zero_pads, gpu_id):
-             with cp.cuda.Device(gpu_id):
+            if j > n:
+                pass
+            with cp.cuda.Device(gpu_id):
                 sample = self.render_scene(i)
                 mask = self.mask_loader(i)
                 rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
@@ -123,8 +125,7 @@ class ColonyRenderer:
                 Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
                 Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
 
-                if j > n:
-                    break
+
 
         Parallel(n_jobs=n_jobs, backend="threading")(delayed(run_on_GPU)(j, i, zero_pads, gpu_id) for (j, i), gpu_id in tqdm(zip(enumerate(cycle(range(len(self.OPL_dirs)))), cycle(range(n_GPUs))), total=n)  )
         #for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n): 
