@@ -112,30 +112,30 @@ class ColonyRenderer:
 
         ray.init(num_gpus=n_GPUs)
 
-        @ray.remote(num_gpus=1)
+        @ray.remote(num_gpus=1/n_jobs)
         def run_on_GPU(batch, zero_pads, gpu_id, n_jobs):
             #with cp.cuda.Device(gpu_id):
-            #    s = cp.cuda.Stream(non_blocking = True)
-            #    with s:
-            def run_batch(j, i):
-                if j > n:
-                    pass:
-                else:
-                    sample = self.render_scene(i)
-                    mask = self.mask_loader(i)
-                    rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
-
-                    if np.random.rand() < roll_prob:
-                        n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
-                        sample = np.roll(sample, amount, axis=n_axis_to_roll)
-                        rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
-
-                    Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
-                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
-
-                    #if j > n:
-                    #    break
-            Parallel(n_jobs=n_jobs)(delayed(run_batch)(j, i) for j, i in batch)
+            s = cp.cuda.Stream(non_blocking = True)
+            with s:
+                def run_batch(j, i):
+                    if j > n:
+                        pass
+                    else:
+                        sample = self.render_scene(i)
+                        mask = self.mask_loader(i)
+                        rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
+    
+                        if np.random.rand() < roll_prob:
+                            n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+                            sample = np.roll(sample, amount, axis=n_axis_to_roll)
+                            rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
+    
+                        Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+                        Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+    
+                        #if j > n:
+                        #    break
+            Parallel(n_jobs=1)(delayed(run_batch)(j, i) for j, i in batch)
 
         def batched(iterable, n):
             "Batch data into tuples of length n. The last batch may be shorter."
