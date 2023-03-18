@@ -1,290 +1,161 @@
+import random
+from itertools import cycle, islice
+import os
+
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib_scalebar.scalebar import ScaleBar
-from scipy.special import jv
-import psfmodels as psfm
-import warnings
+import noise
+from PIL import Image
+from glob import glob
+
+from scipy.ndimage import gaussian_filter
+from skimage.exposure import rescale_intensity
+from skimage.measure import label
+from skimage.morphology import remove_small_objects
+from skimage.transform import rescale
+from skimage.util import random_noise
+from tqdm.auto import tqdm
+
+from SyMBac.drawing import clean_up_mask
+from SyMBac.renderer import convolve_rescale
+
+import cupy as cp
+from joblib import Parallel, delayed
+
+class ColonyRenderer:
+    def __init__(self, simulation, PSF, camera = None):
+        self.simulation = simulation
+        self.PSF = PSF
+        self.camera = camera
+
+        self.scene_shape = simulation.scene_shape
+        self.resize_amount = simulation.resize_amount
+
+        self.masks_dir = simulation.masks_dir
+        self.OPL_dir = simulation.OPL_dir
+
+        self.mask_dirs = sorted(glob(f"{self.masks_dir}/*.png"))
+        self.OPL_dirs = sorted(glob(f"{self.OPL_dir}/*.png"))
+
+    def perlin_generator(self, scale = 5, octaves = 10, persistence = 1.9, lacunarity = 1.8):
+
+        shape = self.scene_shape
+
+        y, x = np.round(shape[0] / self.resize_amount).astype(int), np.round(shape[1] / self.resize_amount).astype(int)
+
+        world = np.zeros((x, y))
+
+        # make coordinate grid on [0,1]^2
+        x_idx = np.linspace(0, 1, y)
+        y_idx = np.linspace(0, 1, x)
+        world_x, world_y = np.meshgrid(x_idx, y_idx)
+
+        # apply perlin noise, instead of np.vectorize, consider using itertools.starmap()
+        world = np.vectorize(noise.pnoise2)(world_x / scale,
+                                            world_y / scale,
+                                            octaves=octaves,
+                                            persistence=persistence,
+                                            lacunarity=lacunarity)
+
+        # here was the error: one needs to normalize the image first. Could be done without copying the array, though
+        img = np.floor((world + .5) * 255).astype(np.uint8)  # <- Normalize world first
+        return img
+
+    def random_perlin_generator(self):
+        return self.perlin_generator(np.random.uniform(1, 7), np.random.choice([10, 11, 12, 13]), np.random.uniform(1, 1.9),
+                                np.random.uniform(1.55, 1.9))
 
 
-class Camera:
-    """
-    Class for instantiating Camera objects.
+    def OPL_loader(self, idx):
+        return np.array(Image.open(self.OPL_dirs[idx]))
 
-    Example:
+    def mask_loader(self, idx):
+        return np.array(Image.open(self.mask_dirs[idx]))
 
-    >>> my_camera = Camera(baseline=100, sensitivity=2.9, dark_noise=8)
-    >>> my_camera.render_dark_image()
+    def render_scene(self, idx):
+        scene = self.OPL_loader(idx)
+        scene = rescale_intensity(scene, out_range=(0, 1))
 
-    """
+        temp_kernel = self.PSF.kernel
+        if "phase" in self.PSF.mode.lower():
+        	temp_kernel = gaussian_filter(temp_kernel, 8.7, mode="reflect")
 
-    def __init__(self, baseline, sensitivity, dark_noise):
-        """
+        convolved = convolve_rescale(scene, temp_kernel, 1/self.resize_amount, rescale_int=True)
 
-        :param int baseline: The baseline intensity of the camera.
-        :param float sensitivity: The camera sensitivity.
-        :param dark_noise: The camera dark noise
-        """
-        self.baseline, self.sensitivity, self.dark_noise = baseline, sensitivity, dark_noise
+        if "phase" in self.PSF.mode.lower():
+            bg = self.random_perlin_generator()
+            convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(1000,3000), np.random.uniform(1,3), mode="reflect")
 
-    def render_dark_image(self, size, plot=True):
-        """
-        Render a sample synthetic dark image from the camera
+        convolved = random_noise((convolved), mode="poisson")
+        convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False)
 
-        :param tuple(int, int) size: Size of the dark image.
-        :param bool plot: Whether or not to plot the image.
-        :return: Dark image sample.
-        :rtype: np.ndarray
-        """
-        rng = np.random.default_rng(2)
-        dark_img = rng.normal(loc=self.baseline, scale=self.dark_noise, size=size)
-        dark_img = rng.poisson(dark_img)
-        if plot:
-            plt.imshow(dark_img, cmap="Greys_r")
-            plt.colorbar()
-            plt.axis("off")
-            plt.show()
-        return dark_img
+        convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
 
+        return convolved
 
-class PSF_generator:
-    """
-    Instantiate a PSF generator, allows you to create phase contrast or fluorescence PSFs.
+    def generate_random_samples(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, batch_size = 20):
+        n_GPUs = len(GPUs)
+        if n_GPUs > 1:
+            n_jobs = n_GPUs
+        try:
+            os.mkdir(f"{savedir}")
+        except:
+            pass
+        try:
+            os.mkdir(f"{savedir}/masks/")
+        except:
+            pass
+        try:
+            os.mkdir(f"{savedir}/synth_imgs")
+        except:
+            pass
+        zero_pads = np.ceil(np.log10(n)).astype(int)
 
-    Example:
+        def run_on_GPU(batch, zero_pads, gpu_id):
+            with cp.cuda.Device(gpu_id):
+                for j, i in batch:
+                    sample = self.render_scene(i)
+                    mask = self.mask_loader(i)
+                    rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
 
-    >>> #Creating a phase contrast PSF
-    >>> my_kernel = PSF_generator(
-            radius = 50,
-            wavelength = 0.75,
-            NA = 1.2,
-            n = 1.3,
-            resize_amount = 3,
-            pix_mic_conv = 0.065,
-            apo_sigma = 10,
-            mode="phase contrast",
-            condenser = "Ph3"
-        )
-    >>> my_kernel.calculate_PSF()
-    >>> my_kernel.plot_PSF()
+                    if np.random.rand() < roll_prob:
+                        n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+                        sample = np.roll(sample, amount, axis=n_axis_to_roll)
+                        rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
 
-    """
+                    Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
 
-    def __init__(self, radius, wavelength, NA, n, apo_sigma, mode, condenser=None, z_height=None, resize_amount=None,
-                 pix_mic_conv=None, scale=None, offset = 0, pz=0):
-        """
-        :param int radius: Radius of the PSF.
-        :param float wavelength: Wavelength of imaging light in micron.
-        :param float NA: Numerical aperture of the objective lens.
-        :param float n: Refractive index of the imaging medium.
-        :param float apo_sigma: Gaussian apodisation sigma for phase contrast PSF (will be ignored for fluorescence PSFs).
-        :param str mode: Either ``phase contrast``, ``simple fluo``, or `3d fluo``.
-        :param str condenser: Either ``Ph1``, ``Ph2``, ``Ph3``, ``Ph4``, or ``PhF`` (will be ignored for fluorescence PSFs).
-        :param int z_height: The Z-size of a 3D fluorescence PSF. Will be ignored for ``mode=phase contrast`` or ``simple fluo``.
-        :param int resize_amount: Upscaling factor, typically chosen to be 3.
-        :param float pix_mic_conv: Micron per pixel conversion factor. E.g approx 0.1 for 60x on some cameras.
-        :param float scale: If not provided will be calculated as ``self.pix_mic_conv / self.resize_amount``.
-        :param float offset: A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.``.
-        """
-        self.radius = radius
-        self.wavelength = wavelength
-        self.NA = NA
-        self.n = n
-        if scale:
-            self.scale = scale
-        else:
-            self.resize_amount = resize_amount
-            self.pix_mic_conv = pix_mic_conv
-            self.scale = self.pix_mic_conv / self.resize_amount
-        self.apo_sigma = apo_sigma
-        self.mode = mode
-        self.condenser = condenser
-        self.pz = pz
-        if condenser:
-            self.W, self.R, self.diameter = self.get_condensers()[condenser]
+                    if j > n:
+                        break
 
-        self.z_height = z_height
-        self.min_sigma = 0.42 * 0.6 / 6 / self.scale  # micron#
-        self.offset = offset
+        def batched(iterable, n):
+            "Batch data into tuples of length n. The last batch may be shorter."
+            # batched('ABCDEFG', 3) --> ABC DEF G
+            if n < 1:
+                raise ValueError('n must be at least one')
+            it = iter(iterable)
+            while (batch := tuple(islice(it, n))):
+                yield batch
 
-    def calculate_PSF(self):
-        if "phase contrast" in self.mode.lower():
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                self.kernel = self.get_phase_contrast_kernel(R=self.R, W=self.W, radius=self.radius, scale=self.scale,
-                                                             NA=self.NA, n=self.n, sigma=self.apo_sigma,
-                                                             wavelength=self.wavelength, offset = self.offset)
+        n_batches = int(np.ceil(n / batch_size))
+        batched_idxs = batched(  enumerate(cycle(range(len(self.OPL_dirs)))), batch_size)
+        batched_zip = zip(batched_idxs,cycle(GPUs))
+        batched_zip = islice(batched_zip, 0, n_batches)
 
-        elif "simple fluo" in self.mode.lower():
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                self.kernel = self.get_fluorescence_kernel(radius=self.radius, scale=self.scale, NA=self.NA, n=self.n,
-                                                           wavelength=self.wavelength, offset = self.offset)
+        Parallel(n_jobs=n_jobs, backend="loky")(delayed(run_on_GPU)(batch, zero_pads, gpu_id) for batch, gpu_id in tqdm(batched_zip, total=n_batches) )
+        #for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n): 
+        #    sample = self.render_scene(i)
+        #    mask = self.mask_loader(i)
+        #    rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)#
 
-        elif "3d fluo" in self.mode.lower():
-            assert self.z_height, "For 3D fluorescence, you must specify a Z height"
-            self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=self.pz, ni=self.n,
-                                        wvl=self.wavelength, NA=self.NA, model="scalar") + self.offset
-        
-        else:
-            raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
-        self.kernel = self.kernel/self.kernel.max()
-    def plot_PSF(self):
-        if "3d fluo" in self.mode.lower():
-            fig, axes = plt.subplots(1, 3)
-            for dim, ax in enumerate(axes.flatten()):
-                ax.axis("off")
-                ax.imshow((self.kernel.mean(axis=dim)), cmap="Greys_r")
-                scalebar = ScaleBar(self.scale, "um", length_fraction=0.3)
-                ax.add_artist(scalebar)
-            plt.show()
-        else:
-            fig, ax = plt.subplots()
-            ax.axis("off")
-            ax.imshow(self.kernel, cmap="Greys_r")
-            scalebar = ScaleBar(self.scale, "um", length_fraction=0.25)
-            ax.add_artist(scalebar)
-            plt.show()
+        #    if np.random.rand() < roll_prob:
+        #        n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+        #        sample = np.roll(sample, amount, axis=n_axis_to_roll)
+        #        rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)#
 
-    @staticmethod
-    def get_fluorescence_kernel(wavelength, NA, n, radius, scale, offset = 0):
-        """
-        Returns a 2D numpy array which is an airy-disk approximation of the fluorescence point spread function
+        #    Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+        #    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
 
-        Parameters
-        ----------
-        Lambda : float
-            Wavelength of imaging light (micron)
-        NA : float
-            Numerical aperture of the objective lens
-        n : float
-            Refractive index of the imaging medium (~1 for air, ~1.4-1.5 for oil)
-        radius : int
-            The radius of the PSF to be rendered in pixels
-        scale : float
-            The pixel size of the image to be rendered (micron/pix)
-        offset : float
-            A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.
+        #    if j > n:
+        #        break
 
-        Returns
-        -------
-        2-D numpy array representing the fluorescence contrast PSF
-        """
-
-        r = np.arange(-radius, radius + 1)
-        kaw = 2 * NA / n * np.pi / wavelength #np.tan(np.arcsin(NA/n))
-        xx, yy = np.meshgrid(r, r)
-        xx, yy = xx * scale, yy * scale
-        rr = np.sqrt(xx ** 2 + yy ** 2) * kaw
-        PSF = (2 * jv(1, rr) / (rr)) ** 2
-        PSF[radius, radius] = 1
-        PSF += offset
-        return PSF
-
-    @staticmethod
-    def somb(x):
-        r"""
-        Returns the sombrero function of a 2D numpy array, defined as
-
-        .. math::
-           somb(x)= \frac{2 J_1 (\pi x)}{\pi x}
-
-
-        """
-        z = np.zeros(x.shape)
-        x = np.abs(x)
-        idx = np.nonzero(x)
-        z[idx] = 2 * jv(1, np.pi * x[idx]) / (np.pi * x[idx])
-        return z
-
-    @staticmethod
-    def get_phase_contrast_kernel(R, W, radius, scale, NA, n, sigma, wavelength, offset = 0):
-        """
-        Returns a 2D numpy array which is the phase contrast kernel based on microscope parameters
-
-
-        Parameters
-        ----------
-        R : float
-            The radius of the phase contrast condenser (in mm)
-        W : float
-            The width of the phase contrast condenser opening (in mm)
-        radius : int
-            The radius of the PSF to be rendered in pixels
-        scale : float
-            The pixel size of the image to be rendered (micron/pix)
-        NA : float
-            Numerical aperture of the objective lens
-        n : float
-            Refractive index of the imaging medium (~1 for air, ~1.4-1.5 for oil)
-        sigma : float
-            radius of a 2D gaussian of the same size as the PSF (in pixels) which is multiplied by the PSF to simulate apodisation of the PSF
-        λ : float
-            The mean wavelength of the imaging light (in micron)
-        offset : float
-            A constant offset to add to the PSF, increases accuracy of long range effects, especially useful for colony simulations.
-
-        Returns
-        -------
-        2-D numpy array representing the phase contrast PSF
-
-        """
-        gaussian = PSF_generator.gaussian_2D(radius * 2 + 1, sigma)
-
-        scale1 = 1000  # micron per millimeter
-        # F = F * scale1 # to microm
-        Lambda = wavelength  # in micron % wavelength of light
-        R = R * scale1  # to microm
-        W = W * scale1  # to microm
-        # The corresponding point spread kernel function for the negative phase contrast
-        r = np.arange(-radius, radius + 1)
-        xx, yy = np.meshgrid(r, r)
-        xx, yy = xx * scale, yy * scale
-        kaw = 2 * NA / n * np.pi / Lambda
-        rr = np.sqrt(xx ** 2 + yy ** 2) * kaw
-
-        kernel1 = 2 * jv(1, rr) / (rr)
-        kernel1[radius, radius] = 1
-
-        kernel2 = 2 * (R - W) ** 2 / R ** 2 * jv(1, (R - W) ** 2 / R ** 2 * rr) / rr
-        kernel2[radius, radius] = np.nanmax(kernel2)
-
-        kernel1*= gaussian
-        kernel2*= gaussian
-
-        kernel = kernel1 - kernel2
-
-        kernel = kernel / np.max(kernel)
-
-        kernel[radius, radius] = 1
-
-        if (np.sum(kernel1) > np.sum(kernel2)):
-            kernel = -kernel / np.sum(kernel)
-        else:
-            kernel = kernel / np.sum(kernel)
-            
-            
-        kernel += offset
-        return kernel
-
-    @staticmethod
-    def gaussian_2D(size, σ):
-        """Returns a 2D gaussian (numpy array) of size (pixels x pixels) and gaussian radius (σ)"""
-        x = np.linspace(0, size, size)
-        μ = np.mean(x)
-        A = 1 / (σ * np.sqrt(2 * np.pi))
-        B = np.exp(-1 / 2 * (x - μ) ** 2 / (σ ** 2))
-        _gaussian_1D = A * B
-        _gaussian_2D = np.outer(_gaussian_1D, _gaussian_1D)
-        return _gaussian_2D
-
-    @staticmethod
-    def get_condensers():
-        """Returns a dictionary of common phase contrast condenser dimensions, where the numbers are W, R, diameter (in mm)"""
-        condensers = {
-            "Ph1": (0.45, 3.75, 24),
-            "Ph2": (0.8, 5.0, 24),
-            "Ph3": (1.0, 9.5, 24),
-            "Ph4": (1.5, 14.0, 24),
-            "PhF": (1.5, 19.0, 25)
-        }  # W, R, Diameter
-        return condensers

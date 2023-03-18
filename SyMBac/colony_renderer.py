@@ -107,9 +107,9 @@ class ColonyRenderer:
             os.mkdir(f"{savedir}/synth_imgs")
         except:
             pass
-        zero_pads = np.ceil(np.log10(n)).astype(int)
 
-        def run_on_GPU(batch, zero_pads, gpu_id):
+        def run_on_GPU(batch, n, gpu_id):
+            zero_pads = np.ceil(np.log10(n)).astype(int)
             with cp.cuda.Device(gpu_id):
                 for j, i in batch:
                     sample = self.render_scene(i)
@@ -140,7 +140,7 @@ class ColonyRenderer:
         batched_idxs = batched(  enumerate(cycle(range(len(self.OPL_dirs)))), batch_size)
         batched_zip = zip(batched_idxs,cycle(range(n_GPUs)))
 
-        Parallel(n_jobs=n_jobs, backend="threading")(delayed(run_on_GPU)(batch, zero_pads, gpu_id) for batch, gpu_id in tqdm(batched_zip, total=n_batches) )
+        Parallel(n_jobs=n_jobs, backend="loky")(delayed(run_on_GPU)(batch, n, gpu_id) for batch, gpu_id in tqdm(batched_zip, total=n_batches) )
         #for j, i in tqdm(enumerate(cycle(range(len(self.OPL_dirs)))), total = n): 
         #    sample = self.render_scene(i)
         #    mask = self.mask_loader(i)
