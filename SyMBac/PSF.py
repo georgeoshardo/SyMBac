@@ -70,7 +70,7 @@ class PSF_generator:
     """
 
     def __init__(self, radius, wavelength, NA, n, apo_sigma, mode, condenser=None, z_height=None, resize_amount=None,
-                 pix_mic_conv=None, scale=None, offset = 0):
+                 pix_mic_conv=None, scale=None, offset = 0, pz=0):
         """
         :param int radius: Radius of the PSF.
         :param float wavelength: Wavelength of imaging light in micron.
@@ -98,6 +98,7 @@ class PSF_generator:
         self.apo_sigma = apo_sigma
         self.mode = mode
         self.condenser = condenser
+        self.pz = pz
         if condenser:
             self.W, self.R, self.diameter = self.get_condensers()[condenser]
 
@@ -121,7 +122,7 @@ class PSF_generator:
 
         elif "3d fluo" in self.mode.lower():
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
-            self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=0, ni=self.n,
+            self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=self.pz, ni=self.n,
                                         wvl=self.wavelength, NA=self.NA) + self.offset
         
         else:

@@ -12,9 +12,12 @@ FAQs
 - **What format do my images need to be in?**
   
   - The real images you are trying to replicate should be in the format of single-trench timeseries images. If you are unsure what this is, you can call ``get_sample_images()["E. coli 100x"]`` from ``SyMBac.misc`` for an example image.
-- **I'm getting libGL MESA-LOADER errors**
+- **I'm getting libGL MESA-LOADER/swarst driver errors**
 
+  - Try ``conda install -c conda-forge libstdcxx-ng``
   - See this `StackExchange link <https://unix.stackexchange.com/questions/655495/trying-to-run-pygame-on-my-conda-environment-on-my-fresh-manjaro-install-and-ge>`_.
+
+
 
 - **I'm getting a libGL error**
 
