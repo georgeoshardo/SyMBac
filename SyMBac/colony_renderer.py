@@ -110,7 +110,7 @@ class ColonyRenderer:
         zero_pads = np.ceil(np.log10(n)).astype(int)
 
         def run_on_GPU(batch, zero_pads, gpu_id):
-            for j, i in batch
+            for j, i in batch:
                 with cp.cuda.Device(gpu_id):
                     sample = self.render_scene(i)
                     mask = self.mask_loader(i)
