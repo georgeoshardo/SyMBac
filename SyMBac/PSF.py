@@ -70,7 +70,7 @@ class PSF_generator:
     """
 
     def __init__(self, radius, wavelength, NA, n, apo_sigma, mode, condenser=None, z_height=None, resize_amount=None,
-                 pix_mic_conv=None, scale=None, offset = 0, pz=0):
+                 pix_mic_conv=None, scale=None, offset = 0, pz=0, working_distance=None):
         """
         :param int radius: Radius of the PSF.
         :param float wavelength: Wavelength of imaging light in micron.
@@ -99,6 +99,7 @@ class PSF_generator:
         self.mode = mode
         self.condenser = condenser
         self.pz = pz
+        self.working_distance = working_distance
         if condenser:
             self.W, self.R, self.diameter = self.get_condensers()[condenser]
 
@@ -122,8 +123,19 @@ class PSF_generator:
 
         elif "3d fluo" in self.mode.lower():
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
-            self.kernel = psfm.make_psf(self.z_height, self.radius * 2, dxy=self.scale, dz=self.scale, pz=self.pz, ni=self.n,
-                                        wvl=self.wavelength, NA=self.NA, model="scalar") + self.offset
+            self.kernel = psfm.make_psf(
+                self.z_height, 
+                self.radius * 2, 
+                dxy=self.scale, 
+                dz=self.scale, 
+                pz=self.pz, 
+                ni=self.n, 
+                ni0 = self.n,
+                wvl=self.wavelength, 
+                NA=self.NA, 
+                model="scalar",
+                ti0 = self.working_distance
+                ) + self.offset
         
         else:
             raise NameError("Incorrect mode, currently supported: phase contrast, simple fluo, 3d flup")
