@@ -110,7 +110,7 @@ class ColonyRenderer:
         return convolved
 
     def generate_random_samples(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, gpu_fraction=1, batch_size = 20):
-        #n_GPUs = len(GPUs)
+        n_GPUs = len(GPUs)
         #if n_GPUs > 1:
         #    n_jobs = n_GPUs
         try:
