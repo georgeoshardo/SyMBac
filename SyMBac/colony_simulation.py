@@ -194,10 +194,11 @@ class ColonySimulation:
 
             space = crop_image(space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
             mask = crop_image(mask, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
-            fluorescence_space = crop_image(fluorescence_space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
-
-            fluorescence_space_3D = crop_image(fluorescence_space_3D, (start_row, stop_row), (start_col, stop_col), pad = crop_pad)
-            space_3D = crop_image(space_3D, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
+            if FL:
+                fluorescence_space = crop_image(fluorescence_space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
+                if as_3D:
+                    fluorescence_space_3D = crop_image(fluorescence_space_3D, (start_row, stop_row), (start_col, stop_col), pad = crop_pad)
+                    space_3D = crop_image(space_3D, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
         
 
         if save and not savename:

@@ -39,9 +39,9 @@ class ColonyRenderer:
         if "3d" in self.PSF.mode.lower():
             self.OPL_dirs = sorted(glob(f"{simulation.fluorescent_projections_dir}/*.tif*"))
 
-    def perlin_generator(self, scale = 5, octaves = 10, persistence = 1.9, lacunarity = 1.8):
+    def perlin_generator(self, shape, scale = 5, octaves = 10, persistence = 1.9, lacunarity = 1.8):
 
-        shape = self.scene_shape
+        #shape = self.scene_shape
 
         y, x = np.round(shape[0] / self.resize_amount).astype(int), np.round(shape[1] / self.resize_amount).astype(int)
 
@@ -63,8 +63,8 @@ class ColonyRenderer:
         img = np.floor((world + .5) * 255).astype(np.uint8)  # <- Normalize world first
         return img
 
-    def random_perlin_generator(self):
-        return self.perlin_generator(np.random.uniform(1, 7), np.random.choice([10, 11, 12, 13]), np.random.uniform(1, 1.9),
+    def random_perlin_generator(self, shape):
+        return self.perlin_generator(shape, np.random.uniform(1, 7), np.random.choice([10, 11, 12, 13]), np.random.uniform(1, 1.9),
                                 np.random.uniform(1.55, 1.9))
 
 
@@ -83,7 +83,8 @@ class ColonyRenderer:
 
         kernel = self.PSF.kernel
         if "phase" in self.PSF.mode.lower():
-        	kernel = gaussian_filter(kernel, 8.7, mode="reflect")
+            scene = scene**(1/1.5)
+            kernel = gaussian_filter(kernel, 8.7, mode="reflect")
 
         if "3d" in self.PSF.mode.lower():
 
@@ -98,11 +99,13 @@ class ColonyRenderer:
             convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
 
         if "phase" in self.PSF.mode.lower():
-            bg = self.random_perlin_generator()
-            convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(1000,3000), np.random.uniform(1,3), mode="reflect")
+            bg = self.random_perlin_generator(scene.shape)
+            convolved = rescale_intensity(convolved*1.0)
+            convolved += gaussian_filter(np.rot90(bg)/np.random.uniform(500,1500), np.random.uniform(1,3), mode="reflect")
+            #convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
 
-        convolved = random_noise((convolved), mode="poisson")
-        #convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False)
+        #convolved = random_noise((convolved), mode="poisson")
+        #convolved = random_noise((convolved), mode="gaussian", mean=1, var=0.0002, clip=False).astype(np.uint16)
 
         #convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, np.iinfo(np.uint16).max)).astype(np.uint16)
 
@@ -126,7 +129,7 @@ class ColonyRenderer:
         except:
             pass
         zero_pads = np.ceil(np.log10(n)).astype(int)
-
+        ray.shutdown()
         ray.init(num_gpus=n_GPUs)
 
         @ray.remote(num_gpus=gpu_fraction)
