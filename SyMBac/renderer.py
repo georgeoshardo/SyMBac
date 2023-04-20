@@ -24,7 +24,7 @@ from PIL import Image
 from SyMBac.PSF import PSF_generator
 from SyMBac.pySHINE import cart2pol, sfMatch, lumMatch
 from skimage.filters import threshold_multiotsu
-
+import random
 
 if importlib.util.find_spec("cupy") is None:
     from scipy.signal import convolve2d as cuconvolve
@@ -121,13 +121,14 @@ class Renderer:
 
     """
 
-    def __init__(self, simulation, PSF, real_image, camera=None):
+    def __init__(self, simulation, PSF, real_image, camera=None, additional_real_images = None):
         """
 
         :param SyMBac.simulation.Simulation simulation: The SyMBac simulation.
         :param SyMBac.psf.PSF_generator PSF: The PSF to be applied to the synthetic data.
         :param np.ndarray real_image: A real image sample
         :param SyMBac.PSF.Camera camera: (optional) The simulation camera object to be applied to the synthetic data
+        :param List additional_real_images: List of additional images which will be randomly used to fourier match during the rendering process.
         """
         self.real_image = real_image
         self.PSF = PSF
@@ -139,6 +140,7 @@ class Renderer:
         device_multiplier = -50
         self.y_border_expansion_coefficient = 3
         self.x_border_expansion_coefficient = 3
+        self.additional_real_images = additional_real_images
 
         temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = self.generate_PC_OPL(
             scene=simulation.OPL_scenes[-1],
@@ -199,7 +201,7 @@ class Renderer:
 
     def generate_test_comparison(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
-                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_lower_int = 1, halo_upper_int = 1):
+                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_top_intensity = 1, halo_bottom_intensity = 1, halo_start = 0, halo_end = 1, random_real_image = None):
         """
         Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image.
 
@@ -245,9 +247,9 @@ class Renderer:
             If true converts image to a fluorescence (hides the trench and swaps to the fluorescence PSF).
         defocus : float
             Simulated optical defocus by convolving the kernel with a 2D gaussian of radius defocus.
-        halo_lower_int : float
+        halo_top_intensity : float
             Simulated "halo" caused by the microfluidic device. This sets the starting muliplier of a linear ramp which is applied down the length of the image in the direction of the trench. , 
-        halo_upper_int : float
+        halo_bottom_intensity : float
             Simulated "halo" caused by the microfluidic device. This sets the ending multiplier of a lienar ramp which is applied down the length of the image. E.g, if ``image`` has shape ``(y, x)``, then this results in ``image = image * np.linspace(halo_lower_int,halo_upper_int, image.shape[0])[:, None]``.
 
 
@@ -272,8 +274,22 @@ class Renderer:
         )
 
         ### Halo simulation
-        expanded_scene = expanded_scene * np.linspace(halo_lower_int,halo_upper_int, expanded_scene.shape[0])[:, None]
-        expanded_scene_no_cells = expanded_scene_no_cells * np.linspace(halo_lower_int,halo_upper_int, expanded_scene_no_cells.shape[0])[:, None]
+        def halo_line_profile(length, halo_top_intensity, halo_bottom_intensity, halo_start, halo_end):
+            halo_start = int(halo_start * length)
+            halo_end = int(halo_end * length)
+            part_1 = np.linspace(halo_bottom_intensity,halo_bottom_intensity,   halo_start)
+            part_2 = np.linspace(halo_bottom_intensity, halo_top_intensity, halo_end - halo_start)
+            part_3 = np.linspace(halo_top_intensity, halo_top_intensity, length - halo_end)
+            a = np.concatenate([part_1, part_2, part_3])[:, None]
+            return a
+
+
+        
+        #halo_array = np.linspace(halo_lower_int,halo_upper_int, expanded_scene.shape[0])[:, None]
+        halo_array = halo_line_profile(self.real_image.shape[0]*self.simulation.resize_amount, halo_top_intensity, halo_bottom_intensity, halo_start, halo_end)
+        #halo_array[halo_start:] = 1
+        expanded_scene[expanded_scene.shape[0] - len(halo_array):,:] *= halo_array
+        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - len(halo_array):,:] *= halo_array
 
         if self.PSF.mode == "phase contrast":
             R, W, radius, scale, NA, n, _, λ = self.PSF.R, self.PSF.W, self.PSF.radius, self.PSF.scale, self.PSF.NA, self.PSF.n, self.PSF.apo_sigma, self.PSF.wavelength
@@ -320,7 +336,11 @@ class Renderer:
             convolved = convolve_rescale(expanded_scene, kernel, 1 / self.simulation.resize_amount, rescale_int=True)
 
         real_resize, expanded_resized = make_images_same_shape(self.real_image, convolved, rescale_int=True)
-        fftim1 = fft.fftshift(fft.fft2(real_resize))
+        if random_real_image is not None:
+            fftim1 = fft.fftshift(fft.fft2(random_real_image))
+        else:
+            fftim1 = fft.fftshift(fft.fft2(real_resize))
+            
         angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
 
         if match_fourier and not match_histogram:
@@ -616,8 +636,11 @@ class Renderer:
             match_noise=[True, False],
             debug_plot=fixed(True),
             defocus=(0, 20, 0.1),
-            halo_lower_int = (0,1,0.1), 
-            halo_upper_int = (0,1,0.1)
+            halo_top_intensity = (0,1,0.1), 
+            halo_bottom_intensity = (0,1,0.1),
+            halo_start = (0,1,0.11),
+            halo_end = (0,1,0.1),
+            random_real_image=fixed(None)
         )
 
         return self.params
@@ -705,7 +728,10 @@ class Renderer:
                 match_noise = np.random.choice([True, False])
             else:
                 match_noise = self.params.kwargs["match_noise"]
-
+            
+            if self.additional_real_images:
+                random_real_image = random.choice(self.additional_real_images)
+            
             syn_image, mask = self.generate_test_comparison(
                 media_multiplier=media_multiplier,
                 cell_multiplier=cell_multiplier,
@@ -717,7 +743,12 @@ class Renderer:
                 match_noise=match_noise,
                 debug_plot=False,
                 noise_var=self.params.kwargs["noise_var"],
-                defocus=self.params.kwargs["defocus"]
+                defocus=self.params.kwargs["defocus"],
+                halo_top_intensity = self.params.kwargs["halo_top_intensity"], 
+                halo_bottom_intensity = self.params.kwargs["halo_bottom_intensity"],
+                halo_start = self.params.kwargs["halo_start"],
+                halo_end = self.params.kwargs["halo_end"],
+                random_real_image = random_real_image
             )
 
             syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
