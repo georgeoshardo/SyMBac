@@ -140,7 +140,7 @@ class ColonySimulation:
             density_modifiers = [np.random.uniform(*distribution_args) for _ in range(len(cellmodeller_properties))]
         if random_distribution == "normal":
             density_modifiers = [np.random.normal(*distribution_args) for _ in range(len(cellmodeller_properties))]
-            density_modifiers = [x if x > 0 else 0 for x in density_modifiers]
+            density_modifiers = [x if x > 0 else np.mean(density_modifiers) for x in density_modifiers]
         for c in range(len(cellmodeller_properties)):
             position = cellmodeller_properties[c][3]
             offset = np.ceil(np.mean(self.scene_shape) / 2).astype(int)
