@@ -22,10 +22,11 @@ import cupy as cp
 from joblib import Parallel, delayed
 
 class ColonyRenderer:
-    def __init__(self, simulation, PSF, camera = None):
+    def __init__(self, simulation, PSF, camera = None, force_2D = False):
         self.simulation = simulation
         self.PSF = PSF
         self.camera = camera
+        self.force_2D = force_2D
 
         self.scene_shape = simulation.scene_shape
         self.resize_amount = simulation.resize_amount
