@@ -134,32 +134,32 @@ class ColonyRenderer:
 
         @ray.remote(num_gpus=gpu_fraction)
         def run_on_GPU(batch, zero_pads, gpu_id, n_jobs):
-            with cp.cuda.Device(gpu_id):
-                s = cp.cuda.Stream(non_blocking = True)
-                with s:
-                    def run_batch(j, i):
-                        if j > n:
-                            pass
+            #with cp.cuda.Device(gpu_id):
+            s = cp.cuda.Stream(non_blocking = True)
+            with s:
+                def run_batch(j, i):
+                    if j > n:
+                        pass
+                    else:
+                        sample = self.render_scene(i)
+                        mask = self.mask_loader(i)
+                        rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
+    
+                        if np.random.rand() < roll_prob:
+                            n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
+                            sample = np.roll(sample, amount, axis=n_axis_to_roll)
+                            rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
+    
+                        if "3d" in self.PSF.mode.lower():
+                            tifffile.imwrite(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
                         else:
-                            sample = self.render_scene(i)
-                            mask = self.mask_loader(i)
-                            rescaled_mask =  rescale(mask, 1 / self.resize_amount, anti_aliasing=False, order=0, preserve_range=True).astype(np.uint16)
+                            Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
+                        Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+    
+                        #if j > n:
+                        #    break
+            Parallel(n_jobs=n_jobs)(delayed(run_batch)(j, i) for j, i in batch)
         
-                            if np.random.rand() < roll_prob:
-                                n_axis_to_roll, amount = random.choice([(0, int(sample.shape[0]/2)), (1, int(sample.shape[1]/2)), ([0,1], (int(sample.shape[0]/2), int(sample.shape[1]/2)))])
-                                sample = np.roll(sample, amount, axis=n_axis_to_roll)
-                                rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
-        
-                            if "3d" in self.PSF.mode.lower():
-                                tifffile.imwrite(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
-                            else:
-                                Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
-                            Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
-        
-                            #if j > n:
-                            #    break
-                Parallel(n_jobs=n_jobs)(delayed(run_batch)(j, i) for j, i in batch)
-            
 
 
         def batched(iterable, n):
