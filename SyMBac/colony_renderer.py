@@ -87,14 +87,19 @@ class ColonyRenderer:
             kernel = gaussian_filter(kernel, 8.7, mode="reflect")
 
         if "3d" in self.PSF.mode.lower():
-
             self.PSF.z_height = scene.shape[0]
             self.PSF.calculate_PSF()
             kernel = self.PSF.kernel / np.sum(self.PSF.kernel)
 
-            convolved = np.array(
-                [convolve_rescale(scene_slice, PSF_slice/np.sum(PSF_slice), 1/self.resize_amount, rescale_int=False) for scene_slice, PSF_slice in zip(scene, kernel)]
-            )
+            if self.force_2D:
+                kernel = np.sum(kernel,axis=0)
+                kernel /= np.sum(kernel)
+                scene = np.sum(scene, axis=0)
+                convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
+            else:
+                convolved = np.array(
+                    [convolve_rescale(scene_slice, PSF_slice/np.sum(PSF_slice), 1/self.resize_amount, rescale_int=False) for scene_slice, PSF_slice in zip(scene, kernel)]
+                )
         else:
             convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
 
