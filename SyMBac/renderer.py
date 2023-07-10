@@ -138,8 +138,8 @@ class Renderer:
         media_multiplier = 30
         cell_multiplier = 1
         device_multiplier = -50
-        self.y_border_expansion_coefficient = 3
-        self.x_border_expansion_coefficient = 3
+        self.y_border_expansion_coefficient = 5
+        self.x_border_expansion_coefficient = 5
         self.additional_real_images = additional_real_images
 
         temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = self.generate_PC_OPL(
@@ -304,7 +304,7 @@ class Renderer:
                                      pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
                                      condenser=self.PSF.condenser)
             self.PSF.calculate_PSF()
-        if self.PSF.mode.lower() == "3d fluo":  # Full 3D PSF model
+        if len(self.PSF.kernel.shape) == 3:  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
 

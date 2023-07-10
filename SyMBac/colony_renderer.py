@@ -89,7 +89,7 @@ class ColonyRenderer:
 
         if "3d" in self.PSF.mode.lower():
             self.PSF.z_height = scene.shape[0]
-            self.PSF.calculate_PSF()
+            #self.PSF.calculate_PSF()
             kernel = self.PSF.kernel / np.sum(self.PSF.kernel)
 
             if self.force_2D:
