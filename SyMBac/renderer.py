@@ -89,7 +89,7 @@ else:
             The output of the convolution rescale operation
         """
 
-        output = cuconvolve(cp.array(image), cp.array(kernel))
+        output = cuconvolve(cp.array(image), cp.array(kernel),mode="constant")
         output = output.get()
         output = rescale(output, rescale_factor, anti_aliasing=False)
 
