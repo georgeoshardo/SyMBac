@@ -125,7 +125,7 @@ class PSF_generator:
             assert self.z_height, "For 3D fluorescence, you must specify a Z height"
             self.kernel = psfm.make_psf(
                 self.z_height, 
-                self.radius * 2, 
+                self.radius * 2 + 1, 
                 dxy=self.scale, 
                 dz=self.scale, 
                 pz=self.pz, 
