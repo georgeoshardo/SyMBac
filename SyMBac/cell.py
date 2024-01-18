@@ -1,28 +1,83 @@
 import numpy as np
 import pymunk
 from SyMBac import cell_geometry
-
-
 class Cell:
-    def __init__(self,
-    length, 
-    width, 
-    x_pos, 
-    y_pos,
-    angle = 0, 
-    resolution = 30, 
-    model = "adder", 
-    food_conc = 5, 
-    mass = 0.000001, 
-    friction = 0, 
-    pm_object = 0, 
-    division_threshold = 30,
-    mother = None):
+    """
+    Cells are the agents in the simulation. This class allows for instantiating `Cell` object.
+
+    .. note::
+       Typically the user will not need to call this class, as it will be handled by :meth:`SyMBac.cell_simulation`,
+       specifically all cell setup
+       happens when instantiating a simulation using :meth:`SyMBac.simulation.Simulation`
+    """
+    def __init__(
+        self,
+        length,
+        width,
+        resolution,
+        position,
+        angle,
+        space,
+        dt,
+        growth_rate_constant,
+        max_length,
+        max_length_mean,
+        max_length_var,
+        width_var,
+        width_mean,
+        parent = None,
+        daughter = None,
+        lysis_p = 0,
+        pinching_sep = 0
+    ):
+        
+        """
+        Initialising a cell
+
+        For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html Cell class has been tested and works with pymunk version 6.0.0
+
+        Parameters
+        ----------
+        length : float
+            Cell's length
+        width : float
+            Cell's width
+        resolution : int
+            Number of points defining cell's geometry
+        position : (float, float)
+            x,y coords of cell centroid
+        angle : float
+            rotation in radians of cell (counterclockwise)
+        space : pymunk.space.Space
+            The pymunk space of the cell
+        dt : float
+            Timestep the cell experiences every iteration
+        growth_rate_constant : float
+            The cell grows by a function of dt*growth_rate_constant depending on its growth model
+        max_length : float
+            The maximum length a cell reaches before dividing
+        max_length_mean : float
+            should be the same as max_length for reasons unless doing advanced simulations
+        max_length_var : float
+            The variance defining a normal distribution around max_length
+        width_var : float
+            The variance defining a normal distribution around width
+        width_mean : float
+            For reasons should be set equal to width unless using advanced features
+        body : pymunk.body.Body
+            The cell's pymunk body object
+        shape : pymunk.shapes.Poly
+            The cell's pymunk body object
+        ID : int
+            A unique identifier for each cell. At the moment just a number from 0 to 100_000_000 and cross fingers that we get no collisions. 
+            
+        """
+        self.dt = dt
+        self.growth_rate_constant = growth_rate_constant
         self.length = length
+        self.width_mean = width_mean
+        self.width_var = width_var
         self.width = width
-        self.x_pos = x_pos
-        self.y_pos = y_pos
-        self.angle = angle
         self.resolution = resolution
         self.angle = angle
         self.position = position
@@ -73,7 +128,7 @@ class Cell:
             cell_mass = 0.000001
             cell_moment = pymunk.moment_for_poly(cell_mass, cell_shape.get_vertices())
             cell_body = pymunk.Body(cell_mass,cell_moment)
-            cell_shape.body  = cell_body
+            cell_shape.body = cell_body
             self.body = cell_body
             new_x = self.position[0] + self.length/2 *  np.cos(self.angle)
             new_y = self.position[1] + self.length/2 *  np.sin(self.angle)

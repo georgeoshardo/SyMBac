@@ -1,6 +1,9 @@
-#%%
-import pyglet
-import pymunk as pm
+import pickle
+from copy import deepcopy
+import numpy as np
+from scipy.stats import norm
+from SyMBac.cell import Cell
+from SyMBac.trench_geometry import trench_creator, get_trench_segments
 from pymunk.pyglet_util import DrawOptions
 import pymunk
 import pyglet
@@ -155,14 +158,6 @@ def create_space():
     #space.threads = 2
     return space
 
-def update_cell_lengths(cells):
-    """
-    Iterates through all cells in the simulation and updates their length according to their growth law.
-
-    :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
-    """
-    for cell in cells:
-        cell.update_length()
 
 
 def update_pm_cells(cells, space):
@@ -189,7 +184,6 @@ def update_pm_cells(cells, space):
 
 def cell_adder(cell, space):
     space.add(cell.body, cell.shape)
-
 
 def update_cell_positions(cells):
     """
@@ -243,33 +237,19 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
 
     """
     for shape in space.shapes:
-        space.remove(shape)
-    for body in space.bodies:
-        space.remove(body)
-
+        if shape.body.position.y < 0 or shape.body.position.y > ylim:
+            space.remove(shape.body, shape)
+            space.step(dt)
 
     for cell in cells:
-        cell.growth(np.random.uniform(low = 0, high = 0.1))
-        cell.update_pm_object()
-        if cell.is_dividing() == 1:
-            cell.divide()
-            cell.update_pm_object()
-            daughter = Cell(length = cell.daughter_length(), width = cell.daughter_width(), x_pos = cell.daughter_x_pos(), y_pos = cell.daughter_y_pos(), angle=cell.daughter_angle())
-            cells.append(daughter)
-        cell_adder(cell)
-        if len(cells) <= 20:
-            for x in range(150):
-                space.step(dt)
-        elif len(cells) <= 100:
-            for x in range(50):
-                space.step(dt)
-        elif len(cells) > 100:
+        if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
+            cells.remove(cell)
+            space.step(dt)
+        elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
+            cells.remove(cell)
             space.step(dt)
         else:
             pass
-            #new_cells.append(cell)
-    #cells = deepcopy(new_cells)
-    #graveyard = deepcopy(graveyard)
 
     wipe_space(space)
 
