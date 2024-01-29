@@ -118,29 +118,29 @@ class Cell:
         """
 
         if self.is_dividing():
-            new_length = self.length/2  - self.width/4
-            daughter_length = self.length - new_length  - self.width/4
-            self.length = new_length
+            self.length = self.length/2 * 0.98 # It just has to be done in this order due to when we call self.body.position = [new_x, new_y]
+            daughter_length = self.length
             self.pinching_sep = 0
+            
             cell_vertices = self.calculate_vertex_list()
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
-            cell_moment = 100001
-            cell_mass = 1
+            cell_mass = 0.000001
+            cell_moment = pymunk.moment_for_poly(cell_mass, cell_shape.get_vertices())
             cell_body = pymunk.Body(cell_mass,cell_moment)
             cell_shape.body = cell_body
             self.body = cell_body
-            new_x = self.position[0] + (self.length + self.width/2)/2 * np.cos(self.angle*2)
-            new_y = self.position[1] + (self.length+ self.width/2)/2 * np.sin(self.angle*2)
+            new_x = self.position[0] + self.length/2 *  np.cos(self.angle)
+            new_y = self.position[1] + self.length/2 *  np.sin(self.angle)
             self.body.position = [new_x, new_y]
             cell_body.angle = self.angle
             cell_shape.friction=0
-            self.space.add(cell_body, cell_shape)
+            #self.space.add(cell_body, cell_shape)
             daughter_details = {
                 "length": daughter_length,
                 "width": np.random.normal(self.width_mean,self.width_var),
                 "resolution": self.resolution,
-                "position": [self.position[0] - (self.length+ self.width/2)/2 * np.cos(self.angle*2), self.position[1] - (self.length+ self.width/2)/2 * np.sin(self.angle*2)],
+                "position": [self.position[0] - self.length/2 *  np.cos(self.angle), self.position[1] - self.length/2 *  np.sin(self.angle)],
                 "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
@@ -154,20 +154,23 @@ class Cell:
                 "parent": self.parent,
                 "pinching_sep": 0
             }
+
+            
+            #self.position = [new_x, new_y]
             return daughter_details
         else:
             cell_vertices = self.calculate_vertex_list()
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
-            cell_moment = 100001
-            cell_mass = 1
+            cell_mass = 0.000001
+            cell_moment = pymunk.moment_for_poly(cell_mass, cell_shape.get_vertices())
             cell_body = pymunk.Body(cell_mass,cell_moment)
             cell_shape.body = cell_body
             self.body = cell_body
             cell_body.position = self.position
             cell_body.angle = self.angle
             cell_shape.friction=0
-            self.space.add(cell_body, cell_shape)
+            #self.space.add(cell_body, cell_shape)
             return cell_body, cell_shape
 
     def is_dividing(self): # This needs to be made constant or a cell can divide in one frame and not another frame
@@ -241,7 +244,7 @@ class Cell:
         return cell_geometry.get_vertices(
             self.length,
             self.width,
-            self.angle, 
+            0,#self.angle, 
             self.resolution
             )
 

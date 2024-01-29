@@ -48,8 +48,7 @@ def get_vertices(cell_length, cell_width, angle, resolution):
     Parameters
     ----------
     cell_length : float
-        The length of the STRAIGHT part of the cell's wall. 
-        Total length is cell_length + cell_width because the poles are models as semi-circles.
+        The length of the cell. 
     cell_width : float
         Total thickness of the cell, defines the poles too.
     angle : float
@@ -73,9 +72,11 @@ def get_vertices(cell_length, cell_width, angle, resolution):
     """
     cell_width = cell_width/2
     left_wall = circ(np.linspace(np.pi,2*np.pi, resolution), 0, cell_width)
-    top_wall_xy = wall(cell_width, cell_width, cell_length, 1, resolution)
-    bottom_wall_xy = wall(cell_width, cell_width, cell_length, -1, resolution)
-    right_wall = circ(np.linspace(0,np.pi, resolution), cell_length - cell_width, cell_width)
+    right_wall = circ(np.linspace(0,np.pi, resolution), cell_length - cell_width*2, cell_width)
+
+    top_wall_xy = wall(cell_width, cell_width, cell_length - cell_width, 1, resolution)
+    bottom_wall_xy = wall(cell_width, cell_width, cell_length - cell_width, -1, resolution)
+
     coordinates = [[left_wall[0][x] - cell_length/2, left_wall[1][x] - cell_width/2] for x in reversed(range(len(left_wall[0])))] + \
             [[bottom_wall_xy[0][x] - cell_length/2, bottom_wall_xy[1][x]- cell_width/2] for x in (range(len(bottom_wall_xy[0])))] + \
             [[right_wall[0][x] - cell_length/2, right_wall[1][x]- cell_width/2] for x in reversed(range(len(right_wall[0])))] + \
@@ -91,7 +92,6 @@ def get_vertices(cell_length, cell_width, angle, resolution):
     centered_verts = rotated - centroid(rotated)
 
     return centered_verts.tolist()
-
 def centroid(vertices):
     """Return the centroid of a list of vertices 
     

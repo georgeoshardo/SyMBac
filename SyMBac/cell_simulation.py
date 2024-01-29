@@ -158,17 +158,9 @@ def create_space():
     #space.threads = 2
     return space
 
-def update_cell_lengths(cells):
-    """
-    Iterates through all cells in the simulation and updates their length according to their growth law.
-
-    :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
-    """
-    for cell in cells:
-        cell.update_length()
 
 
-def update_pm_cells(cells):
+def update_pm_cells(cells, space):
     """
     Iterates through all cells in the simulation and updates their pymunk body and shape objects. Contains logic to
     check for cell division, and create daughters if necessary.
@@ -177,6 +169,7 @@ def update_pm_cells(cells):
 
     """
     for cell in cells:
+        cell.update_length()
         if cell.is_dividing():
             daughter_details = cell.create_pm_cell()
             if len(daughter_details) > 2: # Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
@@ -185,6 +178,12 @@ def update_pm_cells(cells):
                 cells.append(daughter)
         else:
             cell.create_pm_cell()
+        cell_adder(cell, space)
+        for _ in range(150):
+            space.step(1/100)
+
+def cell_adder(cell, space):
+    space.add(cell.body, cell.shape)
 
 def update_cell_positions(cells):
     """
@@ -241,27 +240,20 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
             space.step(dt)
-    #new_cells = []
-    #graveyard = []
+
     for cell in cells:
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
-            #graveyard.append([cell, "outside"])
             cells.remove(cell)
             space.step(dt)
         elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
-            #graveyard.append([cell, "lysis"])
             cells.remove(cell)
             space.step(dt)
         else:
             pass
-            #new_cells.append(cell)
-    #cells = deepcopy(new_cells)
-    #graveyard = deepcopy(graveyard)
 
     wipe_space(space)
 
-    update_cell_lengths(cells)
-    update_pm_cells(cells)
+    update_pm_cells(cells, space)
 
     for _ in range(phys_iters):
         space.step(dt)
