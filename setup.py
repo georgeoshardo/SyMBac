@@ -4,7 +4,7 @@ this_directory = Path(__file__).parent
 
 setup(
     name = 'SyMBac',
-    version = '0.4.0',
+    version = '0.4.5',
     description = 'A package for generating synthetic images of bactera in phase contrast or fluorescence. Used for creating training data for machine learning segmentation and tracking algorithms.',
     url = 'https://github.com/georgeoshardo/SyMBac',
     author = 'Georgeos Hardo',
@@ -52,6 +52,8 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Topic :: Scientific/Engineering :: Image Processing',
         'Topic :: Scientific/Engineering'

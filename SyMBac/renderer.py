@@ -44,7 +44,7 @@ if importlib.util.find_spec("cupy") is None:
         kernel : 2D numpy array
             The kernel
         rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+            Typically 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
         rescale_int : bool
             If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
 
@@ -407,6 +407,9 @@ class Renderer:
         expanded_device_mask = expanded_scene_no_cells
 
         expanded_device_mask = rescale(expanded_device_mask, 1 / self.simulation.resize_amount, anti_aliasing=False)
+
+
+
         real_resize, expanded_device_mask = make_images_same_shape(self.real_image, expanded_device_mask,
                                                                    rescale_int=True)
         just_device = expanded_device_mask * noisy_img
@@ -457,7 +460,9 @@ class Renderer:
             plt.show()
             plt.close()
         else:
-            return noisy_img, expanded_mask_resized_reshaped.astype(int)
+            _, superres_mask = make_images_same_shape(np.zeros((self.real_image.shape[0]*self.simulation.resize_amount,self.real_image.shape[1]*self.simulation.resize_amount)), expanded_mask, rescale_int=False)
+            return noisy_img, expanded_mask_resized_reshaped.astype(int), superres_mask.astype(int)
+            #return noisy_img, expanded_mask_resized_reshaped.astype(int)
 
     def generate_PC_OPL(self, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                         y_border_expansion_coefficient, x_border_expansion_coefficient, defocus):
@@ -640,7 +645,7 @@ class Renderer:
             halo_bottom_intensity = (0,1,0.1),
             halo_start = (0,1,0.11),
             halo_end = (0,1,0.1),
-            random_real_image=fixed(None)
+            random_real_image=fixed(None),
         )
 
         return self.params
@@ -688,6 +693,10 @@ class Renderer:
             os.mkdir(save_dir + "/masks")
         except:
             pass
+        try:
+            os.mkdir(save_dir + "/superres_masks")
+        except:
+            pass
 
         current_file_num = len(os.listdir(save_dir + "/convolutions"))
 
@@ -731,8 +740,10 @@ class Renderer:
             
             if self.additional_real_images:
                 random_real_image = random.choice(self.additional_real_images)
+            else:
+                random_real_image = None
             
-            syn_image, mask = self.generate_test_comparison(
+            syn_image, mask, superres_mask = self.generate_test_comparison(
                 media_multiplier=media_multiplier,
                 cell_multiplier=cell_multiplier,
                 device_multiplier=device_multiplier,
@@ -758,10 +769,16 @@ class Renderer:
                 mask = np.zeros(mask.shape)
                 mask = Image.fromarray(mask.astype(dtype))
                 mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+
+                superres_mask = np.zeros(superres_mask.shape)
+                superres_mask = Image.fromarray(superres_mask.astype(dtype))
+                superres_mask.save("{}/superres_masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
             else:
                 mask = Image.fromarray(mask.astype(dtype))
                 mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
 
+                superres_mask = Image.fromarray(superres_mask.astype(dtype))
+                superres_mask.save("{}/superres_masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
 
 
         Parallel(n_jobs=n_jobs, backend="threading")(delayed(generate_samples)(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier) for z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier in
