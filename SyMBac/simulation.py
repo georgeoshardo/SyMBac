@@ -156,6 +156,7 @@ class Simulation:
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
         """
+        
         viewer = napari.view_image(np.array(self.OPL_scenes), name='OPL scenes')
         viewer.add_labels(np.array(self.masks), name='Synthetic masks')
         napari.run()
