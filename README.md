@@ -81,7 +81,7 @@ Check the version of `CUDA` you have installed using `nvcc --version` and instal
 pip install cupy-cuda114
 ```
 
-If you installed CUDA on Ubuntu 18.04+ using the new Nvidia supplied repositories, it is a real possibility that `nvcc` won't work. Instead check your CUDA version using `nvidia-smi`.
+If you installed CUDA on Ubuntu 18.04+ using the new Nvidia supplied repositories, it is a real possibility that `nvcc` won't work. You need to run `nvcc` from the binary folder of where your cuda installation is.
 
 ### If you aren't using a GPU:
 
@@ -103,3 +103,5 @@ See FAQs "Do I need to have a GPU?"
   * The real images you are trying to replicate should be in the format of single-trench timeseries images. If you are unsure what this is, you can call `get_sample_images()["E. coli 100x"]` from `SyMBac.misc`for an example image.
 * I'm getting libGL MESA-LOADER errors
   * See https://unix.stackexchange.com/questions/655495/trying-to-run-pygame-on-my-conda-environment-on-my-fresh-manjaro-install-and-ge
+* I'm getting `ContextException: Could not create GL context` when trying to visualise my simulation in real time
+  * Try `conda install -c conda-forge libstdcxx-ng`, and if you're on Ubuntu/Debian `sudo apt install libgl1-mesa-dri`

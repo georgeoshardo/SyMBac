@@ -1,12 +1,12 @@
 import numpy as np
 from joblib import Parallel, delayed
-
+import pickle
 from SyMBac.cell_simulation import run_simulation
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
 from tqdm.autonotebook import tqdm
 import napari
-
+import os
 class Simulation:
     """
     Class for instantiating Simulation objects. These are the basic objects used to run all SyMBac simulations. This
@@ -36,7 +36,7 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, load_sim_dir = None):
         """
         Initialising a Simulation object
 
@@ -72,6 +72,8 @@ class Simulation:
         resize_amount : int
             This is the "upscaling" factor for the simulation and the entire image generation process. Must be kept constant
             across the image generation pipeline. Starting value of 3 recommended.
+        load_sim_dir : str
+            The directory if you wish to load a previously completed simulation
         """
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -87,8 +89,24 @@ class Simulation:
         self.resize_amount = resize_amount
         self.save_dir = save_dir
         self.offset = 30
+        self.load_sim_dir = load_sim_dir
 
-    def run_simulation(self, show_window = True, streamlit_mode=False):
+        try:
+            os.mkdir(save_dir)
+        except:
+            pass
+
+        if self.load_sim_dir:
+            print("Loading previous simulation, no need to call run_simulation method, but you still need to run OPL drawing and correctly define the scale")
+            with open(f"{load_sim_dir}/cell_timeseries.p", 'rb') as f:
+                self.cell_timeseries = pickle.load(f)
+            with open(f"{load_sim_dir}/space_timeseries.p", 'rb') as f:
+                self.space = pickle.load(f)
+
+    
+
+
+    def run_simulation(self, show_window = True):
         """
         Run the simulation
 
@@ -109,14 +127,12 @@ class Simulation:
             lysis_p=self.lysis_p,  # this should somehow depends on the time
             save_dir=self.save_dir,
             show_window = show_window,
-            streamlit_mode = streamlit_mode
+            resize_amount = self.resize_amount
         )  # growth phase
 
-    def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False, streamlit_mode=False):
-        if streamlit_mode:
-            from stqdm import stqdm as tqdm
-        else:
-            from tqdm.autonotebook import tqdm
+    def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False):
+
+        from tqdm.autonotebook import tqdm
 
         """
         Draw the optical path length images from the simulation. This involves drawing the 3D cells into a 2D numpy
@@ -158,6 +174,7 @@ class Simulation:
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
         """
+        
         viewer = napari.view_image(np.array(self.OPL_scenes), name='OPL scenes')
         viewer.add_labels(np.array(self.masks), name='Synthetic masks')
         napari.run()

@@ -1,5 +1,5 @@
 import importlib
-
+from glob import glob
 import numpy as np
 import psfmodels as psfm
 
@@ -15,7 +15,7 @@ from matplotlib import pyplot as plt
 from skimage.transform import rescale, rotate
 from skimage.util import random_noise
 from joblib import Parallel, delayed
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from skimage import draw
 from skimage.exposure import match_histograms, rescale_intensity
 from scipy.ndimage import gaussian_filter
@@ -44,7 +44,7 @@ if importlib.util.find_spec("cupy") is None:
         kernel : 2D numpy array
             The kernel
         rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
+            Typically 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
         rescale_int : bool
             If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
 
@@ -138,9 +138,29 @@ class Renderer:
         media_multiplier = 30
         cell_multiplier = 1
         device_multiplier = -50
-        self.y_border_expansion_coefficient = 3
-        self.x_border_expansion_coefficient = 3
+
+        ## This bit is dedicated to figuring out the optimal render size
+        sample_OPL = self.simulation.OPL_scenes[0]
+        self.y_border_expansion_coefficient =  1 
+        self.x_border_expansion_coefficient = 1
         self.additional_real_images = additional_real_images
+        temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = self.generate_PC_OPL(
+            scene=simulation.OPL_scenes[-1],
+            mask=simulation.masks[-1],
+            media_multiplier=media_multiplier,
+            cell_multiplier=cell_multiplier,
+            device_multiplier=cell_multiplier,
+            y_border_expansion_coefficient=self.y_border_expansion_coefficient,
+            x_border_expansion_coefficient=self.x_border_expansion_coefficient,
+            defocus=30
+        )
+
+
+
+
+        self.y_border_expansion_coefficient = (np.ceil(real_image.shape[0] / temp_expanded_scene.shape[0]) * simulation.resize_amount) + 3
+        self.x_border_expansion_coefficient = (np.ceil(real_image.shape[1] / temp_expanded_scene.shape[1]) * simulation.resize_amount) + 3
+
 
         temp_expanded_scene, temp_expanded_scene_no_cells, temp_expanded_mask = self.generate_PC_OPL(
             scene=simulation.OPL_scenes[-1],
@@ -161,6 +181,7 @@ class Renderer:
             temp_kernel = self.PSF.kernel
 
         convolved = convolve_rescale(temp_expanded_scene, temp_kernel, 1 / simulation.resize_amount, rescale_int=True)
+        print(simulation.resize_amount, convolved.shape)
         self.real_resize, self.expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
         mean_error = []
         media_error = []
@@ -415,6 +436,9 @@ class Renderer:
         expanded_device_mask = expanded_scene_no_cells
 
         expanded_device_mask = rescale(expanded_device_mask, 1 / self.simulation.resize_amount, anti_aliasing=False)
+
+
+
         real_resize, expanded_device_mask = make_images_same_shape(self.real_image, expanded_device_mask,
                                                                    rescale_int=True)
         just_device = expanded_device_mask * noisy_img
@@ -465,7 +489,9 @@ class Renderer:
             plt.show()
             plt.close()
         else:
-            return noisy_img, expanded_mask_resized_reshaped.astype(int)
+            _, superres_mask = make_images_same_shape(np.zeros((self.real_image.shape[0]*self.simulation.resize_amount,self.real_image.shape[1]*self.simulation.resize_amount)), expanded_mask, rescale_int=False)
+            return noisy_img, expanded_mask_resized_reshaped.astype(int), superres_mask.astype(int)
+            #return noisy_img, expanded_mask_resized_reshaped.astype(int)
 
     def generate_PC_OPL(self, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                         y_border_expansion_coefficient, x_border_expansion_coefficient, defocus):
@@ -514,11 +540,16 @@ class Renderer:
 
         def get_OPL_image(scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                           y_border_expansion_coefficient, x_border_expansion_coefficient, defocus):
-            segment_1_top_left = (
-            0 + self.simulation.offset, int(self.simulation.main_segments.iloc[0]["bb"][0] + self.simulation.offset))
-            segment_1_bottom_right = (
+            segment_1_top_left = [
+                0 + self.simulation.offset, int(self.simulation.main_segments.iloc[0]["bb"][0] + self.simulation.offset)
+            ]
+
+            
+
+            segment_1_bottom_right = [
                 int(self.simulation.main_segments.iloc[0]["bb"][3] + self.simulation.offset),
-                int(self.simulation.main_segments.iloc[0]["bb"][2] + self.simulation.offset))
+                int(self.simulation.main_segments.iloc[0]["bb"][2] + self.simulation.offset)
+            ]
 
             segment_2_top_left = (
             0 + self.simulation.offset, int(self.simulation.main_segments.iloc[1]["bb"][0] + self.simulation.offset))
@@ -531,21 +562,38 @@ class Renderer:
                 media_multiplier = -1 * device_multiplier
             else:
                 test_scene = np.zeros(scene.shape) + device_multiplier
+
                 rr, cc = draw.rectangle(start=segment_1_top_left, end=segment_1_bottom_right, shape=test_scene.shape)
                 test_scene[rr, cc] = 1 * media_multiplier
+
+
+
+
                 rr, cc = draw.rectangle(start=segment_2_top_left, end=segment_2_bottom_right, shape=test_scene.shape)
                 test_scene[rr, cc] = 1 * media_multiplier
+
+
                 circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1]) / 2
                 radius = (segment_1_top_left[1] - self.simulation.offset - (
                             segment_2_bottom_right[1] - self.simulation.offset)) / 2
                 circ_midpoint_x = (self.simulation.offset) + radius
 
+
+
                 rr, cc = draw.rectangle(start=segment_2_top_left, end=(circ_midpoint_x, segment_1_top_left[1]),
                                         shape=test_scene.shape)
+                
+
+
                 test_scene[rr.astype(int), cc.astype(int)] = 1 * media_multiplier
+
+                
                 rr, cc = draw.disk(center=(circ_midpoint_x, circ_midpoint_y), radius=radius, shape=test_scene.shape)
                 rr_semi = rr[rr < (circ_midpoint_x + 1)]
                 cc_semi = cc[rr < (circ_midpoint_x + 1)]
+
+
+
                 test_scene[rr_semi, cc_semi] = device_multiplier
             no_cells = copy.deepcopy(test_scene)
 
@@ -648,13 +696,13 @@ class Renderer:
             halo_bottom_intensity = (0,1,0.1),
             halo_start = (0,1,0.11),
             halo_end = (0,1,0.1),
-            random_real_image=fixed(None)
+            random_real_image=fixed(None),
         )
 
         return self.params
 
     def generate_training_data(self, sample_amount, randomise_hist_match, randomise_noise_match,
-                               burn_in, n_samples, save_dir, in_series=False, seed=False, n_jobs = 1, dtype = np.uint8):
+                               burn_in, n_samples, save_dir, in_series=False, seed=False, n_jobs = 1, mask_dtype = np.uint8, dry_run = False, render_sample_parameters = None, randomise_fourier_match = False, prefix=None):
         """
         Generates the training data from a Jupyter interactive output of generate_test_comparison
 
@@ -681,6 +729,57 @@ class Renderer:
             Optional arg, if specified then the numpy random seed will be set for the rendering, allows reproducible rendering results.
 
         """
+
+        if render_sample_parameters:
+             warnings.warn(f"""
+                           render_sample_parameters has been passed. Ignoring all function args
+                           """, UserWarning)
+        def generate_samples(z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier):
+            
+            if self.additional_real_images:
+                random_real_image = random.choice(self.additional_real_images)
+            else:
+                random_real_image = None
+            
+            syn_image, mask, superres_mask = self.generate_test_comparison(
+                media_multiplier=media_multiplier,
+                cell_multiplier=cell_multiplier,
+                device_multiplier=device_multiplier,
+                sigma=sigma,
+                scene_no=scene_no,
+                match_fourier=match_fourier,
+                match_histogram=match_histogram,
+                match_noise=match_noise,
+                debug_plot=False,
+                noise_var=self.params.kwargs["noise_var"],
+                defocus=self.params.kwargs["defocus"],
+                halo_top_intensity = self.params.kwargs["halo_top_intensity"], 
+                halo_bottom_intensity = self.params.kwargs["halo_bottom_intensity"],
+                halo_start = self.params.kwargs["halo_start"],
+                halo_end = self.params.kwargs["halo_end"],
+                random_real_image = random_real_image
+            )
+
+            syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
+            syn_image.save("{}/convolutions/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
+
+            if (cell_multiplier == 0) or (cell_multiplier == 0.0):
+                mask = np.zeros(mask.shape)
+                mask = Image.fromarray(mask.astype(mask_dtype))
+                mask.save("{}/masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
+
+                superres_mask = np.zeros(superres_mask.shape)
+                superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
+                superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, str(z).zfill(5)))
+            else:
+                mask = Image.fromarray(mask.astype(mask_dtype))
+                mask.save("{}/masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
+
+                superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
+                superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
+
+
+
         if seed:
             np.random.seed(seed)
 
@@ -696,85 +795,71 @@ class Renderer:
             os.mkdir(save_dir + "/masks")
         except:
             pass
+        try:
+            os.mkdir(save_dir + "/superres_masks")
+        except:
+            pass
 
-        current_file_num = len(os.listdir(save_dir + "/convolutions"))
+        current_file_num = len(glob(save_dir + f"/convolutions/{prefix}*"))
 
-        if in_series:
-            series_len = (self.simulation.sim_length) - burn_in
-            n_series_to_sim = int(np.ceil(n_samples/series_len))
-
-            media_multiplier_modifiers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
-            cell_multiplier_modifiers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
-            device_multiplier_modifiers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
-            sigma_modifiers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
-
-        else:
-            media_multiplier_modifiers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_samples)]
-            cell_multiplier_modifiers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_samples)]
-            device_multiplier_modifiers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_samples)]
-            sigma_modifiers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_samples)]
-
-
-        def generate_samples(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier):
-
-            media_multiplier = media_multiplier_modifier * self.params.kwargs["media_multiplier"]
-            cell_multiplier =  cell_multiplier_modifier * self.params.kwargs["cell_multiplier"]
-            device_multiplier = device_multiplier_modifier * self.params.kwargs["device_multiplier"]
-            sigma = sigma_modifier * self.params.kwargs["sigma"]
-            
+        # If sample parameters not pre-provided, generate them first
+        if not render_sample_parameters:
             if in_series:
-                scene_no = (np.arange(burn_in, self.simulation.sim_length).tolist() * n_series_to_sim)[z] #burn_in + z % (self.simulation.sim_length - 2)
-                # print(z, scene_no, media_multiplier)
-                # can maybe re-run run_simulation and draw_scene when this loops back to 0
+                series_len = (self.simulation.sim_length) - burn_in
+                n_series_to_sim = int(np.ceil(n_samples/series_len))
+
+                media_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["media_multiplier"] for _ in range(n_series_to_sim)], series_len)
+                cell_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["cell_multiplier"] for _ in range(n_series_to_sim)], series_len)
+                device_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["device_multiplier"] for _ in range(n_series_to_sim)], series_len)
+                sigmas = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
+                scene_nos =  np.arange(burn_in, self.simulation.sim_length).tolist() * n_series_to_sim
+
             else:
-                scene_no = np.random.randint(burn_in, self.simulation.sim_length - 2)
+                media_multipliers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["media_multiplier"] for _ in range(n_samples)]
+                cell_multipliers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["cell_multiplier"] for _ in range(n_samples)]
+                device_multipliers = [np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["device_multiplier"] for _ in range(n_samples)]
+                sigmas = [np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["sigma"] for _ in range(n_samples)]
+                scene_nos = np.random.randint(low = burn_in, high = self.simulation.sim_length - 2, size = n_samples)
+
             if randomise_hist_match:
-                match_histogram = np.random.choice([True, False])
+                hist_match_bools = np.random.choice([True, False], size = n_samples)
             else:
-                match_histogram = self.params.kwargs["match_histogram"]
+                hist_match_bools = [self.params.kwargs["match_histogram"]] * n_samples
+
             if randomise_noise_match:
-                match_noise = np.random.choice([True, False])
+                noise_match_bools = np.random.choice([True, False], size = n_samples)
             else:
-                match_noise = self.params.kwargs["match_noise"]
-            
-            if self.additional_real_images:
-                random_real_image = random.choice(self.additional_real_images)
+                noise_match_bools = [self.params.kwargs["match_noise"]] * n_samples 
+
+            if randomise_fourier_match:
+                fourier_match_bools = np.random.choice([True, False], size = n_samples)
             else:
-                random_real_image = None
-            
-            syn_image, mask = self.generate_test_comparison(
-                media_multiplier=media_multiplier,
-                cell_multiplier=cell_multiplier,
-                device_multiplier=device_multiplier,
-                sigma=sigma,
-                scene_no=scene_no,
-                match_fourier=self.params.kwargs["match_fourier"],
-                match_histogram=match_histogram,
-                match_noise=match_noise,
-                debug_plot=False,
-                noise_var=self.params.kwargs["noise_var"],
-                defocus=self.params.kwargs["defocus"],
-                halo_top_intensity = self.params.kwargs["halo_top_intensity"], 
-                halo_bottom_intensity = self.params.kwargs["halo_bottom_intensity"],
-                halo_start = self.params.kwargs["halo_start"],
-                halo_end = self.params.kwargs["halo_end"],
-                random_real_image = random_real_image
-            )
+                fourier_match_bools = [self.params.kwargs["match_fourier"]] * n_samples
 
-            syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
-            syn_image.save("{}/convolutions/synth_{}.tif".format(save_dir, str(z).zfill(5)))
 
-            if (cell_multiplier == 0) or (cell_multiplier == 0.0):
-                mask = np.zeros(mask.shape)
-                mask = Image.fromarray(mask.astype(dtype))
-                mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
-            else:
-                mask = Image.fromarray(mask.astype(dtype))
-                mask.save("{}/masks/synth_{}.tif".format(save_dir, str(z).zfill(5)))
+            render_sample_parameters = {
+                "n_samples" : n_samples,
+                "media_multipliers" : np.array(media_multipliers),
+                "cell_multipliers" : np.array(cell_multipliers),
+                "device_multipliers" : np.array(device_multipliers),
+                "sigmas" : np.array(sigmas),
+                "scene_nos" : np.array(scene_nos),
+                "hist_match_bools" : np.array(hist_match_bools),
+                "noise_match_bools" : np.array(noise_match_bools),
+                "fourier_match_bools" : np.array(fourier_match_bools)
+            }
+
+        if dry_run:
+            return render_sample_parameters
+        
 
 
 
-        Parallel(n_jobs=n_jobs, backend="threading")(delayed(generate_samples)(z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier) for z, media_multiplier_modifier, cell_multiplier_modifier, device_multiplier_modifier, sigma_modifier in
-                               tqdm(
-                                zip(range(current_file_num, n_samples + current_file_num), media_multiplier_modifiers, cell_multiplier_modifiers, device_multiplier_modifiers, sigma_modifiers)
-                                , desc="Sample generation"))
+        Parallel(
+            n_jobs=n_jobs, backend="threading"
+            )(
+                delayed(generate_samples)(
+                    z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier) for z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier in tqdm(
+                                zip(
+                                    range(render_sample_parameters["n_samples"]), render_sample_parameters["media_multipliers"], render_sample_parameters["cell_multipliers"], render_sample_parameters["device_multipliers"], render_sample_parameters["sigmas"], render_sample_parameters["scene_nos"], render_sample_parameters["hist_match_bools"], render_sample_parameters["noise_match_bools"], render_sample_parameters["fourier_match_bools"])
+                                , desc="Rendering synthetic images"))
