@@ -209,6 +209,14 @@ class Renderer:
                 thresh_media = ((regions == 0)) * 1
                 thresh_cells = ((regions == 1)) * 2
                 thresh_device = ((regions == 2)) * 3
+            elif cells == "fluo":
+                thresh_media = ((regions == 0)) * 1
+                thresh_cells = ((regions == 2)) * 2
+                thresh_device = ((regions == 1)) * 3
+            if cells == "side_pc":
+                thresh_media = (regions == 2) * 1
+                thresh_cells = (regions == 0) * 2
+                thresh_device = (regions == 1) * 3
         else:
             thresh_media = np.zeros(self.real_resize.shape).astype(int)
             thresh_cells = np.zeros(self.real_resize.shape).astype(int)

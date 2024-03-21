@@ -73,8 +73,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         length=cell_max_length * scale_factor,
         width=cell_width * scale_factor,
         resolution=60,
-        position=(40, 10),
-        angle=0.8,
+        position=(int(trench_width/2) + 35, 10 + cell_max_length * scale_factor),
+        angle=np.pi/2, #0.8,
         space=space,
         dt= dt,
         growth_rate_constant=1,
@@ -124,13 +124,13 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     if show_window:
         pyglet.clock.schedule_interval(step_and_update, interval=dt, cells=cells, space=space, phys_iters=phys_iters,
                                        ylim=trench_length, cell_timeseries=cell_timeseries, x=x, sim_length=sim_length,
-                                       save_dir=save_dir)
+                                       save_dir=save_dir, xlim=trench_width)
         pyglet.app.run()
     else:
         for _ in tqdm(range(sim_length+2)):
             step_and_update(
                 dt=dt, cells=cells, space=space, phys_iters=phys_iters, ylim=trench_length,
-                cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir
+                cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir, xlim=trench_width
             )
 
     # window.close()
@@ -211,7 +211,7 @@ def update_cell_parents(cells, new_cells):
     for i in range(len(cells)):
         cells[i].update_parent(id(new_cells[i]))
 
-def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
+def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries, x, sim_length, save_dir, xlim):
     """
     Evolves the simulation forward
 
@@ -233,15 +233,22 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
     for shape in space.shapes:
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
-            space.step(dt)
+            for _ in range(phys_iters):
+                space.step(dt)
+            # space.step(dt)
 
     for cell in cells:
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
             cells.remove(cell)
-            space.step(dt)
+            for _ in range(phys_iters):
+                space.step(dt)
+            # space.step(dt)
         elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
             cells.remove(cell)
-            space.step(dt)
+            for _ in range(phys_iters):
+                space.step(dt)
+            # space.step(dt)
+            
         else:
             pass
 
@@ -252,6 +259,19 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
     for _ in range(phys_iters):
         space.step(dt)
     update_cell_positions(cells)
+
+    if x[0] > 1:
+    #     print(int(np.ceil(xlim/1.5)))
+        # for shape in space.shapes:
+        #     if shape.body.position.x < 25 or shape.body.position.x > 45 + int(np.ceil(xlim/1.5)):
+        #         space.remove(shape.body, shape)
+        #         space.step(dt)
+        for cell in cells:
+            if cell.shape.body.position.x < 35 or cell.shape.body.position.x > 45 + int(xlim):
+                cells.remove(cell)
+                print("removed a cell")
+                # space.step(dt)
+        # wipe_space(space)
 
     #print(str(len(cells))+" cells")
     if x[0] > 1:
