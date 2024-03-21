@@ -1,5 +1,5 @@
 import importlib
-
+from glob import glob
 import numpy as np
 import psfmodels as psfm
 
@@ -694,7 +694,7 @@ class Renderer:
         return self.params
 
     def generate_training_data(self, sample_amount, randomise_hist_match, randomise_noise_match,
-                               burn_in, n_samples, save_dir, in_series=False, seed=False, n_jobs = 1, mask_dtype = np.uint8, dry_run = False, render_sample_parameters = None, randomise_fourier_match = False):
+                               burn_in, n_samples, save_dir, in_series=False, seed=False, n_jobs = 1, mask_dtype = np.uint8, dry_run = False, render_sample_parameters = None, randomise_fourier_match = False, prefix=None):
         """
         Generates the training data from a Jupyter interactive output of generate_test_comparison
 
@@ -724,10 +724,7 @@ class Renderer:
 
         if render_sample_parameters:
              warnings.warn(f"""
-                           render_sample_parameters has been passed, ignoring:
-                            sample_amount = {sample_amount}
-                           
-                           
+                           render_sample_parameters has been passed. Ignoring all function args
                            """, UserWarning)
         def generate_samples(z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier):
             
@@ -756,22 +753,22 @@ class Renderer:
             )
 
             syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
-            syn_image.save("{}/convolutions/synth_{}.png".format(save_dir, str(z).zfill(5)))
+            syn_image.save("{}/convolutions/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
             if (cell_multiplier == 0) or (cell_multiplier == 0.0):
                 mask = np.zeros(mask.shape)
                 mask = Image.fromarray(mask.astype(mask_dtype))
-                mask.save("{}/masks/synth_{}.png".format(save_dir, str(z).zfill(5)))
+                mask.save("{}/masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
                 superres_mask = np.zeros(superres_mask.shape)
                 superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
-                superres_mask.save("{}/superres_masks/synth_{}.png".format(save_dir, str(z).zfill(5)))
+                superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, str(z).zfill(5)))
             else:
                 mask = Image.fromarray(mask.astype(mask_dtype))
-                mask.save("{}/masks/synth_{}.png".format(save_dir, str(z).zfill(5)))
+                mask.save("{}/masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
                 superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
-                superres_mask.save("{}/superres_masks/synth_{}.png".format(save_dir, str(z).zfill(5)))
+                superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
 
 
@@ -795,7 +792,7 @@ class Renderer:
         except:
             pass
 
-        current_file_num = len(os.listdir(save_dir + "/convolutions"))
+        current_file_num = len(glob(save_dir + f"/convolutions/{prefix}*"))
 
         # If sample parameters not pre-provided, generate them first
         if not render_sample_parameters:
@@ -856,5 +853,5 @@ class Renderer:
                 delayed(generate_samples)(
                     z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier) for z, media_multiplier, cell_multiplier, device_multiplier, sigma, scene_no, match_histogram, match_noise, match_fourier in tqdm(
                                 zip(
-                                    range(current_file_num, render_sample_parameters["n_samples"] + current_file_num), render_sample_parameters["media_multipliers"], render_sample_parameters["cell_multipliers"], render_sample_parameters["device_multipliers"], render_sample_parameters["sigmas"], render_sample_parameters["scene_nos"], render_sample_parameters["hist_match_bools"], render_sample_parameters["noise_match_bools"], render_sample_parameters["fourier_match_bools"])
+                                    range(render_sample_parameters["n_samples"]), render_sample_parameters["media_multipliers"], render_sample_parameters["cell_multipliers"], render_sample_parameters["device_multipliers"], render_sample_parameters["sigmas"], render_sample_parameters["scene_nos"], render_sample_parameters["hist_match_bools"], render_sample_parameters["noise_match_bools"], render_sample_parameters["fourier_match_bools"])
                                 , desc="Rendering synthetic images"))

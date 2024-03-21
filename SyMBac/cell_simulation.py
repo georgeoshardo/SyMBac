@@ -73,7 +73,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         length=cell_max_length * scale_factor,
         width=cell_width * scale_factor,
         resolution=60,
-        position=(20, 10),
+        position=(40, 10),
         angle=0.8,
         space=space,
         dt= dt,
