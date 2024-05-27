@@ -5,6 +5,7 @@
 ), Georgeos Hardo, Maximillian Noka, Somenath Bakshi
 
 [***Read the docs***](https://symbac.readthedocs.io/en/latest/)
+
 [***New! Try the Colab version***] (please let me know if you run into issues)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/19_kxRDjvkq1t8c8In4z0nN82CZtb2dbZ?usp=sharing)
 
