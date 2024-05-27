@@ -4,9 +4,9 @@
 ](https://doi.org/10.1186/s12915-022-01453-6
 ), Georgeos Hardo, Maximillian Noka, Somenath Bakshi
 
-[***NEW: Read the docs***](https://symbac.readthedocs.io/en/latest/)
-
-<img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/symbac_sliders.gif" alt="drawing" width="600" height="400"/>
+[***Read the docs***](https://symbac.readthedocs.io/en/latest/)
+[***New! Try the Colab version***] (please let me know if you run into issues)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/19_kxRDjvkq1t8c8In4z0nN82CZtb2dbZ?usp=sharing)
 
   * [What is it?](#what-is-it-)
   * [Why would I want to generate synthetic images?](#why-would-i-want-to-generate-synthetic-images-)
