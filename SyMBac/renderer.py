@@ -803,7 +803,7 @@ class Renderer:
                 media_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["media_multiplier"] for _ in range(n_series_to_sim)], series_len)
                 cell_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["cell_multiplier"] for _ in range(n_series_to_sim)], series_len)
                 device_multipliers = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) * self.params.kwargs["device_multiplier"] for _ in range(n_series_to_sim)], series_len)
-                sigmas = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount) for _ in range(n_series_to_sim)], series_len)
+                sigmas = np.repeat([np.random.uniform(1 - sample_amount, 1 + sample_amount)* self.params.kwargs["sigma"] for _ in range(n_series_to_sim)], series_len)
                 scene_nos =  np.arange(burn_in, self.simulation.sim_length).tolist() * n_series_to_sim
 
             else:
