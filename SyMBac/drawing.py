@@ -84,7 +84,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.ID][0]
         phase_mult = 20
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult,
-                                separation])
+                                separation, cell.mask_label])
     return cell_properties
 
 def get_crop_bounds_2D(img, tol=0):
@@ -247,14 +247,14 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     space = np.zeros(space_size)
     space_masks_label = np.zeros(space_size)
     space_masks_nolabel = np.zeros(space_size)
-    colour_label = [1]
+    #colour_label = [1]
 
     space_masks = np.zeros(space_size)
     if label_masks == False:
         space_masks = space_masks.astype(bool)
 
     for properties in cell_properties:
-        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation = properties
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label = properties
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
@@ -288,10 +288,8 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         def get_mask(label_masks):
 
             if label_masks:
-                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                 rotated_OPL_cell > 0) * \
-                                                                                                         colour_label[0]
-                colour_label[0] += 1
+                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * sim_mask_label
+                #colour_label[0] += 1
                 return space_masks_label
             else:
                 space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (

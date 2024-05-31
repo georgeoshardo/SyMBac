@@ -25,10 +25,16 @@ class Cell:
         max_length_var,
         width_var,
         width_mean,
-        parent = None,
+        mother = None,
         daughter = None,
         lysis_p = 0,
-        pinching_sep = 0
+        pinching_sep = 0,
+        mask_label = 1,
+        generation = 0,
+        N_divisions = 0,
+        just_divided = False,
+        mother_mask_label = None,
+        dead = False
     ):
         
         """
@@ -87,12 +93,17 @@ class Cell:
         self.max_length_var = max_length_var
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
-        self.ID = np.random.randint(0,100_000_000)
+        self.ID = np.random.randint(0,100_000_000) #TODO delete this (so bad)
         self.lysis_p = lysis_p
-        self.parent = parent
+        self.mother = mother
         self.daughter = daughter
         self.pinching_sep = pinching_sep
-        
+        self.mask_label = mask_label
+        self.generation = generation
+        self.N_divisions = N_divisions
+        self.just_divided = just_divided
+        self.mother_mask_label = mother_mask_label
+        self.dead = dead
 
     def create_pm_cell(self):
         """
@@ -116,8 +127,11 @@ class Cell:
 
            If :meth:`SyMBac.cell.Cell.is_dividing()` returns `False`, then only a tuple containing (pymunk.body, pymunk.shape) will be returned.
         """
-
+        
         if self.is_dividing():
+            self.just_divided = True
+            self.N_divisions += 1
+            self.space.historic_N_cells += 1
             self.length = self.length/2 * 0.98 # It just has to be done in this order due to when we call self.body.position = [new_x, new_y]
             daughter_length = self.length
             self.pinching_sep = 0
@@ -130,8 +144,8 @@ class Cell:
             cell_body = pymunk.Body(cell_mass,cell_moment)
             cell_shape.body = cell_body
             self.body = cell_body
-            new_x = self.position[0] + self.length/2 *  np.cos(self.angle)
-            new_y = self.position[1] + self.length/2 *  np.sin(self.angle)
+            new_x = self.position[0] - self.length/2 *  np.cos(self.angle)
+            new_y = self.position[1] - self.length/2 *  np.sin(self.angle)
             self.body.position = [new_x, new_y]
             cell_body.angle = self.angle
             cell_shape.friction=0
@@ -140,7 +154,7 @@ class Cell:
                 "length": daughter_length,
                 "width": np.random.normal(self.width_mean,self.width_var),
                 "resolution": self.resolution,
-                "position": [self.position[0] - self.length/2 *  np.cos(self.angle), self.position[1] - self.length/2 *  np.sin(self.angle)],
+                "position": [self.position[0] + self.length/2 *  np.cos(self.angle), self.position[1] + self.length/2 *  np.sin(self.angle)],
                 "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
@@ -151,14 +165,18 @@ class Cell:
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
                 "lysis_p": self.lysis_p,
-                "parent": self.parent,
-                "pinching_sep": 0
+                "pinching_sep": 0,
+                "mask_label": self.space.historic_N_cells,
+                "generation": self.generation + 1,
+                "N_divisions": 0,
+                "just_divided": True,
+                "mother_mask_label": int(self.mask_label)
             }
 
             
-            #self.position = [new_x, new_y]
             return daughter_details
         else:
+            self.just_divided = False
             cell_vertices = self.calculate_vertex_list()
             cell_shape = pymunk.Poly(None, cell_vertices)
             self.shape = cell_shape
@@ -215,19 +233,6 @@ class Cell:
         """
         self.position = self.body.position
         self.angle = self.body.angle
-
-    def update_parent(self, parent):
-        """
-        Parameters
-        ----------
-        parent : :class:`SyMBac.cell.Cell`
-           The SyMBac cell object to assign as the parent to the current cell.
-
-        Returns
-        -------
-        None
-        """
-        self.parent = parent
 
     def get_angle(self):
         """

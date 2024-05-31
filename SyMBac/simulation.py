@@ -1,13 +1,15 @@
 import numpy as np
 from joblib import Parallel, delayed
 import pickle
-from SyMBac.cell_simulation import run_simulation
+from SyMBac.cell_simulation import run_simulation as run_cell_simulation
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
-from tqdm.autonotebook import tqdm
 import napari
 import os
+import warnings
+from tqdm.auto import tqdm
 class Simulation:
+    
     """
     Class for instantiating Simulation objects. These are the basic objects used to run all SyMBac simulations. This
     class is used to parameterise simulations, run them, draw optical path length images, and then visualise them.
@@ -107,13 +109,16 @@ class Simulation:
 
 
     def run_simulation(self, show_window = True):
+        if show_window:
+            warnings.warn("You are using show_window = True. If you re-run the simulation (even by re-creating the Simulation object), then for reasons which I do not understand, the state of the simulation is not reset. Restart your notebook or interpreter to re-run simulations.")
         """
         Run the simulation
 
         :param bool show_window: Whether to show the pyglet window while running the simulation. Typically would be `false` if running SyMBac headless.
 
         """
-        self.cell_timeseries, self.space = run_simulation(
+
+        self.cell_timeseries, self.space, self.historic_cells = run_cell_simulation(
             trench_length=self.trench_length,
             trench_width=self.trench_width,
             cell_max_length=self.cell_max_length,  # 6, long cells # 1.65 short cells
@@ -132,7 +137,6 @@ class Simulation:
 
     def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False):
 
-        from tqdm.autonotebook import tqdm
 
         """
         Draw the optical path length images from the simulation. This involves drawing the 3D cells into a 2D numpy
@@ -156,13 +160,13 @@ class Simulation:
         ID_props = generate_curve_props(self.cell_timeseries)
 
         self.cell_timeseries_properties = Parallel(n_jobs=-1)(
-            delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(self.cell_timeseries, desc='Timeseries Properties'))
+            delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(self.cell_timeseries, desc='Extracting cell properties from the simulation'))
 
         space_size = get_space_size(self.cell_timeseries_properties)
 
         scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
         cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
-            self.cell_timeseries_properties, desc='Scene Draw:'))
+            self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
         self.OPL_scenes = [_[0] for _ in scenes]
         self.masks = [_[1] for _ in scenes]
 

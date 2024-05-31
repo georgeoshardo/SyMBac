@@ -9,12 +9,14 @@ import pymunk
 import pyglet
 from tqdm.auto import tqdm
 
+#TODO work these functions into a class, possibly in simulation.py
+
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
                    phys_iters, max_length_var, width_var, save_dir, resize_amount, lysis_p=0, show_window = True):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
-    simulation. There is currently a bug where if you try to rerun the simulation in the same kernel, it will be
+    simulation. There is currently a bug where if you try to rerun the simulation in the same kernel with show_window=True, it will be
     extremely slow.
 
     Parameters
@@ -69,11 +71,13 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     trench_width = trench_width * scale_factor
     trench_creator(trench_width, trench_length, (35, 0), space)  # Coordinates of bottom left corner of the trench
 
+    # Always set the N cells to 1 before adding a cell to the space, and set the mask_label
+    space.historic_N_cells = 1
     cell1 = Cell(
-        length=cell_max_length * scale_factor,
+        length=cell_max_length*0.5 * scale_factor,
         width=cell_width * scale_factor,
         resolution=60,
-        position=(40, 10),
+        position=(40, 100),
         angle=0.8,
         space=space,
         dt= dt,
@@ -83,8 +87,11 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         max_length_var=max_length_var * np.sqrt(scale_factor),
         width_var=width_var * np.sqrt(scale_factor),
         width_mean=cell_width * scale_factor,
-        parent=None,
-        lysis_p=lysis_p
+        mother=None,
+        lysis_p=lysis_p,
+        mask_label=1,
+        generation = 0,
+        N_divisions=0
     )
 
     if show_window:
@@ -106,40 +113,38 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
                 # close the window
                 window.close()
 
-    #global cell_timeseries
-    #global x
-
-    #try:
-    #    del cell_timeseries
-    #except:
-    #    pass
-    #try:
-    #    del x
-    #except:
-    #    pass
-
     x = [0]
     cell_timeseries = []
     cells = [cell1]
+    historic_cells = [cell1] # A list of cells which will contain all cells ever in the simulation
     if show_window:
         pyglet.clock.schedule_interval(step_and_update, interval=dt, cells=cells, space=space, phys_iters=phys_iters,
                                        ylim=trench_length, cell_timeseries=cell_timeseries, x=x, sim_length=sim_length,
-                                       save_dir=save_dir)
+                                       save_dir=save_dir, historic_cells=historic_cells)
         pyglet.app.run()
     else:
         for _ in tqdm(range(sim_length+2)):
             step_and_update(
                 dt=dt, cells=cells, space=space, phys_iters=phys_iters, ylim=trench_length,
-                cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir
+                cell_timeseries=cell_timeseries, x=x, sim_length=sim_length, save_dir=save_dir, historic_cells=historic_cells,
             )
 
-    # window.close()
-    # phys_iters = phys_iters
-    # for x in tqdm(range(sim_length+250),desc="Simulation Progress"):
-    #    cells = step_and_update(dt=dt, cells=cells, space=space, phys_iters=phys_iters,ylim=trench_length*1.1, cell_timeseries = cell_timeseries, x=x, sim_length = sim_length, save_dir = save_dir)
-    #    if x > 250:
-    #        cell_timeseries.append(deepcopy(cells))
-    return cell_timeseries, space
+
+    for frame, cells in enumerate(cell_timeseries):
+        for cell in cells:
+            cell.t = frame#
+
+    #for cell in cell_timeseries[0]:
+    #    cell.prev_t_cell = None
+    #for cells_prev, cells in zip(cell_timeseries, cell_timeseries[1:]):
+    #    for cell in cells:
+    #        for cell_prev in cells_prev:
+    #            if cell.mask_label == cell_prev.mask_label:
+    #                cell.prev_t_cell = cell_prev
+    #            else:
+    #                cell.prev_t_cell = None
+
+    return cell_timeseries, space, historic_cells
 
 def create_space():
     """
@@ -149,6 +154,7 @@ def create_space():
     """
 
     space = pymunk.Space(threaded=False)
+    space.historic_N_cells = 0
     #space.threads = 2
     return space
 
@@ -169,6 +175,8 @@ def update_pm_cells(cells, space):
             if len(daughter_details) > 2: # Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
                 daughter = Cell(**daughter_details)
                 cell.daughter = daughter
+                daughter.mother = cell
+                #daughter.mo
                 cells.append(daughter)
         else:
             cell.create_pm_cell()
@@ -200,18 +208,8 @@ def wipe_space(space):
             space.remove(body)
             space.remove(poly)
 
-def update_cell_parents(cells, new_cells):
-    """
-    Takes two lists of cells, one in the previous frame, and one in the frame after division, and updates the parents of
-    each cell
 
-    :param list(SyMBac.cell.Cell) cells:
-    :param list(SyMBac.cell.Cell) new_cells:
-    """
-    for i in range(len(cells)):
-        cells[i].update_parent(id(new_cells[i]))
-
-def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_length,save_dir):
+def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries, x, sim_length,save_dir, historic_cells):
     """
     Evolves the simulation forward
 
@@ -236,31 +234,28 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries,x,sim_le
             space.step(dt)
 
     for cell in cells:
+        historic_cells.append(cell)
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
+            cell.dead = True
             cells.remove(cell)
             space.step(dt)
         elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(cells) > 1:   # in case all cells disappear
+            cell.dead = True
             cells.remove(cell)
             space.step(dt)
         else:
             pass
+        historic_cells.append(cell)
+
 
     wipe_space(space)
-
     update_pm_cells(cells, space)
-
     for _ in range(phys_iters):
         space.step(dt)
     update_cell_positions(cells)
 
-    #print(str(len(cells))+" cells")
     if x[0] > 1:
-        #copy_cells = deepcopy(cells)
-
         cell_timeseries.append(deepcopy(cells))
-        copy_cells = cell_timeseries[-1]
-        update_cell_parents(cells, copy_cells)
-        #del copy_cells
     if x[0] == sim_length-1:
         with open(save_dir+"/cell_timeseries.p", "wb") as f:
             pickle.dump(cell_timeseries, f)
