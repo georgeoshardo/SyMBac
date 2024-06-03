@@ -278,8 +278,8 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
         offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
         offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
-        assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
-        assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
+        assert y > cell_y, f"Cell has {y - cell_y} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
+        assert x > cell_x, f"Cell has {x - cell_x} negative pixels in x coordinate, try increasing your offset"
         space[
         y - cell_y:y + cell_y + offset_y,
         x - cell_x:x + cell_x + offset_x
