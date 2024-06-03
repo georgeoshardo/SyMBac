@@ -54,7 +54,7 @@ if importlib.util.find_spec("cupy") is None:
             The output of the convolution rescale operation
         """
 
-        output = cuconvolve(image, kernel, mode="constant")
+        output = cuconvolve(image, kernel, mode="same")
         # output = output.get()
         output = rescale(output, rescale_factor, anti_aliasing=False)
 
