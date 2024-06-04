@@ -1,6 +1,6 @@
 import itertools
 import random
-
+from noise import pnoise2
 import numpy as np
 from matplotlib import pyplot as plt
 from numba import njit
@@ -32,7 +32,7 @@ def generate_curve_props(cell_timeseries):
     IDs = []
     for cell_list in cell_timeseries:
         for cell in cell_list:
-            IDs.append(cell.ID)
+            IDs.append(cell.mask_label)
     IDs = np.array(IDs)
     unique_IDs = np.unique(IDs)
     # For each cell, assign random curvature properties
@@ -74,17 +74,31 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         centroid = get_centroid(vertices)
         farthest_vertices = find_farthest_vertices(vertices)
         length = get_distance(farthest_vertices[0], farthest_vertices[1])
+        length = cell.length
         width = cell.width
         separation = cell.pinching_sep
         # angle = np.arctan(vertices_slope(farthest_vertices[0], farthest_vertices[1]))
-        angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],
-                           (farthest_vertices[0] - farthest_vertices[1])[0])
-        angle = np.rad2deg(angle) + 90
+        #angle = np.arctan2((farthest_vertices[0] - farthest_vertices[1])[1],
+        #                   (farthest_vertices[0] - farthest_vertices[1])[0])
+        angle = cell.angle #np.rad2deg(angle) + 90
 
-        ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.ID][0]
+        ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.mask_label][0]
         phase_mult = 20
+        draw_params = {
+            "length": length,
+            "width": width,
+            "angle": angle,
+            "centroid": centroid,
+            "freq_modif": freq_modif,
+            "amp_modif": amp_modif,
+            "phase_modif": phase_modif,
+            "phase_mult": phase_mult,
+            "separation": separation,
+            "mask_label": cell.mask_label
+        }
+        cell.draw_params = draw_params
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult,
-                                separation, cell.mask_label])
+                                separation, cell.mask_label, cell.texture_y_coordinate])
     return cell_properties
 
 def get_crop_bounds_2D(img, tol=0):
@@ -254,12 +268,31 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         space_masks = space_masks.astype(bool)
 
     for properties in cell_properties:
-        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label = properties
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label, texture_y_coordinate = properties
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
         OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
 
+        scale = 70.0
+        octaves = 3
+        persistence = 0.5
+        lacunarity = 1
+        seed = 420
+        
+
+        noise = np.zeros(OPL_cell.shape)
+        for i in range(OPL_cell.shape[0]):
+            for j in range(OPL_cell.shape[1]):
+                noise[i][j] = pnoise2((i - OPL_cell.shape[0] + texture_y_coordinate) / 2 / scale,
+                                      (j - OPL_cell.shape[1]) / 2 / scale,
+                                      octaves=octaves,
+                                      persistence=persistence,
+                                      lacunarity=lacunarity,
+                                      base=seed)
+
+        OPL_cell = OPL_cell * (1+noise*1.5)
+        
         if do_transformation:
             OPL_cell_2 = np.zeros((OPL_cell.shape[0], int(OPL_cell.shape[1] * 2)))
             midpoint = int(np.median(range(OPL_cell_2.shape[1])))
@@ -273,6 +306,7 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
             for B in roll_coords:
                 OPL_cell_2[B, :] = np.roll(OPL_cell_2[B, :], roll_amounts[B])
             OPL_cell = (OPL_cell_2)
+
 
         rotated_OPL_cell = rotate(OPL_cell, -angle, resize=True, clip=False, preserve_range=True, center=(x, y))
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)

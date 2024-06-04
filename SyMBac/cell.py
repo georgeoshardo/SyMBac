@@ -1,6 +1,7 @@
 import numpy as np
 import pymunk
 from SyMBac import cell_geometry
+from copy import deepcopy
 class Cell:
     """
     Cells are the agents in the simulation. This class allows for instantiating `Cell` object.
@@ -34,7 +35,8 @@ class Cell:
         N_divisions = 0,
         just_divided = False,
         mother_mask_label = None,
-        dead = False
+        dead = False,
+        texture_y_coordinate = 0
     ):
         
         """
@@ -104,6 +106,7 @@ class Cell:
         self.just_divided = just_divided
         self.mother_mask_label = mother_mask_label
         self.dead = dead
+        self.texture_y_coordinate = texture_y_coordinate
 
     def create_pm_cell(self):
         """
@@ -131,8 +134,11 @@ class Cell:
         if self.is_dividing():
             self.just_divided = True
             self.N_divisions += 1
+            
+            
             self.space.historic_N_cells += 1
             self.length = self.length/2 * 0.98 # It just has to be done in this order due to when we call self.body.position = [new_x, new_y]
+            
             daughter_length = self.length
             self.pinching_sep = 0
             
@@ -150,6 +156,7 @@ class Cell:
             cell_body.angle = self.angle
             cell_shape.friction=0
             #self.space.add(cell_body, cell_shape)
+            
             daughter_details = {
                 "length": daughter_length,
                 "width": np.random.normal(self.width_mean,self.width_var),
@@ -170,9 +177,11 @@ class Cell:
                 "generation": self.generation + 1,
                 "N_divisions": 0,
                 "just_divided": True,
-                "mother_mask_label": int(self.mask_label)
+                "mother_mask_label": int(self.mask_label),
+                "texture_y_coordinate": self.texture_y_coordinate
             }
 
+            self.texture_y_coordinate = self.texture_y_coordinate - self.length
             
             return daughter_details
         else:
@@ -217,8 +226,9 @@ class Cell:
         -------
         None
         """
-
-        self.length = self.length + self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.5,1.3)
+        added_length = self.growth_rate_constant*self.dt*self.length*np.random.uniform(0.5,1.3)
+        self.length = self.length + added_length
+        self.texture_y_coordinate += added_length/2
         self.pinching_sep = max(0, self.length - self.max_length + self.width)
         self.pinching_sep = min(self.pinching_sep, self.width - 2)
 

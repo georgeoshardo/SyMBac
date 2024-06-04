@@ -290,7 +290,7 @@ class Simulation:
             pyglet.app.run()
         else:
             for _ in tqdm(range(self.sim_length+2)):
-                self.step_and_update()
+                self.step_and_update(self.dt)
 
 
         for frame, cells in enumerate(self.cell_timeseries):
