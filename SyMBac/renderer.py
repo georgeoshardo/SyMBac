@@ -89,7 +89,7 @@ else:
             The output of the convolution rescale operation
         """
 
-        output = cuconvolve(cp.array(image), cp.array(kernel), mode="constant")
+        output = cuconvolve(cp.array(image), cp.array(kernel), mode="nearest")
         output = output.get()
         output = rescale(output, rescale_factor, anti_aliasing=False)
 
@@ -182,7 +182,8 @@ class Renderer:
 
         convolved = convolve_rescale(temp_expanded_scene, temp_kernel, 1 / simulation.resize_amount, rescale_int=True)
         print(simulation.resize_amount, convolved.shape)
-        self.real_resize, self.expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
+        self.real_resize, self.expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=False)
+        self.real_resize = self.real_resize/self.real_resize.max()
         mean_error = []
         media_error = []
         cell_error = []
@@ -349,14 +350,15 @@ class Renderer:
                 convolved[x] = temp_conv
             convolved = convolved.sum(axis=0)
             convolved = rescale(convolved, 1 / self.simulation.resize_amount, anti_aliasing=False)
-            convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, 1))
+            #convolved = rescale_intensity(convolved.astype(np.float32), out_range=(0, 1))
         else:
             kernel = self.PSF.kernel
             if defocus > 0:
-                kernel = gaussian_filter(kernel, defocus, mode="reflect")
-            convolved = convolve_rescale(expanded_scene, kernel, 1 / self.simulation.resize_amount, rescale_int=True)
-
-        real_resize, expanded_resized = make_images_same_shape(self.real_image, convolved, rescale_int=True)
+                kernel = gaussian_filter(kernel, defocus, mode="constant")
+            convolved = convolve_rescale(expanded_scene, kernel, 1 / self.simulation.resize_amount, rescale_int=True) #
+        #real_resize, OPL_scene = make_images_same_shape(self.real_image, expanded_scene, rescale_int=False)
+        real_resize, convolved = make_images_same_shape(self.real_image, convolved, rescale_int=True)
+        real_resize = real_resize / real_resize.max() #Because we do not want to rescale the convolution in the above line
         if random_real_image is not None:
             fftim1 = fft.fftshift(fft.fft2(random_real_image))
         else:
@@ -365,10 +367,10 @@ class Renderer:
         angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
 
         if match_fourier and not match_histogram:
-            matched = sfMatch([real_resize, expanded_resized], tarmag=mags)[1]
+            matched = sfMatch([real_resize, convolved], tarmag=mags)[1]
             matched = lumMatch([real_resize, matched], None, [np.mean(real_resize), np.std(real_resize)])[1]
         else:
-            matched = expanded_resized
+            matched = convolved
 
         if match_histogram and match_fourier:
             matched = sfMatch([real_resize, matched], tarmag=mags)[1]
@@ -387,17 +389,17 @@ class Renderer:
             matched = matched / (matched.max() / self.real_image.max()) / sensitivity
             if match_fourier:
                 matched += abs(matched.min()) # Preserve mean > 0 for rng.poisson(matched)
-            matched = rng.poisson(matched)
+            #matched = rng.poisson(matched)
             noisy_img = matched + rng.normal(loc=baseline, scale=dark_noise, size=matched.shape)
         else:  # Ad hoc noise mathcing
-            noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
+            #noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
             noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0, var=noise_var, clip=False)
 
         if match_noise:
             noisy_img = match_histograms(noisy_img, real_resize)
         else:
             pass
-        noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
+        #noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
 
         ## getting the cell mask to the right shape
         expanded_mask_resized = rescale(expanded_mask, 1 / self.simulation.resize_amount, anti_aliasing=False,
@@ -408,21 +410,21 @@ class Renderer:
                                                                        rescale_int=False)
         else:
             _, expanded_mask_resized_reshaped = make_images_same_shape(self.real_image, expanded_mask_resized,
-                                                                       rescale_int=True)
+                                                                       rescale_int=False)
 
         expanded_media_mask = rescale(
             (expanded_scene_no_cells == device_multiplier) ^ (expanded_scene - expanded_scene_no_cells).astype(bool),
             1 / self.simulation.resize_amount, anti_aliasing=False)
-        real_resize, expanded_media_mask = make_images_same_shape(self.real_image, expanded_media_mask,
-                                                                  rescale_int=True)
+        _, expanded_media_mask = make_images_same_shape(self.real_image, expanded_media_mask,
+                                                                  rescale_int=False)
         just_media = expanded_media_mask * noisy_img
 
         expanded_cell_pseudo_mask = (expanded_scene - expanded_scene_no_cells).astype(bool)
         expanded_cell_pseudo_mask = rescale(expanded_cell_pseudo_mask, 1 / self.simulation.resize_amount,
                                             anti_aliasing=False)
 
-        real_resize, expanded_cell_pseudo_mask = make_images_same_shape(self.real_image, expanded_cell_pseudo_mask,
-                                                                        rescale_int=True)
+        _, expanded_cell_pseudo_mask = make_images_same_shape(self.real_image, expanded_cell_pseudo_mask,
+                                                                        rescale_int=False)
         just_cells = expanded_cell_pseudo_mask * noisy_img
 
         expanded_device_mask = expanded_scene_no_cells
@@ -431,10 +433,11 @@ class Renderer:
 
 
 
-        real_resize, expanded_device_mask = make_images_same_shape(self.real_image, expanded_device_mask,
-                                                                   rescale_int=True)
+        _, expanded_device_mask = make_images_same_shape(self.real_image, expanded_device_mask,
+                                                                   rescale_int=False)
+        
         just_device = expanded_device_mask * noisy_img
-
+        noisy_img = noisy_img/noisy_img.max()
         simulated_means = np.array([just_media[np.where(just_media)].mean(), just_cells[np.where(just_cells)].mean(),
                                     just_device[np.where(just_device)].mean()])
         simulated_vars = np.array([just_media[np.where(just_media)].var(), just_cells[np.where(just_cells)].var(),
@@ -457,10 +460,13 @@ class Renderer:
             ax2 = plt.subplot2grid((1, 8), (0, 1), colspan=1, rowspan=1)
             ax3 = plt.subplot2grid((1, 8), (0, 2), colspan=3, rowspan=1)
             ax4 = plt.subplot2grid((1, 8), (0, 5), colspan=3, rowspan=1)
-            ax1.imshow(noisy_img, cmap="Greys_r")
+            vmin = min(real_resize.min(), noisy_img.min())
+            vmax = max(real_resize.max(), noisy_img.max())
+            ax1.imshow(noisy_img, cmap="Greys_r", vmin = vmin, vmax = vmax)
             ax1.set_title("Synthetic")
             ax1.axis("off")
-            ax2.imshow(real_resize, cmap="Greys_r")
+            real_resize_imshow = ax2.imshow(real_resize, cmap="Greys_r", vmin = vmin, vmax = vmax)
+            fig.colorbar(real_resize_imshow, ax=ax1)
             ax2.set_title("Real")
             ax2.axis("off")
             ax3.plot(mean_error)
@@ -482,7 +488,7 @@ class Renderer:
             plt.close()
         else:
             _, superres_mask = make_images_same_shape(np.zeros((self.real_image.shape[0]*self.simulation.resize_amount,self.real_image.shape[1]*self.simulation.resize_amount)), expanded_mask, rescale_int=False)
-            return noisy_img, expanded_mask_resized_reshaped.astype(int), superres_mask.astype(int)
+            return noisy_img, expanded_mask_resized_reshaped.astype(int), superres_mask.astype(int), expanded_scene
             #return noisy_img, expanded_mask_resized_reshaped.astype(int)
 
     def generate_PC_OPL(self, scene, mask, media_multiplier, cell_multiplier, device_multiplier,
@@ -553,7 +559,8 @@ class Renderer:
                 test_scene = np.zeros(scene.shape)
                 media_multiplier = -1 * device_multiplier
             else:
-                test_scene = np.zeros(scene.shape) + device_multiplier
+                ### OPL generation happening here
+                test_scene = (np.zeros(scene.shape) + 1) * device_multiplier
 
                 rr, cc = draw.rectangle(start=segment_1_top_left, end=segment_1_bottom_right, shape=test_scene.shape)
                 test_scene[rr, cc] = 1 * media_multiplier
@@ -673,9 +680,9 @@ class Renderer:
         self.params = interactive(
             self.generate_test_comparison,
             {'manual': manual_update},
-            media_multiplier=(-300, 300, 1),
-            cell_multiplier=(-30, 30, 0.01),
-            device_multiplier=(-300, 300, 1),
+            media_multiplier=(0, 1, 0.01),
+            cell_multiplier=(0, 1, 0.01),
+            device_multiplier=(0, 1, 0.01),
             sigma=(self.PSF.min_sigma, self.PSF.min_sigma * 20, self.PSF.min_sigma / 20),
             scene_no=(0, len(self.simulation.OPL_scenes) - 1, 1),
             noise_var=(0, 0.01, 0.0001),
@@ -733,7 +740,7 @@ class Renderer:
             else:
                 random_real_image = None
             
-            syn_image, mask, superres_mask = self.generate_test_comparison(
+            syn_image, mask, superres_mask, OPL_scene = self.generate_test_comparison(
                 media_multiplier=media_multiplier,
                 cell_multiplier=cell_multiplier,
                 device_multiplier=device_multiplier,
@@ -754,6 +761,8 @@ class Renderer:
 
             syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
             syn_image.save("{}/convolutions/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
+            OPL_scene_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(OPL_scene)))
+            OPL_scene_image.save("{}/OPL_scenes/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
             if (cell_multiplier == 0) or (cell_multiplier == 0.0):
                 mask = np.zeros(mask.shape)
@@ -789,6 +798,10 @@ class Renderer:
             pass
         try:
             os.mkdir(save_dir + "/superres_masks")
+        except:
+            pass
+        try:
+            os.mkdir(save_dir + "/OPL_scenes")
         except:
             pass
 

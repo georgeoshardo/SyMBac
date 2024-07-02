@@ -275,9 +275,9 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
 
         scale = 70.0
-        octaves = 3
+        octaves = 1
         persistence = 0.5
-        lacunarity = 1
+        lacunarity = 2
         seed = 420
         
 
