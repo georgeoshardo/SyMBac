@@ -1,7 +1,7 @@
 import numpy as np
 import pymunk
 from SyMBac import cell_geometry
-from copy import deepcopy
+
 class Cell:
     """
     Cells are the agents in the simulation. This class allows for instantiating `Cell` object.

@@ -10,6 +10,9 @@ from skimage.morphology import opening, remove_small_objects
 from skimage.exposure import rescale_intensity
 from skimage.segmentation import find_boundaries
 from PIL import Image
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
+from SyMBac.trench_geometry import get_trench_segments
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
@@ -555,3 +558,42 @@ def get_space_size(cell_timeseries_properties):
 
 def clean_up_mask(mask):
     return remove_small_objects(label(mask))
+
+
+
+def draw_simulation_OPL(simulation, do_transformation = True, label_masks = True):
+
+
+    """
+    Draw the optical path length images from the simulation. This involves drawing the 3D cells into a 2D numpy
+    array, and then the corresponding masks for each cell.
+
+    After running this function, the Simulation object will gain two new attributes: ``self.OPL_scenes`` and ``self.masks`` which can be accessed separately.
+
+    :param bool do_transformation: Sets whether to transform the cells by bending them. Bending the cells can add realism to a simulation, but risks clipping the cells into the mother machine trench walls.
+
+    :param bool label_masks: Sets whether the masks should be binary, or labelled. Masks should be binary is training a standard U-net, such as with DeLTA, but if training Omnipose (recommended), then mask labelling should be set to True.
+
+    :param bool return_output: Controls whether the function returns the OPL scenes and masks. Does not affect the assignment of these attributes to the instance.
+
+    Returns
+    -------
+    output : tuple(list(numpy.ndarray), list(numpy.ndarray))
+       If ``return_output = True``, a tuple containing lists, each of which contains the entire simulation. The first element in the tuple contains the OPL images, the second element contains the masks
+
+    """
+    simulation.main_segments = get_trench_segments(simulation.space)
+    ID_props = generate_curve_props(simulation.cell_timeseries)
+
+    cell_timeseries_properties = Parallel(n_jobs=-1)(
+        delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(simulation.cell_timeseries, desc='Extracting cell properties from the simulation'))
+
+    space_size = get_space_size(cell_timeseries_properties)
+    offset = 30
+    scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
+    cell_properties, do_transformation, space_size, offset, label_masks) for cell_properties in tqdm(
+        cell_timeseries_properties, desc='Rendering cell optical path lengths'))
+    OPL_scenes = [_[0] for _ in scenes]
+    masks = [_[1] for _ in scenes]
+
+    return OPL_scenes, masks

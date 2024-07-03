@@ -14,6 +14,25 @@ import pyglet
 from scipy.stats import norm
 from copy import deepcopy
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
+import logging
+from pathlib import Path
+
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Create file handler and set level to debug
+log_path = os.path.join(os.getcwd(), 'simulation.log')
+fh = logging.FileHandler(log_path)
+fh.setLevel(logging.DEBUG)
+
+# Create formatter and add it to the handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+
+# Add the file handler to the logger
+logger.addHandler(fh)
+
 
 class Simulation:
     
@@ -46,7 +65,12 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, load_sim_dir = None):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, load_sim_dir = None, sim_callback = None, show_progress = "tqdm"):
+        
+        logger.info("Initializing Simulation object")
+
+
+        
         """
         Initialising a Simulation object
 
@@ -98,11 +122,12 @@ class Simulation:
         self.phys_iters = phys_iters
         self.resize_amount = resize_amount
         self.save_dir = save_dir
-        self.offset = 30
         self.load_sim_dir = load_sim_dir
-
+        self.sim_callback = sim_callback
+        self.show_progress = show_progress
+        
         try:
-            os.mkdir(save_dir)
+            Path(save_dir).mkdir(parents=True, exist_ok=True)
         except:
             pass
 
@@ -113,10 +138,11 @@ class Simulation:
             with open(f"{load_sim_dir}/space_timeseries.p", 'rb') as f:
                 self.space = pickle.load(f)
 
+        logger.debug(vars(self))
     
 
 
-    def run_simulation(self, show_window = True):
+    def run_simulation(self, show_window = False):
         if show_window:
             warnings.warn("You are using show_window = True. If you re-run the simulation (even by re-creating the Simulation object), then for reasons which I do not understand, the state of the simulation is not reset. Restart your notebook or interpreter to re-run simulations.")
         """
@@ -130,7 +156,7 @@ class Simulation:
             show_window = show_window,
         )  # growth phase
 
-    def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False):
+    def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False): #TODO decouble drawing from simulation
 
 
         """
@@ -168,7 +194,7 @@ class Simulation:
         if return_output:
             return self.OPL_scenes, self.masks
 
-    def visualise_in_napari(self):
+    def visualise_in_napari(self): #TODO decouble drawing from simulation
         """
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
@@ -179,7 +205,7 @@ class Simulation:
         napari.run()
 
 
-    def run_cell_simulation(self, show_window = True):
+    def run_cell_simulation(self, show_window = True): # TODO make the dt and growth rate explicitly able to control the simulation step
         """
         Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
         display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -289,8 +315,16 @@ class Simulation:
             pyglet.clock.schedule_interval(self.step_and_update, interval = self.dt)
             pyglet.app.run()
         else:
-            for _ in tqdm(range(self.sim_length+2)):
+            if self.show_progress == "tqdm":
+                loop_iterator = tqdm(range(self.sim_length+2))
+            elif self.show_progress == "magicgui":
+                loop_iterator = self.pbar(range(self.sim_length+2))
+            else:
+                loop_iterator = range(self.sim_length+2)
+            for _ in loop_iterator:
                 self.step_and_update(self.dt)
+                if self.sim_callback:
+                    self.sim_callback(self)
 
 
         for frame, cells in enumerate(self.cell_timeseries):
