@@ -341,9 +341,10 @@ class Simulation:
         self.space.historic_N_cells = 0
         self.space.threads = 2
 
+    def cell_adder(self, cell):
+        self.space.add(cell.body, cell.shape)
 
-
-    def update_pm_cells(self, cells, space):
+    def update_pm_cells(self):
         """
         Iterates through all cells in the simulation and updates their pymunk body and shape objects. Contains logic to
         check for cell division, and create daughters if necessary.
@@ -351,50 +352,43 @@ class Simulation:
         :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
 
         """
-        for cell in cells:
+        for cell in self.cells:
             cell.update_length()
-            if cell.is_dividing():
-                daughter_details = cell.create_pm_cell()
-                if len(daughter_details) > 2: # TODO Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
-                    daughter = SimCell(**daughter_details)
-                    cell.daughter = daughter
-                    daughter.mother = cell
-                    #daughter.mo
-                    cells.append(daughter)
+            if check_if_dividing(cell):
+                daughter = cell.divide()
+                daughter.mother = cell
+                self.cells.append(daughter)
             else:
-                cell.create_pm_cell()
-            self.cell_adder(cell, space)
+                cell.update_pm_cell()
+            self.cell_adder(cell)
             for _ in range(150):
-                space.step(1/100)
+                self.space.step(1/100)
 
-    def cell_adder(self, cell, space):
-        space.add(cell.body, cell.shape)
-
-    def update_cell_positions(self, cells):
+    def update_cell_positions(self):
         """
         Iterates through all cells in the simulation and updates their positions, keeping the cell object's position
         synchronised with its corresponding pymunk shape and body inside the pymunk space.
 
         :param list(SyMBac.cell.Cell) cells: A list of all cells in the current timepoint of the simulation.
         """
-        for cell in cells:
+        for cell in self.cells:
             cell.update_position()
 
-    def wipe_space(self, space):
+    def wipe_space(self):
         """
         Deletes all cells in the simulation pymunk space.
 
         :param pymunk.Space space:
         """
-        for body, poly in zip(space.bodies, space.shapes):
+        for body, poly in zip(self.space.bodies, self.space.shapes):
             if body.body_type == 0:
-                space.remove(body)
-                space.remove(poly)
+                self.space.remove(body)
+                self.space.remove(poly)
 
 
     def step_and_update(self, dt): #dt dummy var in this case
         """
-        Evolves the simulation forward
+        The main simulation loop: Evolves the simulation forward
 
         :param float dt: The simulation timestep
         :param list(SyMBac.cell.Cell)  cells: A list of all cells in the current timestep
@@ -433,14 +427,15 @@ class Simulation:
             self.historic_cells.append(cell)
 
 
-        self.wipe_space(self.space)
-        self.update_pm_cells(self.cells, self.space)
+        self.wipe_space()
+        self.update_pm_cells()
         for _ in range(self.phys_iters):
             self.space.step(self.dt)
-        self.update_cell_positions(self.cells)
+        self.update_cell_positions()
 
         if self.sim_progress > 1:
-            self.cell_timeseries.append(copy(self.cells)) # This is slowing everything down
+            #self.cell_timeseries.append(deepcopy(self.cells)) # This is slowing everything down
+            self.cell_timeseries.append([cell.draw_cell_factory() for cell in self.cells])
             #self.cell_timeseries.append()
             pass
         if self.sim_progress == self.sim_length-1:
@@ -453,3 +448,8 @@ class Simulation:
         self.sim_progress += 1
         return self.cells
 
+def check_if_dividing(cell):
+    if cell.length > cell.max_length:
+        return True
+    else:
+        return False
