@@ -7,12 +7,12 @@ import napari
 import os
 import warnings
 from tqdm.auto import tqdm
-from SyMBac.cell import Cell
+from SyMBac.cell import Cell, SimCell
 from pymunk.pyglet_util import DrawOptions
 import pymunk
 import pyglet
 from scipy.stats import norm
-from copy import deepcopy
+from copy import deepcopy, copy
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 import logging
 from pathlib import Path
@@ -125,7 +125,8 @@ class Simulation:
         self.load_sim_dir = load_sim_dir
         self.sim_callback = sim_callback
         self.show_progress = show_progress
-        
+        self.chronological_time = 0
+        self.frame_time = 0
         try:
             Path(save_dir).mkdir(parents=True, exist_ok=True)
         except:
@@ -266,14 +267,12 @@ class Simulation:
 
         # Always set the N cells to 1 before adding a cell to the space, and set the mask_label
         self.space.historic_N_cells = 1
-        cell1 = Cell(
+        cell1 = SimCell(
             length=self.cell_max_length*0.5 * scale_factor,
             width=self.cell_width * scale_factor,
             resolution=60,
             position=(40, 100),
             angle=0.8,
-            space=self.space,
-            dt= self.dt,
             growth_rate_constant=1,
             max_length=self.cell_max_length * scale_factor,
             max_length_mean=self.cell_max_length * scale_factor,
@@ -284,7 +283,10 @@ class Simulation:
             lysis_p=self.lysis_p,
             mask_label=1,
             generation = 0,
-            N_divisions=0
+            replicative_age=0,
+            chronological_age=0,
+            frame_age=0,
+            simulation = self
         )
 
         if show_window:
@@ -326,11 +328,6 @@ class Simulation:
                 if self.sim_callback:
                     self.sim_callback(self)
 
-
-        for frame, cells in enumerate(self.cell_timeseries):
-            for cell in cells:
-                cell.t = frame#
-
         return self.cell_timeseries, self.space, self.historic_cells
 
     def create_space(self):
@@ -342,7 +339,7 @@ class Simulation:
 
         self.space = pymunk.Space(threaded=True)
         self.space.historic_N_cells = 0
-        #space.threads = 2
+        self.space.threads = 2
 
 
 
@@ -358,8 +355,8 @@ class Simulation:
             cell.update_length()
             if cell.is_dividing():
                 daughter_details = cell.create_pm_cell()
-                if len(daughter_details) > 2: # Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
-                    daughter = Cell(**daughter_details)
+                if len(daughter_details) > 2: # TODO Really hacky. Needs fixing because sometimes this returns cell_body, cell shape. So this is a check to ensure that it's returing daughter_x, y and angle
+                    daughter = SimCell(**daughter_details)
                     cell.daughter = daughter
                     daughter.mother = cell
                     #daughter.mo
@@ -414,6 +411,8 @@ class Simulation:
         cells : list(SyMBac.cell.Cell)
 
         """
+        self.chronological_time += dt 
+        self.frame_time += 1
         for shape in self.space.shapes:
             if shape.body.position.y < 0 or shape.body.position.y > self.trench_length_for_sim:
                 self.space.remove(shape.body, shape)
@@ -441,7 +440,9 @@ class Simulation:
         self.update_cell_positions(self.cells)
 
         if self.sim_progress > 1:
-            self.cell_timeseries.append(deepcopy(self.cells))
+            self.cell_timeseries.append(copy(self.cells)) # This is slowing everything down
+            #self.cell_timeseries.append()
+            pass
         if self.sim_progress == self.sim_length-1:
             with open(self.save_dir+"/cell_timeseries.p", "wb") as f:
                 pickle.dump(self.cell_timeseries, f)

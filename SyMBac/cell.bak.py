@@ -17,52 +17,6 @@ class Cell:
         length,
         width,
         resolution,
-    ):
-        
-        """
-        Initialising a generic Cell
-
-        For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html Cell class has been tested and works with pymunk version 6.0.0
-
-        Parameters
-        ----------
-        length : float
-            Cell's length
-        width : float
-            Cell's width
-        resolution : int
-            Number of points defining cell's geometry            
-        """
-        self.length = length
-        self.width = width
-        self.resolution = resolution
-
-    def calculate_vertex_list(self):
-        return cell_geometry.get_vertices(
-            self.length,
-            self.width,
-            0,#self.angle, 
-            self.resolution
-            )
-
-
-
-    
-class SimCell(Cell):
-    """
-    A class for physics simulation cells, methods implemented here all rely on access to the Pymunk properties of this object.
-
-    See SyMbac.cell.Cell
-
-    simulation : SyMBac.simulation.Simulation
-        A simulation object
-    """
-
-    def __init__(
-        self,
-        length,
-        width,
-        resolution,
         position,
         angle,
         growth_rate_constant,
@@ -85,8 +39,9 @@ class SimCell(Cell):
         texture_y_coordinate = 0,
         simulation = None
     ):
+        
         """
-        Initialising a Simulation Cell
+        Initialising a cell
 
         For info about the Pymunk objects, see the API reference. http://www.pymunk.org/en/latest/pymunk.html Cell class has been tested and works with pymunk version 6.0.0
 
@@ -126,22 +81,17 @@ class SimCell(Cell):
             A unique identifier for each cell. At the moment just a number from 0 to 100_000_000 and cross fingers that we get no collisions. 
             
         """
-        
-        super().__init__(
-            length = length,
-            width = width,
-            resolution = resolution,
-        )
-
         self.growth_rate_constant = growth_rate_constant
+        self.length = length
         self.width_mean = width_mean
         self.width_var = width_var
+        self.width = width
+        self.resolution = resolution
         self.angle = angle
         self.position = position
         self.max_length = max_length
         self.max_length_mean = max_length_mean
         self.max_length_var = max_length_var
-
 
         self.generation = generation
         self.replicative_age = replicative_age
@@ -149,8 +99,10 @@ class SimCell(Cell):
         self.frame_age = frame_age
         self.simulation = simulation
         self.frame_position = self.simulation.frame_time
+
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
+        self.ID = np.random.randint(0,100_000_000) #TODO delete this (so bad)
         self.lysis_p = lysis_p
         self.mother = mother
         self.daughter = daughter
@@ -276,6 +228,7 @@ class SimCell(Cell):
         else:
             return False
 
+
     def update_length(self):
         """
         A method, typically called every timepoint to update the length of the cell according to ``self.length = self.length + self.growth_rate_constant*self.simulation.dt*self.length``.
@@ -316,6 +269,14 @@ class SimCell(Cell):
         """
         return self.body.angle
     
+    def calculate_vertex_list(self):
+        return cell_geometry.get_vertices(
+            self.length,
+            self.width,
+            0,#self.angle, 
+            self.resolution
+            )
+
     def get_vertex_list(self):
         """
         Calculates the vertex list (a set of x,y coordinates) which parameterise the outline of the cell
@@ -335,7 +296,7 @@ class SimCell(Cell):
     def get_centroid(self):
         """
         Calculates the centroid of the cell from the vertices.
-        x and y are in world coordinates
+
         Returns
         -------
         centroid : float
@@ -343,3 +304,5 @@ class SimCell(Cell):
         """
         vertices = self.get_vertex_list()
         return cell_geometry.centroid(vertices)
+
+    

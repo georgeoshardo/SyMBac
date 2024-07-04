@@ -33,9 +33,10 @@ class Lineage:
         for node in self.temporal_lineage_graph.nodes:
             cell = self.temporal_lineage_graph.nodes[node]["cell"]
             if cell.mother:
-                exp_node = (cell.mother.mask_label, node[1])
-                assert exp_node in self.temporal_lineage_graph.nodes
-                self.temporal_lineage_graph.add_edge(exp_node, node)
+                if cell.just_divided:
+                    exp_node = (cell.mother.mask_label, node[1])
+                    assert exp_node in self.temporal_lineage_graph.nodes
+                    self.temporal_lineage_graph.add_edge(exp_node, node)
 
     def plot_family_tree(self):
         pos = nx.nx_agraph.graphviz_layout(self.family_tree_graph, prog="twopi")
