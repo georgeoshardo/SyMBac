@@ -339,8 +339,6 @@ class SimCell(Cell):
                 resolution=self.resolution,
                 position=self.position,
                 angle=self.angle,
-                mother=self.mother,
-                daughter=self.daughter,
                 pinching_sep=self.pinching_sep,
                 generation=self.generation,
                 replicative_age=self.replicative_age,
@@ -371,8 +369,6 @@ class DrawCell(Cell):
         resolution,
         position,
         angle,
-        mother = None,
-        daughter = None,
         pinching_sep = None,
         generation = None,
         replicative_age = None,
@@ -393,8 +389,6 @@ class DrawCell(Cell):
         )
         self.angle = angle
         self.position = position
-        self.mother = mother
-        self.daughter = daughter
         self.pinching_sep = pinching_sep
         self.generation = generation
         self.replicative_age = replicative_age

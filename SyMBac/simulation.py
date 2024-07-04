@@ -16,7 +16,7 @@ from SyMBac.trench_geometry import trench_creator, get_trench_segments
 import logging
 from pathlib import Path
 from napari.utils.colormaps import label_colormap
-
+import pyglet
 # Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -293,8 +293,9 @@ class Simulation:
         if show_window:
             import pyglet
             from pyglet.math import Vec3, Mat4
-            self.camera_offset = Vec3(0, 0, 0)
-            self.zoom = 1.0
+            self.__camera_offset = Vec3(0, 0, 0)
+            self.__zoom = 1.0
+            self.__dragging = False
             window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
             window.view = window.view.from_translation(pyglet.math.Vec3(20, 20, 0))
             options = DrawOptions()
@@ -302,6 +303,9 @@ class Simulation:
             @window.event
             def on_draw():
                 window.clear()
+                translation = Mat4.from_translation(self.__camera_offset)
+                scaling = Mat4.from_scale(Vec3(self.__zoom, self.__zoom, 1.0))
+                window.view = translation @ scaling
                 self.space.debug_draw(options)
 
             # key press event
@@ -316,40 +320,61 @@ class Simulation:
             @window.event
             def on_key_press(symbol, modifiers):
                 if symbol == pyglet.window.key.LEFT:
-                    self.camera_offset += Vec3(10, 0, 0)
+                    self.__camera_offset += Vec3(10, 0, 0)
                 elif symbol == pyglet.window.key.RIGHT:
-                    self.camera_offset -= Vec3(10, 0, 0)
+                    self.__camera_offset -= Vec3(10, 0, 0)
                 elif symbol == pyglet.window.key.UP:
-                    self.camera_offset -= Vec3(0, 10, 0)
+                    self.__camera_offset -= Vec3(0, 10, 0)
                 elif symbol == pyglet.window.key.DOWN:
-                    self.camera_offset += Vec3(0, 10, 0)
+                    self.__camera_offset += Vec3(0, 10, 0)
                 elif symbol == pyglet.window.key.Z:
-                    self.zoom *= 1.1  # Zoom in
+                    self.__zoom *= 1.1  # Zoom in
                 elif symbol == pyglet.window.key.X:
-                    self.zoom /= 1.1  # Zoom out
+                    self.__zoom /= 1.1  # Zoom out
 
-                translation = Mat4.from_translation(self.camera_offset)
-                scaling = Mat4.from_scale(Vec3(self.zoom, self.zoom, 1.0))
-                window.view = translation @ scaling
-                
-                #window.view = window.view.from_translation(self.camera_offset)
+
+            
+            @window.event
+            def on_mouse_press(x, y, button, modifiers):
+                if button == pyglet.window.mouse.LEFT:
+                    self.__dragging = True
+                    self.__last_mouse_position = (x, y)
+
+            @window.event
+            def on_mouse_release(x, y, button, modifiers):
+                if button == pyglet.window.mouse.LEFT:
+                    self.__dragging = False
+
+            @window.event
+            def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
+                if self.__dragging:
+                    self.__camera_offset += Vec3(dx, dy, 0)
+                    self.__last_mouse_position = (x, y)
+
+            @window.event
+            def on_mouse_scroll(x, y, scroll_x, scroll_y):
+                zoom_factor = 1.1
+                if scroll_y > 0:
+                    self.__zoom *= zoom_factor  # Zoom in
+                elif scroll_y < 0:
+                    self.__zoom /= zoom_factor  # Zoom out
 
         x = [0]
         self.cell_timeseries = []
         self.cells = [cell1]
         self.historic_cells = [cell1] # A list of cells which will contain all cells ever in the simulation
         self.sim_progress = 0
+        self.progress_bar = tqdm(total=self.sim_length)
+
         if show_window:
             pyglet.clock.schedule_interval(self.step_and_update, interval = self.dt)
             pyglet.app.run()
         else:
-            if self.show_progress == "tqdm":
-                loop_iterator = tqdm(range(self.sim_length+2))
-            elif self.show_progress == "magicgui":
+            if self.show_progress == "magicgui":
                 loop_iterator = self.pbar(range(self.sim_length+2))
             else:
                 loop_iterator = range(self.sim_length+2)
-            for _ in loop_iterator:
+            for _ in range(self.sim_length+2):
                 self.step_and_update(self.dt)
                 if self.sim_callback:
                     self.sim_callback(self)
@@ -466,13 +491,15 @@ class Simulation:
             self.cell_timeseries.append([cell.draw_cell_factory() for cell in self.cells])
             #self.cell_timeseries.append()
             pass
-        if self.sim_progress == self.sim_length-1:
+        if self.sim_progress == self.sim_length:
             with open(self.save_dir+"/cell_timeseries.p", "wb") as f:
                 pickle.dump(self.cell_timeseries, f)
             with open(self.save_dir+"/space_timeseries.p", "wb") as f:
                 pickle.dump(self.space, f)
+            pyglet.app.exit()
             return self.cells
         self.sim_progress += 1
+        self.progress_bar.update(1)
         return self.cells
 
 def check_if_dividing(cell):
