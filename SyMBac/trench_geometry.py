@@ -8,26 +8,62 @@ def segment_creator(local_xy1, local_xy2,global_xy,thickness):
     segment_shape.friction = 0
     return segment_body, segment_shape
 
+
+def semi_circle(r,x):
+    return np.sqrt(r**2-x**2)
+
+def semi_circle_grad(r,x):
+    return -x/np.sqrt(r**2-x**2)
+
+def y_int(r,x):
+    return semi_circle_grad(r,x) * (-x) + semi_circle(r,x)
+
+def x_int(r, x):
+    return -semi_circle(r,x)/semi_circle_grad(r,x) + x
+
+def dx(r,x, distance):
+    return distance * np.cos(np.arctan(semi_circle_grad(r,x)))
+    
+def dy(r,x, distance):
+    return distance * np.sin(np.arctan(semi_circle_grad(r,x)))
+
+
 def trench_creator(size,trench_length, global_xy, space):
-    size = int(np.ceil(size/1.5))
+    r = size/2
+    xs = np.linspace(-r,r,50)
+    ys = -semi_circle(r, xs)
+
     segments = []
-    for x in range(size):
-        segment = segment_creator((x,0),(0,size-x),global_xy,1)
+    for x, y in zip(xs, ys):
+        x1 = x + dx(r,x,1) + r
+        y1 = y - dy(r,x,1)
+        x2 = x - dx(r,x,1) + r
+        y2 = y + dy(r,x,1)
+
+        segment = segment_creator((x1,y1),(x2,y2),global_xy,1)
         segments.append(segment)
 
-    for x in range(size):
-        segment = segment_creator((size-x,0),(size,size-x),(global_xy[0]+size/2, global_xy[1]),1)
-        segments.append(segment)
+
+    # size = int(np.ceil(size/1.5))
+    # segments = []
+    # for x in range(size):
+    #     segment = segment_creator((x,0),(0,size-x),global_xy,1)
+    #     segments.append(segment)
+
+    # for x in range(size):
+    #     segment = segment_creator((size-x,0),(size,size-x),(global_xy[0]+size/2, global_xy[1]),1)
+    #     segments.append(segment)
     for z in segments:
         for s in z:
             space.add(s)
 
     left_wall = segment_creator((0,0),(0,trench_length),global_xy,1)
-    right_wall = segment_creator((size,0),(size,trench_length),(global_xy[0]+size/2, global_xy[1]),1)
-    barrier_thickness = 10
+    right_wall = segment_creator((0,0),(0,trench_length),(global_xy[0]+size, global_xy[1]),1)
+    barrier_thickness = 100
     left_barrier = segment_creator((0,0),(0,trench_length),(global_xy[0]-barrier_thickness, global_xy[1]),barrier_thickness)
-    right_barrier = segment_creator((size,0),(size,trench_length),(global_xy[0]+size/2+barrier_thickness, global_xy[1]),barrier_thickness)
-    walls = [left_wall, right_wall, left_barrier, right_barrier]
+    right_barrier = segment_creator((0,0),(0,trench_length),(global_xy[0]+size+barrier_thickness, global_xy[1]),barrier_thickness)
+    #walls = [left_wall, right_wall, left_barrier, right_barrier]
+    walls = [left_barrier, right_barrier]
     for z in walls:
         for s in z:
             space.add(s)

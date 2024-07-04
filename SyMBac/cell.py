@@ -350,7 +350,9 @@ class SimCell(Cell):
                 mother_mask_label=self.mother_mask_label,
                 daughter_mask_label=self.daughter_mask_label,
                 texture_y_coordinate=self.texture_y_coordinate,
-                from_simulation=True
+                from_simulation=True,
+                vertex_list= self.get_vertex_list(),
+                centroid = self.get_centroid()
             )
             # Return the created DrawCell instance
             return draw_cell
@@ -380,7 +382,9 @@ class DrawCell(Cell):
         mother_mask_label = None,
         daughter_mask_label = None,
         texture_y_coordinate = None,
-        from_simulation = False
+        from_simulation = False,
+        vertex_list = None,
+        centroid = None
     ):
         super().__init__(
             length = length,
@@ -401,3 +405,5 @@ class DrawCell(Cell):
         self.daughter_mask_label = daughter_mask_label
         self.texture_y_coordinate = texture_y_coordinate
         self.from_simulation = from_simulation
+        self.vertex_list = vertex_list # In world coordinates
+        self.centroid = centroid # In world coordinates

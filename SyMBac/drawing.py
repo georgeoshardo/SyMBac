@@ -67,16 +67,17 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
 
     cell_properties = []
     for cell in cell_timeseries_lists:
-        body, shape = (cell.body, cell.shape)
-        vertices = []
-        for v in shape.get_vertices():
-            x, y = v.rotated(shape.body.angle) + shape.body.position  # .rotated(self.shape.body.angle)
-            vertices.append((x, y))
-        vertices = np.array(vertices)
+        # body, shape = (cell.body, cell.shape)
+        # vertices = []
+        # for v in cell.vertex_list:
+        #     x, y = v.rotated(cell.body.angle) + shape.body.position  # .rotated(self.shape.body.angle)
+        #     vertices.append((x, y))
+        # vertices = np.array(vertices)
 
-        centroid = get_centroid(vertices)
-        farthest_vertices = find_farthest_vertices(vertices)
-        length = get_distance(farthest_vertices[0], farthest_vertices[1])
+        # centroid = get_centroid(vertices)
+        # farthest_vertices = find_farthest_vertices(vertices)
+        # length = get_distance(farthest_vertices[0], farthest_vertices[1])
+        centroid = cell.centroid #new
         length = cell.length
         width = cell.width
         separation = cell.pinching_sep
@@ -597,3 +598,14 @@ def draw_simulation_OPL(simulation, do_transformation = True, label_masks = True
     masks = [_[1] for _ in scenes]
 
     return OPL_scenes, masks
+
+def visualise_OPL_in_napari(OPL_scenes, masks):
+    import napari
+    """
+    Opens a napari window allowing you to visualise the OPL (probably from the simulation), with both masks, OPL images, interactively.
+    :return:
+    """
+    
+    viewer = napari.view_image(np.array(OPL_scenes), name='OPL scenes')
+    viewer.add_labels(np.array(masks), name='Synthetic masks')
+    napari.run()

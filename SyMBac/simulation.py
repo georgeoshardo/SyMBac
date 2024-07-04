@@ -263,7 +263,8 @@ class Simulation:
 
         self.trench_length_for_sim = self.trench_length * scale_factor
         self.trench_width_for_sim = self.trench_width * scale_factor
-        trench_creator(self.trench_width_for_sim, self.trench_length_for_sim, (35, 0), self.space)  # Coordinates of bottom left corner of the trench
+        global_xy = (100,100)
+        trench_creator(self.trench_width_for_sim, self.trench_length_for_sim, global_xy, self.space)  # Coordinates of bottom left corner of the trench
 
         # Always set the N cells to 1 before adding a cell to the space, and set the mask_label
         self.space.historic_N_cells = 1
