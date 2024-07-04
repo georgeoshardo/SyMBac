@@ -35,10 +35,10 @@ def trench_creator(size,trench_length, global_xy, space):
 
     segments = []
     for x, y in zip(xs, ys):
-        x1 = x + dx(r,x,1) + r
-        y1 = y - dy(r,x,1)
-        x2 = x - dx(r,x,1) + r
-        y2 = y + dy(r,x,1)
+        x1 = x + dx(r,x,5) + r
+        y1 = y - dy(r,x,5)
+        x2 = x - dx(r,x,5) + r
+        y2 = y + dy(r,x,5)
 
         segment = segment_creator((x1,y1),(x2,y2),global_xy,1)
         segments.append(segment)
@@ -59,11 +59,10 @@ def trench_creator(size,trench_length, global_xy, space):
 
     left_wall = segment_creator((0,0),(0,trench_length),global_xy,1)
     right_wall = segment_creator((0,0),(0,trench_length),(global_xy[0]+size, global_xy[1]),1)
-    barrier_thickness = 100
+    barrier_thickness = 5
     left_barrier = segment_creator((0,0),(0,trench_length),(global_xy[0]-barrier_thickness, global_xy[1]),barrier_thickness)
     right_barrier = segment_creator((0,0),(0,trench_length),(global_xy[0]+size+barrier_thickness, global_xy[1]),barrier_thickness)
-    #walls = [left_wall, right_wall, left_barrier, right_barrier]
-    walls = [left_barrier, right_barrier]
+    walls = [left_wall, right_wall, left_barrier, right_barrier]
     for z in walls:
         for s in z:
             space.add(s)

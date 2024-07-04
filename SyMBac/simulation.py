@@ -10,12 +10,12 @@ from tqdm.auto import tqdm
 from SyMBac.cell import Cell, SimCell
 from pymunk.pyglet_util import DrawOptions
 import pymunk
-import pyglet
 from scipy.stats import norm
 from copy import deepcopy, copy
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 import logging
 from pathlib import Path
+from napari.utils.colormaps import label_colormap
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -263,7 +263,7 @@ class Simulation:
 
         self.trench_length_for_sim = self.trench_length * scale_factor
         self.trench_width_for_sim = self.trench_width * scale_factor
-        global_xy = (100,100)
+        global_xy = (0 ,0)
         trench_creator(self.trench_width_for_sim, self.trench_length_for_sim, global_xy, self.space)  # Coordinates of bottom left corner of the trench
 
         # Always set the N cells to 1 before adding a cell to the space, and set the mask_label
@@ -271,9 +271,9 @@ class Simulation:
         cell1 = SimCell(
             length=self.cell_max_length*0.5 * scale_factor,
             width=self.cell_width * scale_factor,
-            resolution=60,
-            position=(40, 100),
-            angle=0.8,
+            resolution=20,
+            position=(self.trench_width_for_sim/2,self.cell_max_length),
+            angle=np.pi/2,
             growth_rate_constant=1,
             max_length=self.cell_max_length * scale_factor,
             max_length_mean=self.cell_max_length * scale_factor,
@@ -289,10 +289,14 @@ class Simulation:
             frame_age=0,
             simulation = self
         )
-
+        
         if show_window:
-
+            import pyglet
+            from pyglet.math import Vec3, Mat4
+            self.camera_offset = Vec3(0, 0, 0)
+            self.zoom = 1.0
             window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
+            window.view = window.view.from_translation(pyglet.math.Vec3(20, 20, 0))
             options = DrawOptions()
             options.shape_outline_color = (10,20,30,40)
             @window.event
@@ -308,6 +312,27 @@ class Simulation:
                 if symbol == pyglet.window.key.E:
                     # close the window
                     window.close()
+            
+            @window.event
+            def on_key_press(symbol, modifiers):
+                if symbol == pyglet.window.key.LEFT:
+                    self.camera_offset += Vec3(10, 0, 0)
+                elif symbol == pyglet.window.key.RIGHT:
+                    self.camera_offset -= Vec3(10, 0, 0)
+                elif symbol == pyglet.window.key.UP:
+                    self.camera_offset -= Vec3(0, 10, 0)
+                elif symbol == pyglet.window.key.DOWN:
+                    self.camera_offset += Vec3(0, 10, 0)
+                elif symbol == pyglet.window.key.Z:
+                    self.zoom *= 1.1  # Zoom in
+                elif symbol == pyglet.window.key.X:
+                    self.zoom /= 1.1  # Zoom out
+
+                translation = Mat4.from_translation(self.camera_offset)
+                scaling = Mat4.from_scale(Vec3(self.zoom, self.zoom, 1.0))
+                window.view = translation @ scaling
+                
+                #window.view = window.view.from_translation(self.camera_offset)
 
         x = [0]
         self.cell_timeseries = []
@@ -343,6 +368,8 @@ class Simulation:
         self.space.threads = 2
 
     def cell_adder(self, cell):
+        cmap = (label_colormap(100).colors * 255).astype(int)
+        cell.shape.color = cmap[cell.mask_label % len(cmap)]
         self.space.add(cell.body, cell.shape)
 
     def update_pm_cells(self):
@@ -444,7 +471,6 @@ class Simulation:
                 pickle.dump(self.cell_timeseries, f)
             with open(self.save_dir+"/space_timeseries.p", "wb") as f:
                 pickle.dump(self.space, f)
-            pyglet.app.exit()
             return self.cells
         self.sim_progress += 1
         return self.cells
