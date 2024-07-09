@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SyMBac"
+version = "0.5.0" 
+authors = [
+    {name = "Georgeos Hardo", email = "gh464@cam.ac.uk"},
+]
+description = "A package for generating synthetic images of bacteria in phase contrast or fluorescence. Used for creating training data for machine learning segmentation and tracking algorithms."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "GPL-2.0"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",  
+    "Operating System :: POSIX :: Linux", 
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering"
+]
+dependencies = [
+    "tifffile",
+    "scikit-image",
+    "matplotlib",
+    "tqdm",
+    "pandas",
+    "natsort",
+    "jupyterlab",
+    "ipywidgets",
+    "joblib",
+    "scipy",
+    "napari[all]",
+    "pymunk",
+    "pyglet",
+    "matplotlib-scalebar",
+    "psfmodels",
+    "pandoc",
+    "zarr",
+    "numpy",
+    "noise"
+]
+
+[project.optional-dependencies]
+gpu = [
+    "torch",
+    "torchvision",
+    "torchaudio"
+]
+
+dev = [
+    "pytest",
+    "flake8",
+    "black",
+    "isort",
+    "mypy",
+    "sphinx_automodapi",
+    "sphinx-autobuild",
+    "nbsphinx",
+    "sphinx_copybutton",
+    "sphinx_rtd_theme"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"symbac" = ["sample_images/*.tiff"]
+
+[project.urls]
+"Homepage" = "https://github.com/georgeoshardo/SyMBac"
+"Documentation" = "https://symbac.readthedocs.io/en/latest/"
