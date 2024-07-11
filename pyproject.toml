@@ -10,7 +10,7 @@ authors = [
 ]
 description = "A package for generating synthetic images of bacteria in phase contrast or fluorescence. Used for creating training data for machine learning segmentation and tracking algorithms."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "GPL-2.0"}
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -51,11 +51,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "flake8",
     "black",
     "isort",
     "pre-commit",
-    "pip-tools"
+    "pip-tools",
+    "ipytest"
 ]
 
 [tool.setuptools.packages.find]
@@ -69,8 +69,8 @@ where = ["src"]
 "Documentation" = "https://symbac.readthedocs.io/en/latest/"
 
 [tool.black]
-line-length = 100
-target-version = ['py38']
+line-length = 128
+target-version = ['py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(

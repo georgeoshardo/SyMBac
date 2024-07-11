@@ -1,6 +1,7 @@
 import logging
 import os
 import pickle
+import random
 import warnings
 from copy import copy, deepcopy
 from pathlib import Path
@@ -83,8 +84,10 @@ class Simulation:
         load_sim_dir=None,
         sim_callback=None,
         show_progress="tqdm",
+        random_seed=42,
     ):
-
+        random.seed(random_seed)
+        np.random.seed(random_seed)
         logger.info("Initializing Simulation object")
 
         """
@@ -143,6 +146,7 @@ class Simulation:
         self.show_progress = show_progress
         self.chronological_time = 0
         self.frame_time = 0
+
         try:
             Path(save_dir).mkdir(parents=True, exist_ok=True)
         except:
@@ -201,20 +205,14 @@ class Simulation:
 
         self.cell_timeseries_properties = Parallel(n_jobs=-1)(
             delayed(gen_cell_props_for_draw)(a, ID_props)
-            for a in tqdm(
-                self.cell_timeseries, desc="Extracting cell properties from the simulation"
-            )
+            for a in tqdm(self.cell_timeseries, desc="Extracting cell properties from the simulation")
         )
 
         space_size = get_space_size(self.cell_timeseries_properties)
 
         scenes = Parallel(n_jobs=-1)(
-            delayed(draw_scene)(
-                cell_properties, do_transformation, space_size, self.offset, label_masks
-            )
-            for cell_properties in tqdm(
-                self.cell_timeseries_properties, desc="Rendering cell optical path lengths"
-            )
+            delayed(draw_scene)(cell_properties, do_transformation, space_size, self.offset, label_masks)
+            for cell_properties in tqdm(self.cell_timeseries_properties, desc="Rendering cell optical path lengths")
         )
         self.OPL_scenes = [_[0] for _ in scenes]
         self.masks = [_[1] for _ in scenes]
@@ -289,12 +287,11 @@ class Simulation:
         self.pix_mic_conv_for_sim = 1 / self.pix_mic_conv  # micron per pixel
         scale_factor = self.pix_mic_conv_for_sim * self.resize_amount  # resolution scaling factor
 
-        self.trench_length_for_sim = self.trench_length * scale_factor
         self.trench_width_for_sim = self.trench_width * scale_factor
-        global_xy = (0, 0)
-        trench_creator(
-            self.trench_width_for_sim, self.trench_length_for_sim, global_xy, self.space
-        )  # Coordinates of bottom left corner of the trench
+        self.trench_length_for_sim = self.trench_length * scale_factor - self.trench_width_for_sim / 2
+
+        global_xy = (-self.trench_width_for_sim / 2, self.trench_width_for_sim / 2)
+        trench_creator(self.trench_width_for_sim, self.trench_length_for_sim, global_xy, self.space)
 
         # Always set the N cells to 1 before adding a cell to the space, and set the mask_label
         self.space.historic_N_cells = 1
@@ -302,7 +299,7 @@ class Simulation:
             length=self.cell_max_length * 0.5 * scale_factor,
             width=self.cell_width * scale_factor,
             resolution=20,
-            position=(self.trench_width_for_sim / 2, self.cell_max_length),
+            position=(0, self.cell_max_length * scale_factor / 2),
             angle=np.pi / 2,
             growth_rate_constant=1,
             max_length=self.cell_max_length * scale_factor,
@@ -319,16 +316,23 @@ class Simulation:
             frame_age=0,
             simulation=self,
         )
-
+        # for x in range(100):
+        #    self.space.step(1/100)
         if show_window:
             import pyglet
             from pyglet.math import Mat4, Vec3
 
-            self.__camera_offset = Vec3(0, 0, 0)
-            self.__zoom = 1.0
+            window_height = 1000  # px
+            self.__zoom = window_height / (self.trench_length_for_sim + self.trench_width_for_sim)
+            self.__camera_offset = Vec3(700 / 2, 0, 0)
             self.__dragging = False
-            window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
-            window.view = window.view.from_translation(pyglet.math.Vec3(20, 20, 0))
+            window = pyglet.window.Window(
+                width=700,
+                height=1000,
+                caption="SyMBac",
+                resizable=True,
+            )
+            # window.view = window.view.from_translation(pyglet.math.Vec3(0, 0, 0))
             options = DrawOptions()
             options.shape_outline_color = (10, 20, 30, 40)
 
@@ -339,15 +343,6 @@ class Simulation:
                 scaling = Mat4.from_scale(Vec3(self.__zoom, self.__zoom, 1.0))
                 window.view = translation @ scaling
                 self.space.debug_draw(options)
-
-            # key press event
-            @window.event
-            def on_key_press(symbol, modifier):
-
-                # key "E" get press
-                if symbol == pyglet.window.key.E:
-                    # close the window
-                    window.close()
 
             @window.event
             def on_key_press(symbol, modifiers):
@@ -392,9 +387,7 @@ class Simulation:
         x = [0]
         self.cell_timeseries = []
         self.cells = [cell1]
-        self.historic_cells = [
-            cell1
-        ]  # A list of cells which will contain all cells ever in the simulation
+        self.historic_cells = [cell1]  # A list of cells which will contain all cells ever in the simulation
         self.sim_progress = 0
         self.progress_bar = tqdm(total=self.sim_length)
 
@@ -489,8 +482,8 @@ class Simulation:
         cells : list(SyMBac.cell.Cell)
 
         """
-        self.chronological_time += dt
-        self.frame_time += 1
+        print(self.sim_progress)
+
         for shape in self.space.shapes:
             if shape.body.position.y < 0 or shape.body.position.y > self.trench_length_for_sim:
                 self.space.remove(shape.body, shape)
@@ -498,16 +491,11 @@ class Simulation:
 
         for cell in self.cells:
             self.historic_cells.append(cell)
-            if (
-                cell.shape.body.position.y < 0
-                or cell.shape.body.position.y > self.trench_length_for_sim
-            ):
+            if cell.shape.body.position.y < 0 or cell.shape.body.position.y > self.trench_length_for_sim:
                 cell.dead = True
                 self.cells.remove(cell)
                 self.space.step(self.dt)
-            elif (
-                norm.rvs() <= norm.ppf(cell.lysis_p) and len(self.cells) > 1
-            ):  # in case all cells disappear
+            elif norm.rvs() <= norm.ppf(cell.lysis_p) and len(self.cells) > 1:  # in case all cells disappear
                 cell.dead = True
                 self.cells.remove(cell)
                 self.space.step(self.dt)
@@ -522,18 +510,19 @@ class Simulation:
         self.update_cell_positions()
 
         if self.sim_progress > 1:
-            # self.cell_timeseries.append(deepcopy(self.cells)) # This is slowing everything down
             self.cell_timeseries.append([cell.draw_cell_factory() for cell in self.cells])
-            # self.cell_timeseries.append()
-            pass
+
         if self.sim_progress == self.sim_length:
             with open(self.save_dir + "/cell_timeseries.p", "wb") as f:
                 pickle.dump(self.cell_timeseries, f)
             with open(self.save_dir + "/space_timeseries.p", "wb") as f:
                 pickle.dump(self.space, f)
             pyglet.app.exit()
+            print("Closed pyglet")
             return self.cells
         self.sim_progress += 1
+        self.chronological_time += dt
+        self.frame_time += 1
         self.progress_bar.update(1)
         return self.cells
 

@@ -3,7 +3,7 @@
 # Create and activate a new Conda environment
 conda create -n symbac_development python=3.12 -y
 conda activate symbac_development
-
+conda install -c conda-forge libstdcxx-ng -y
 # Install the package in editable mode with development dependencies
 pip install -e ".[dev]"
 

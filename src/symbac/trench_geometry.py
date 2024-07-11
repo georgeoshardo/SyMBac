@@ -65,7 +65,7 @@ def trench_creator(size, trench_length, global_xy, space):
 
     left_wall = segment_creator((0, 0), (0, trench_length), global_xy, 1)
     right_wall = segment_creator((0, 0), (0, trench_length), (global_xy[0] + size, global_xy[1]), 1)
-    barrier_thickness = 5
+    barrier_thickness = 1
     left_barrier = segment_creator(
         (0, 0),
         (0, trench_length),
