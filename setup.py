@@ -22,7 +22,7 @@ setup(
         "tqdm",
         "pandas",
         "natsort",
-        "jupyterlab",
+        "ipython",
         "ipywidgets",
         "joblib",
         "scipy",
