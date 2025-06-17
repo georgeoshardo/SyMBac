@@ -142,7 +142,7 @@ class Cell:
             # Keep growth perfectly straight
             offset = Vec2d(self.joint_distance, 0).rotated(prev_body.angle)
             body.position = prev_body.position + offset
-
+            body.angle = prev_body.angle
             # Add tiny random positional noise to break determinism
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
@@ -237,6 +237,7 @@ class Cell:
             )
             new_tail_body.position = old_tail_body.position + new_tail_offset
             new_tail_body.angle = old_tail_body.angle
+
             # NEW: Add tiny random positional noise to the new segment
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
@@ -271,14 +272,6 @@ class Cell:
 
             self.growth_accumulator = 0.0
             self._update_colors()
-
-        # In cell.py, replace the old divide method with this one
-
-        # In cell.py, replace the divide method with this corrected version
-
-        # In cell.py, replace the entire divide method with this one
-
-        # In cell.py, replace the entire divide method
 
     def divide(self, next_group_id: int, dt: float) -> Optional['Cell']:
         """
