@@ -1,7 +1,7 @@
 import pygame
 import pymunk.pygame_util
-from pymunk.vec2d import Vec2d
-from symbac.simulation.cell import Cell, generate_color
+from symbac.simulation.cell import Cell
+
 
 """
 Initializes Pygame and Pymunk and runs the main simulation loop.
@@ -15,7 +15,7 @@ space = pymunk.Space(threaded=True)
 space.threads = 2
 
 
-def setup_spatial_hash(space, colony):
+def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     """Setup spatial hash with estimated parameters"""
     dim, count = estimate_spatial_hash_params(colony)
     space.use_spatial_hash(dim, count)
@@ -23,7 +23,7 @@ def setup_spatial_hash(space, colony):
     return dim, count
 
 
-def estimate_spatial_hash_params(colony):
+def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
     """Estimate good spatial hash parameters for current colony size"""
     if not colony:
         return 36.0, 1000
@@ -51,6 +51,9 @@ zoom_level = 1.0
 camera_x, camera_y = 0, 0
 min_zoom = 0.1
 max_zoom = 5.0
+
+# NEW: Pause state
+is_paused = False
 
 # Create a virtual surface for drawing
 virtual_surface = pygame.Surface((screen_width, screen_height))
@@ -81,8 +84,9 @@ mouse_joint = None
 
 clock = pygame.time.Clock()
 running = True
+show_joints = True
 
-simulation_speed_multiplier = 2
+simulation_speed_multiplier = 10
 
 while running:
     for event in pygame.event.get():
@@ -116,20 +120,24 @@ while running:
                 zoom_level = 1.0
                 camera_x, camera_y = 0, 0
             elif event.key == pygame.K_j:  # NEW: Toggle joint visibility
-                if hasattr(draw_options, 'show_joints'):
-                    draw_options.show_joints = not draw_options.show_joints
+                show_joints = not show_joints
+                print(draw_options.flags, pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS)
+            elif event.key == pygame.K_p:  # NEW: Toggle pause
+                is_paused = not is_paused
+                print(f"Simulation {'paused' if is_paused else 'resumed'}")
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             # NEW: Convert mouse position to world coordinates
             mouse_x, mouse_y = event.pos
             world_x = (mouse_x - screen_width / 2) / zoom_level + camera_x
             world_y = (mouse_y - screen_height / 2) / zoom_level + camera_y
-            pos = Vec2d(world_x, world_y)
+            pos = (world_x, world_y)
 
             hit = space.point_query_nearest(pos, 5 / zoom_level, pymunk.ShapeFilter())
             if hit is not None and hit.shape.body.body_type == pymunk.Body.DYNAMIC:
                 shape = hit.shape
                 rest_point = shape.body.world_to_local(pos)
+                rest_point = (rest_point[0], rest_point[1])
                 mouse_joint = pymunk.PivotJoint(
                     mouse_body, shape.body, (0, 0), rest_point
                 )
@@ -149,42 +157,43 @@ while running:
 
     dt = 1.0 / 60.0
 
+    # NEW: Only run simulation if not paused
+    if not is_paused:
+        for _ in range(simulation_speed_multiplier):
+            newly_born_worms_map = {}
 
-    for _ in range(simulation_speed_multiplier):
-        newly_born_worms_map = {}
+            for worm in colony[:]:
+                worm.apply_noise(dt)
+                worm.grow(dt)
+                new_worm = worm.divide(next_group_id, dt)  # Pass dt here
+                if new_worm:
+                    newly_born_worms_map[new_worm] = worm
+                    next_group_id += 1
 
-        for worm in colony[:]:
-            worm.apply_noise(dt)
-            worm.grow(dt)
-            new_worm = worm.divide(next_group_id, dt)  # Pass dt here
-            if new_worm:
-                newly_born_worms_map[new_worm] = worm
-                next_group_id += 1
+            if newly_born_worms_map:
+                counter = 0
+                for daughter, mother in newly_born_worms_map.items():
+                    while True:
+                        overlap_found = False
+                        for daughter_shape in daughter.shapes:
+                            query_result = space.shape_query(daughter_shape)
 
-        if newly_born_worms_map:
-            counter = 0
-            for daughter, mother in newly_born_worms_map.items():
-                while True:
-                    overlap_found = False
-                    for daughter_shape in daughter.shapes:
-                        query_result = space.shape_query(daughter_shape)
-
-                        for info in query_result:
-                            if info.shape in mother.shapes:
-                                mother.remove_tail_segment()
-                                overlap_found = True
+                            for info in query_result:
+                                if info.shape in mother.shapes:
+                                    mother.remove_tail_segment()
+                                    overlap_found = True
+                                    break
+                            if overlap_found:
                                 break
-                        if overlap_found:
+
+                        if not overlap_found:
+                            break
+                        counter += 1
+                        if counter > 100:
                             break
 
-                    if not overlap_found:
-                        break
-                    counter += 1
-                    if counter > 100:
-                        break
-
-        colony.extend(newly_born_worms_map.keys())
-        space.step(dt)
+            colony.extend(newly_born_worms_map.keys())
+            space.step(dt)
 
     # NEW: Apply camera transform to draw options
     draw_options.transform = pymunk.Transform(
@@ -193,14 +202,11 @@ while running:
         ty=screen_height / 2 - camera_y * zoom_level
     )
 
-    # NEW: Hide joints when zoomed out, show when zoomed in
-    if zoom_level < 0.8:  # Hide joints when zoomed out
-        draw_options.flags = pymunk.pygame_util.DrawOptions.DRAW_SHAPES
-    else:  # Show joints when zoomed in enough
-        draw_options.flags = (
-                pymunk.pygame_util.DrawOptions.DRAW_SHAPES |
-                pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS
-        )
+    draw_options.flags = pymunk.pygame_util.DrawOptions.DRAW_SHAPES
+    if show_joints and zoom_level >= 0.8:
+        draw_options.flags |= pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS
+
+
 
     # Clear both surfaces
     screen.fill((20, 30, 40))
@@ -212,24 +218,29 @@ while running:
     # Blit virtual surface to main screen
     screen.blit(virtual_surface, (0, 0))
 
-    # NEW: Display zoom level and controls
+    # NEW: Display zoom level, pause status, and controls
     font = pygame.font.Font(None, 36)
     zoom_text = font.render(f"Zoom: {zoom_level:.2f}x", True, (255, 255, 255))
-    help_text = font.render("Mouse wheel: Zoom, R: Reset, J: Toggle joints", True, (255, 255, 255))
+    # NEW: Show pause status
+    pause_text = font.render(f"{'PAUSED' if is_paused else 'Running'}", True, (255, 255, 0) if is_paused else (0, 255, 0))
+    help_text = font.render("Mouse wheel: Zoom, R: Reset, J: Toggle joints, P: Pause", True, (255, 255, 255))
     screen.blit(zoom_text, (10, 10))
-    screen.blit(help_text, (10, 50))
+    screen.blit(pause_text, (10, 50))
+    screen.blit(help_text, (10, 90))
 
     pygame.display.flip()
     clock.tick(60)
 
-    frame_count += 1
+    # NEW: Only increment frame counter and update spatial hash if not paused
+    if not is_paused:
+        frame_count += 1
 
-    # Update spatial hash every 60 frames (1 second) if colony grew significantly
-    if frame_count % 60 == 0:
-        current_segment_count = sum(len(worm.bodies) for worm in colony)
-        if current_segment_count > last_segment_count * 1.5:  # 50% growth
-            dim, count = estimate_spatial_hash_params(colony)
-            space.use_spatial_hash(dim, count)
-            last_segment_count = current_segment_count
+        # Update spatial hash every 60 frames (1 second) if colony grew significantly
+        if frame_count % 60 == 0:
+            current_segment_count = sum(len(worm.bodies) for worm in colony)
+            if current_segment_count > last_segment_count * 1.5:  # 50% growth
+                dim, count = estimate_spatial_hash_params(colony)
+                space.use_spatial_hash(dim, count)
+                last_segment_count = current_segment_count
 
 pygame.quit()

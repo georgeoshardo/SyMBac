@@ -63,16 +63,10 @@ class Cell:
             TODO: use for lineage tracking, give daughter the mother ID
         growth_rate : float, optional
             The rate at which the cell grows over time.
-        _max_length : int, optional
-            The maximum allowable length of the cell in terms of the number of segments.
         min_length_after_division : int, optional
             The minimal length the cell must have after it undergoes division. Defaults to 10.
         max_length_variation : float, optional
             The percentage variation allowed in determining the maximum length of the cell.
-        base_color : tuple[int, int, int], optional
-            The base color of the cell when displayed in Pygame, specified as an RGB tuple. If None, a color is
-            generated based on the group_id.
-            TODO: switch to Pyglet
         noise_strength : float, optional
             The strength of random noisy forces added to modulate the cell's dynamics.
         base_max_length : int, optional
@@ -86,7 +80,7 @@ class Cell:
         self.segment_radius = segment_radius
         self.segment_mass = segment_mass
         self.growth_rate = growth_rate
-        self.max_bend_angle = 0.005  # 0.01 normally
+        self.max_bend_angle = 0.005  # 0.01 normally, 0.05 also good for E. coli in MM
         self.noise_strength = noise_strength
 
         self.group_id = group_id
@@ -113,7 +107,7 @@ class Cell:
         self.growth_accumulator = 0.0
         self.growth_threshold = self.segment_radius / 3
         self.joint_distance = self.segment_radius / 4
-        self.joint_max_force = 30000 # Increase this a lot to make cells rigid, and reduce the max bend angle to 0 (may cause instability)
+        self.joint_max_force = 300000 # Increase this a lot to make cells rigid, and reduce the max bend angle to 0 (may cause instability)
 
         # --- TODO: ADD/MODIFY THESE ATTRIBUTES, make them controllable? ---
         self.is_dividing = False
@@ -242,7 +236,7 @@ class Cell:
                 old_tail_body.angle
             )
             new_tail_body.position = old_tail_body.position + new_tail_offset
-
+            new_tail_body.angle = old_tail_body.angle
             # NEW: Add tiny random positional noise to the new segment
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
@@ -382,8 +376,27 @@ class Cell:
 
     def _split_cell(self, next_group_id: int) -> Optional['Cell']:
         """
-        Draws the septum and, when ready, performs a symmetric separation.
-        Accounts for growth during division and applies division bias.
+        Splits the current cell into two distinct cells if septum formation is complete.
+
+        This method manages the process of cell division by simulating the formation and
+        pinching of the septum, which determines the separation boundary of the two cells.
+        It modifies the shapes and other attributes of the current cell to accommodate
+        the progression of division. Once the septum is fully formed, the cell is split
+        into a mother cell and a daughter cell. The daughter cell inherits certain
+        attributes and state from the mother cell. Cell division is symmetric with the
+        possibility of a bias applied to distribute extra segments between mother and
+        daughter cells.
+
+        Parameters
+        ----------
+        next_group_id : int
+            The group ID to assign to the newly created daughter cell.
+
+        Returns
+        -------
+        Optional[Cell]
+            The daughter cell created after the split, if division is complete.
+            Returns `None` if division has not yet completed its process.
         """
         progress = min(1.0, self.septum_progress)
 
@@ -481,11 +494,25 @@ class Cell:
 
         return daughter_cell
 
-    def _recreate_shape(self, shape_to_replace, new_radius):
+    def _recreate_shape(self, shape_to_replace: pymunk.Circle, new_radius: float) -> pymunk.Circle:
         """
-        Removes a shape, creates a new one with a new radius attached to the
-        same body, and adds it back to the space. Preserves properties.
-        Returns the new shape.
+        Recreates a shape by replacing it with a new shape of a different radius,
+        while maintaining the original shape's properties, such as friction, filter,
+        and color. The old shape is removed from the space, and a new one is added.
+
+        Parameters
+        ----------
+        shape_to_replace : pymunk.Circle
+            The original shape to be replaced. Its friction, filter, and color
+            properties will be transferred to the newly created shape.
+        new_radius : float
+            The radius of the new shape that will replace the old shape.
+
+        Returns
+        -------
+        pymunk.Circle
+            The newly created shape with the provided radius, added to the space, and
+            retaining the original shape's properties.
         """
         body = shape_to_replace.body
 
