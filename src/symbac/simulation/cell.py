@@ -3,23 +3,7 @@ import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
-
-def generate_color(group_id) -> tuple[int, int, int]:
-    """
-    Generate a unique color based on group_id using HSV color space
-    for better visual distinction between cells.
-    """
-    import colorsys
-
-    # Use golden ratio for better color distribution
-    golden_ratio = 0.618033988749895
-    hue = (group_id * golden_ratio) % 1.0
-    saturation = 0.7 + (group_id % 3) * 0.1  # Vary saturation slightly
-    value = 0.8 + (group_id % 2) * 0.2  # Vary brightness slightly
-
-    rgb: tuple[float, float, float] = colorsys.hsv_to_rgb(hue, saturation, value)
-    return int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
-
+from symbac.misc import generate_color
 
 #Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
@@ -30,10 +14,8 @@ class Cell:
     segment_mass: float
     group_id: int
     growth_rate: float
-    max_length: int
     min_length_after_division: int
     max_length_variation: float
-    base_color: Optional[tuple[int, int, int]]
     base_max_length: Optional[int]
     _from_division: Optional[bool]
 
@@ -41,6 +23,9 @@ class Cell:
     base_min_length_after_division: int
     base_max_length_variation: float
     noise_strength: float
+    _max_length: int
+    base_color: tuple[int, int, int]
+
 
     def __init__(
             self,
@@ -51,15 +36,51 @@ class Cell:
             segment_mass: float,
             group_id: int = 0,
             growth_rate: float = 5.0,
-            max_length: int = 40,
             min_length_after_division: int = 10,
             max_length_variation: float = 0.2,
-            base_color: Optional[tuple[int, int, int]] = None,
             noise_strength: float = 0.05,
-            base_max_length: Optional[int] = None,
+            base_max_length: int = 40,
             _from_division: bool = False
     ) -> None:
+        """
+        Initialize a segmented (bendy) cell instance.
 
+        Parameters
+        ----------
+        space : pymunk.Space
+            The simulation space where the cell exists and interacts with other
+            physical entities.
+        start_pos : tuple[float, float]
+            The starting position (x, y) for creating the first segment of the cell.
+        num_segments : int
+            The initial number of segments to create for this cell.
+        segment_radius : float
+            The radius of each segment in the cell.
+        segment_mass : float
+            The mass of each segment in the cell.
+        group_id : int, optional
+            A unique identifier for grouping or categorizing the segments in cell.
+            TODO: use for lineage tracking, give daughter the mother ID
+        growth_rate : float, optional
+            The rate at which the cell grows over time.
+        _max_length : int, optional
+            The maximum allowable length of the cell in terms of the number of segments.
+        min_length_after_division : int, optional
+            The minimal length the cell must have after it undergoes division. Defaults to 10.
+        max_length_variation : float, optional
+            The percentage variation allowed in determining the maximum length of the cell.
+        base_color : tuple[int, int, int], optional
+            The base color of the cell when displayed in Pygame, specified as an RGB tuple. If None, a color is
+            generated based on the group_id.
+            TODO: switch to Pyglet
+        noise_strength : float, optional
+            The strength of random noisy forces added to modulate the cell's dynamics.
+        base_max_length : int, optional
+            An optional base value for calculating the randomised maximum length. If not
+            provided, the value of max_length is used.
+        _from_division : bool, optional
+            Indicates whether the cell is being created as a result of division.
+        """
         self.space = space
         self.start_pos = start_pos
         self.segment_radius = segment_radius
@@ -69,17 +90,17 @@ class Cell:
         self.noise_strength = noise_strength
 
         self.group_id = group_id
-        self.base_color = base_color if base_color else generate_color(group_id)
+        self.base_color = generate_color(group_id)
 
-        # NEW: Store the original base max_length for consistent inheritance
-        self.base_max_length = base_max_length if base_max_length is not None else max_length
+        # Store the original base max_length for consistent inheritance
+        self.base_max_length = base_max_length
 
-        # Always randomize from the original base, not the parent's randomized value
+        # Always randomise from the original base, not the parent's randomised value
         variation = self.base_max_length * max_length_variation
         random_max_len = np.random.uniform(
             self.base_max_length - variation, self.base_max_length + variation
         )
-        self.max_length = max(min_length_after_division * 2, int(random_max_len))
+        self._max_length = max(min_length_after_division * 2, int(random_max_len))
 
         self.min_length_after_division = min_length_after_division
         self.max_length_variation = max_length_variation
@@ -93,6 +114,16 @@ class Cell:
         self.growth_threshold = self.segment_radius / 3
         self.joint_distance = self.segment_radius / 4
         self.joint_max_force = 30000
+
+        # --- ADD THESE NEW ATTRIBUTES ---
+        self.is_dividing = False
+        self.septum_progress = 0.0
+        self.septum_duration = 1.5  # Duration of septum formation in seconds
+        self.division_site = None
+        self.num_septum_segments = 4  # HOW MANY segments on each side form the septum
+        self.min_septum_radius = 0.1  # HOW SMALL the center of the septum gets
+        # --- END OF NEW ATTRIBUTES ---
+
 
         if not _from_division:
             for i in range(num_segments):
@@ -165,14 +196,20 @@ class Cell:
     def grow(self, dt):
         """
         Grows the cell by extending the last segment until a new one can be added.
+        Growth continues during division.
         """
-        if len(self.bodies) >= self.max_length or len(self.bodies) < 2:
+        # Allow growth to continue if the cell is dividing, otherwise stop at max length
+        if not self.is_dividing and len(self.bodies) >= self._max_length:
+            return
+
+        if len(self.bodies) < 2:
             return
 
         # User change: randomized growth
         self.growth_accumulator += (
                 self.growth_rate * dt * np.random.uniform(0, 4)
         )
+
         last_pivot_joint = self.joints[-2]
         original_anchor_x = -self.joint_distance / 2
         last_pivot_joint.anchor_b = (
@@ -238,59 +275,91 @@ class Cell:
             self.growth_accumulator = 0.0
             self._update_colors()
 
-    def divide(self, next_group_id: int) -> Optional['Cell']:
+        # In cell.py, replace the old divide method with this one
 
+        # In cell.py, replace the divide method with this corrected version
+
+        # In cell.py, replace the entire divide method with this one
+
+    def divide(self, next_group_id: int, dt: float) -> Optional['Cell']:
         """
-            If the cell is at max_length, it splits by transplanting its second
-            half into a new Cell object, preserving orientation.
-            """
-        if len(self.bodies) < self.max_length:
+        Manages division with a multi-segment, tapered septum formation.
+        """
+        # 1. INITIATE DIVISION
+        if not self.is_dividing:
+            if len(self.bodies) < self._max_length:
+                return None
+
+            split_index = len(self.bodies) // 2
+            if split_index < self.min_length_after_division or \
+                    (len(self.bodies) - split_index) < self.min_length_after_division:
+                return None
+
+            self.is_dividing = True
+            self.septum_progress = 0.0
+            self.division_site = split_index
             return None
 
-        split_index = len(self.bodies) // 2
-        if split_index < self.min_length_after_division or (
-                len(self.bodies) - split_index
-        ) < self.min_length_after_division:
-            return None
+        # 2. CONTINUE AND UPDATE TAPERED SEPTUM
+        if self.is_dividing:
+            self.septum_progress += dt / self.septum_duration
+            progress = min(1.0, self.septum_progress)
 
-        # Create daughter cell - pass the BASE max_length, not this cell's randomized one
-        daughter_cell = Cell(
-            self.space,
-            self.bodies[split_index].position,
-            0,
-            self.segment_radius,
-            self.segment_mass,
-            next_group_id,
-            self.growth_rate,
-            self.base_max_length,  # FIXED: Pass the original base length
-            self.min_length_after_division,
-            self.max_length_variation,
-            base_color=generate_color(next_group_id),
-            noise_strength=self.noise_strength,
-            base_max_length=self.base_max_length,  # NEW: Ensure base is preserved
-            _from_division=True,
-        )
+            # Loop through the segments that form the septum
+            for i in range(self.num_septum_segments):
+                # Determine the indices of the segments on the mother and daughter sides
+                mother_idx = self.division_site - 1 - i
+                daughter_idx = self.division_site + i
 
-        # Partition the mother's parts.
-        daughter_cell.bodies = self.bodies[split_index:]
-        daughter_cell.shapes = self.shapes[split_index:]
-        daughter_cell.joints = self.joints[split_index * 2:]
+                # Ensure the indices are within the bounds of the cell's body
+                if mother_idx < 0 or daughter_idx >= len(self.bodies):
+                    continue
 
-        for shape in daughter_cell.shapes:
-            shape.filter = pymunk.ShapeFilter(group=next_group_id)
+                # Create a falloff effect: segments closer to the center (i=0) shrink more
+                falloff = (self.num_septum_segments - i) / self.num_septum_segments
 
-        connecting_joint = self.joints[(split_index - 1) * 2]
-        connecting_limit = self.joints[(split_index - 1) * 2 + 1]
-        self.space.remove(connecting_joint, connecting_limit)
+                # Calculate the amount of shrinkage based on progress and falloff
+                shrinkage = (self.segment_radius - self.min_septum_radius) * progress * falloff
+                new_radius = self.segment_radius - shrinkage
 
-        self.bodies = self.bodies[:split_index]
-        self.shapes = self.shapes[:split_index]
-        self.joints = self.joints[: (split_index - 1) * 2]
+                if progress < 1.0:
+                    # Recreate both shapes with their new, smaller radius
+                    old_mother_shape = self.shapes[mother_idx]
+                    self.shapes[mother_idx] = self._recreate_shape(old_mother_shape, new_radius)
 
-        self._update_colors()
-        daughter_cell._update_colors()
+                    old_daughter_shape = self.shapes[daughter_idx]
+                    self.shapes[daughter_idx] = self._recreate_shape(old_daughter_shape, new_radius)
 
-        return daughter_cell
+            # 3. COMPLETE DIVISION
+            if progress >= 1.0:
+                # Restore all affected segments to their original size before splitting
+                for i in range(self.num_septum_segments):
+                    mother_idx = self.division_site - 1 - i
+                    daughter_idx = self.division_site + i
+                    if mother_idx < 0 or daughter_idx >= len(self.shapes):
+                        continue
+
+                    # Restore mother segment
+                    old_mother_shape = self.shapes[mother_idx]
+                    if old_mother_shape.radius < self.segment_radius:
+                        self.shapes[mother_idx] = self._recreate_shape(old_mother_shape, self.segment_radius)
+
+                    # Restore daughter segment
+                    old_daughter_shape = self.shapes[daughter_idx]
+                    if old_daughter_shape.radius < self.segment_radius:
+                        self.shapes[daughter_idx] = self._recreate_shape(old_daughter_shape, self.segment_radius)
+
+                # Perform the actual split
+                daughter_cell = self._split_cell(next_group_id)
+
+                # Reset the mother cell's state
+                self.is_dividing = False
+                self.septum_progress = 0.0
+                self.division_site = None
+
+                return daughter_cell
+
+        return None
 
     def remove_tail_segment(self):
         """
@@ -316,6 +385,7 @@ class Cell:
             return
 
         # NEW: Use the cell's base color with variations
+        r, g, b = self.base_color
         r, g, b = self.base_color
 
         # Body segments: use base color with alpha
@@ -343,3 +413,79 @@ class Cell:
 
         self.shapes[0].color = head_color  # Head
         self.shapes[-1].color = tail_color  # Tail
+
+
+# In cell.py, add this new private method to the Cell class
+
+    def _split_cell(self, next_group_id: int) -> Optional['Cell']:
+        """
+        Performs the actual separation of the cell after the septum has formed.
+        This contains the logic from the original divide method.
+        """
+        # Create daughter cell - pass the BASE max_length, not this cell's randomized one
+        daughter_cell = Cell(
+            space=self.space,
+            start_pos=self.bodies[self.division_site].position,
+            num_segments=0,  # Start with 0 and add them manually
+            segment_radius=self.segment_radius,
+            segment_mass=self.segment_mass,
+            group_id=next_group_id,
+            growth_rate=self.growth_rate,
+            base_max_length=self.base_max_length,
+            min_length_after_division=self.min_length_after_division,
+            max_length_variation=self.max_length_variation,
+            noise_strength=self.noise_strength,
+            _from_division=True)
+
+        # Partition the mother's parts.
+        daughter_cell.bodies = self.bodies[self.division_site:]
+        daughter_cell.shapes = self.shapes[self.division_site:]
+        daughter_cell.joints = self.joints[self.division_site * 2:] # There are 2 joints per segment
+
+        for shape in daughter_cell.shapes:
+            shape.filter = pymunk.ShapeFilter(group=next_group_id)
+
+        # Remove the single joint connecting the two new cells
+        connecting_joint_index = (self.division_site - 1) * 2
+        connecting_joint = self.joints[connecting_joint_index]
+        connecting_limit = self.joints[connecting_joint_index + 1]
+        self.space.remove(connecting_joint, connecting_limit)
+
+        # Trim the mother cell
+        self.bodies = self.bodies[:self.division_site]
+        self.shapes = self.shapes[:self.division_site]
+        self.joints = self.joints[:connecting_joint_index]
+
+        self._update_colors()
+        daughter_cell._update_colors()
+
+        return daughter_cell
+
+# In cell.py, add this new private method to the Cell class
+
+    def _recreate_shape(self, shape_to_replace, new_radius):
+        """
+        Removes a shape, creates a new one with a new radius attached to the
+        same body, and adds it back to the space. Preserves properties.
+        Returns the new shape.
+        """
+        body = shape_to_replace.body
+
+        # Store the properties of the old shape
+        friction = shape_to_replace.friction
+        filter = shape_to_replace.filter
+        color = shape_to_replace.color
+
+        # Remove the old shape from the space and the cell's list
+        self.space.remove(shape_to_replace)
+
+        # Create a new shape with the new radius
+        new_shape = pymunk.Circle(body, new_radius)
+        new_shape.friction = friction
+        new_shape.filter = filter
+        new_shape.color = color
+
+        # Add the new shape to the space
+        self.space.add(new_shape)
+
+        return new_shape
