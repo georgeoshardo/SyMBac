@@ -2,6 +2,7 @@ import pymunk
 import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
+from typing import Optional
 
 def generate_color(group_id) -> tuple[int, int, int]:
     """
@@ -19,32 +20,46 @@ def generate_color(group_id) -> tuple[int, int, int]:
     rgb: tuple[float, float, float] = colorsys.hsv_to_rgb(hue, saturation, value)
     return int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
 
+
+#Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
     space: pymunk.Space
     start_pos: tuple[float, float]
+    num_segments: int
     segment_radius: float
-    growth_rate: float
-    max_bend_angle: float
-    noise_strength: float
+    segment_mass: float
     group_id: int
-    base_color: tuple[int, int, int]
+    growth_rate: float
+    max_length: int
+    min_length_after_division: int
+    max_length_variation: float
+    base_color: Optional[tuple[int, int, int]]
+    base_max_length: Optional[int]
+    _from_division: Optional[bool]
+
+    max_bend_angle: float
+    base_min_length_after_division: int
+    base_max_length_variation: float
+    noise_strength: float
+
     def __init__(
             self,
-            space,
-            start_pos,
-            num_segments,
-            segment_radius,
-            segment_mass,
-            group_id,
-            growth_rate=5.0,
-            max_length=40,
-            min_length_after_division=10,
-            max_length_variation=0.2,
-            base_color=None,
-            noise_strength=0.05,
-            base_max_length=None,
-            _from_division=False,
-    ):
+            space: pymunk.Space,
+            start_pos: tuple[float, float],
+            num_segments: int,
+            segment_radius: float,
+            segment_mass: float,
+            group_id: int = 0,
+            growth_rate: float = 5.0,
+            max_length: int = 40,
+            min_length_after_division: int = 10,
+            max_length_variation: float = 0.2,
+            base_color: Optional[tuple[int, int, int]] = None,
+            noise_strength: float = 0.05,
+            base_max_length: Optional[int] = None,
+            _from_division: bool = False
+    ) -> None:
+
         self.space = space
         self.start_pos = start_pos
         self.segment_radius = segment_radius
@@ -223,11 +238,12 @@ class Cell:
             self.growth_accumulator = 0.0
             self._update_colors()
 
-    def divide(self, next_group_id):
+    def divide(self, next_group_id: int) -> Optional['Cell']:
+
         """
-        If the cell is at max_length, it splits by transplanting its second
-        half into a new Cell object, preserving orientation.
-        """
+            If the cell is at max_length, it splits by transplanting its second
+            half into a new Cell object, preserving orientation.
+            """
         if len(self.bodies) < self.max_length:
             return None
 
