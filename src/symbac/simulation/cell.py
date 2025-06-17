@@ -113,16 +113,17 @@ class Cell:
         self.growth_accumulator = 0.0
         self.growth_threshold = self.segment_radius / 3
         self.joint_distance = self.segment_radius / 4
-        self.joint_max_force = 30000
+        self.joint_max_force = 30000 # Increase this a lot to make cells rigid, and reduce the max bend angle to 0 (may cause instability)
 
-        # --- ADD THESE NEW ATTRIBUTES ---
+        # --- TODO: ADD/MODIFY THESE ATTRIBUTES, make them controllable? ---
         self.is_dividing = False
         self.septum_progress = 0.0
         self.septum_duration = 1.5  # Duration of septum formation in seconds
         self.division_site = None
         self.num_septum_segments = 4  # HOW MANY segments on each side form the septum
         self.min_septum_radius = 0.1  # HOW SMALL the center of the septum gets
-        # --- END OF NEW ATTRIBUTES ---
+        self.length_at_division_start = 0
+        self.division_bias = 3 # Segment-level division bias
 
 
         if not _from_division:
@@ -130,10 +131,11 @@ class Cell:
                 self._add_initial_segment(i == 0)
             self._update_colors()
 
-    def _add_initial_segment(self, is_first):
+    def _add_initial_segment(self, is_first: bool) -> None:
+
         """
-        Adds a single segment to the cell during initialization.
-        """
+            Adds a single segment to the cell during initialization.
+            """
         moment = pymunk.moment_for_circle(
             self.segment_mass, 0, self.segment_radius
         )
@@ -179,10 +181,11 @@ class Cell:
             self.space.add(limit)
             self.joints.append(limit)
 
-    def apply_noise(self, dt):
+    def apply_noise(self, dt: float) -> None:
+
         """
-        NEW: Apply small random forces to all segments to simulate environmental noise
-        """
+            NEW: Apply small random forces to all segments to simulate environmental noise
+            """
         for body in self.bodies:
             # Apply tiny random forces
             force_x = np.random.uniform(-self.noise_strength, self.noise_strength)
@@ -281,9 +284,12 @@ class Cell:
 
         # In cell.py, replace the entire divide method with this one
 
+        # In cell.py, replace the entire divide method
+
     def divide(self, next_group_id: int, dt: float) -> Optional['Cell']:
         """
         Manages division with a multi-segment, tapered septum formation.
+        This version correctly handles continued growth to ensure a symmetric split.
         """
         # 1. INITIATE DIVISION
         if not self.is_dividing:
@@ -295,69 +301,29 @@ class Cell:
                     (len(self.bodies) - split_index) < self.min_length_after_division:
                 return None
 
+            # Start the division process
             self.is_dividing = True
             self.septum_progress = 0.0
             self.division_site = split_index
+            self.length_at_division_start = len(self.bodies)  # Record initial length
             return None
 
-        # 2. CONTINUE AND UPDATE TAPERED SEPTUM
+        # 2. CONTINUE AND UPDATE SEPTUM / SPLIT IF READY
         if self.is_dividing:
             self.septum_progress += dt / self.septum_duration
-            progress = min(1.0, self.septum_progress)
 
-            # Loop through the segments that form the septum
-            for i in range(self.num_septum_segments):
-                # Determine the indices of the segments on the mother and daughter sides
-                mother_idx = self.division_site - 1 - i
-                daughter_idx = self.division_site + i
+            # Perform the split logic (which includes septum drawing and final division)
+            daughter_cell = self._split_cell(next_group_id)
 
-                # Ensure the indices are within the bounds of the cell's body
-                if mother_idx < 0 or daughter_idx >= len(self.bodies):
-                    continue
-
-                # Create a falloff effect: segments closer to the center (i=0) shrink more
-                falloff = (self.num_septum_segments - i) / self.num_septum_segments
-
-                # Calculate the amount of shrinkage based on progress and falloff
-                shrinkage = (self.segment_radius - self.min_septum_radius) * progress * falloff
-                new_radius = self.segment_radius - shrinkage
-
-                if progress < 1.0:
-                    # Recreate both shapes with their new, smaller radius
-                    old_mother_shape = self.shapes[mother_idx]
-                    self.shapes[mother_idx] = self._recreate_shape(old_mother_shape, new_radius)
-
-                    old_daughter_shape = self.shapes[daughter_idx]
-                    self.shapes[daughter_idx] = self._recreate_shape(old_daughter_shape, new_radius)
-
-            # 3. COMPLETE DIVISION
-            if progress >= 1.0:
-                # Restore all affected segments to their original size before splitting
-                for i in range(self.num_septum_segments):
-                    mother_idx = self.division_site - 1 - i
-                    daughter_idx = self.division_site + i
-                    if mother_idx < 0 or daughter_idx >= len(self.shapes):
-                        continue
-
-                    # Restore mother segment
-                    old_mother_shape = self.shapes[mother_idx]
-                    if old_mother_shape.radius < self.segment_radius:
-                        self.shapes[mother_idx] = self._recreate_shape(old_mother_shape, self.segment_radius)
-
-                    # Restore daughter segment
-                    old_daughter_shape = self.shapes[daughter_idx]
-                    if old_daughter_shape.radius < self.segment_radius:
-                        self.shapes[daughter_idx] = self._recreate_shape(old_daughter_shape, self.segment_radius)
-
-                # Perform the actual split
-                daughter_cell = self._split_cell(next_group_id)
-
+            # If a daughter cell was returned, it means division is complete
+            if daughter_cell:
                 # Reset the mother cell's state
                 self.is_dividing = False
                 self.septum_progress = 0.0
                 self.division_site = None
+                self.length_at_division_start = 0
 
-                return daughter_cell
+            return daughter_cell
 
         return None
 
@@ -414,19 +380,72 @@ class Cell:
         self.shapes[0].color = head_color  # Head
         self.shapes[-1].color = tail_color  # Tail
 
-
-# In cell.py, add this new private method to the Cell class
-
     def _split_cell(self, next_group_id: int) -> Optional['Cell']:
         """
-        Performs the actual separation of the cell after the septum has formed.
-        This contains the logic from the original divide method.
+        Draws the septum and, when ready, performs a symmetric separation.
+        Accounts for growth during division and applies division bias.
         """
-        # Create daughter cell - pass the BASE max_length, not this cell's randomized one
+        progress = min(1.0, self.septum_progress)
+
+        # --- Draw the septum on the segments around the original division site ---
+        for i in range(self.num_septum_segments):
+            mother_idx = self.division_site - 1 - i
+            daughter_idx = self.division_site + i
+
+            if mother_idx >= 0 and daughter_idx < len(self.shapes):
+                falloff = (self.num_septum_segments - i) / self.num_septum_segments
+                shrinkage = (self.segment_radius - self.min_septum_radius) * progress * falloff
+                new_radius = self.segment_radius - shrinkage
+
+                # Recreate shapes to apply the new radius
+                old_mother_shape = self.shapes[mother_idx]
+                self.shapes[mother_idx] = self._recreate_shape(old_mother_shape, new_radius)
+
+                old_daughter_shape = self.shapes[daughter_idx]
+                self.shapes[daughter_idx] = self._recreate_shape(old_daughter_shape, new_radius)
+
+        # --- Check if it's time to complete the division ---
+        if progress < 1.0:
+            return None  # Not done pinching yet, return nothing.
+
+        # --- Time to split: Restore radii and perform a symmetric partition ---
+        # First, restore the radii of the pinched segments back to normal
+        for i in range(self.num_septum_segments):
+            mother_idx = self.division_site - 1 - i
+            daughter_idx = self.division_site + i
+            if mother_idx >= 0 and daughter_idx < len(self.shapes):
+                self.shapes[mother_idx] = self._recreate_shape(self.shapes[mother_idx], self.segment_radius)
+                self.shapes[daughter_idx] = self._recreate_shape(self.shapes[daughter_idx], self.segment_radius)
+
+        # Calculate symmetric division accounting for growth during division
+        current_length = len(self.bodies)
+        growth_during_division = current_length - self.length_at_division_start
+
+        # The original division site was at length_at_division_start // 2
+        # Growth occurred at the tail, so we need to give half of that growth to the mother
+        original_half_length = self.length_at_division_start // 2
+        growth_to_redistribute_to_mother = growth_during_division // 2
+
+        # New symmetric split point: original half + half the growth that occurred
+        mother_final_len = original_half_length + growth_to_redistribute_to_mother
+
+        # NEW: Apply division bias (positive = more segments to mother, negative = more to daughter)
+        mother_final_len += self.division_bias
+
+        # Ensure both cells meet minimum length requirements
+        daughter_length = current_length - mother_final_len
+        if mother_final_len < self.min_length_after_division:
+            mother_final_len = self.min_length_after_division
+        elif daughter_length < self.min_length_after_division:
+            mother_final_len = current_length - self.min_length_after_division
+        elif mother_final_len >= current_length:
+            mother_final_len = current_length - self.min_length_after_division
+
+        # Create daughter cell with inherited bias
         daughter_cell = Cell(
             space=self.space,
-            start_pos=self.bodies[self.division_site].position,
-            num_segments=0,  # Start with 0 and add them manually
+            start_pos=self.bodies[mother_final_len].position,
+            num_segments=0,
             segment_radius=self.segment_radius,
             segment_mass=self.segment_mass,
             group_id=next_group_id,
@@ -437,31 +456,30 @@ class Cell:
             noise_strength=self.noise_strength,
             _from_division=True)
 
-        # Partition the mother's parts.
-        daughter_cell.bodies = self.bodies[self.division_site:]
-        daughter_cell.shapes = self.shapes[self.division_site:]
-        daughter_cell.joints = self.joints[self.division_site * 2:] # There are 2 joints per segment
+        # Partition the cell's components based on the adjusted split point
+        daughter_cell.bodies = self.bodies[mother_final_len:]
+        daughter_cell.shapes = self.shapes[mother_final_len:]
+        daughter_cell.joints = self.joints[mother_final_len * 2:]
 
         for shape in daughter_cell.shapes:
             shape.filter = pymunk.ShapeFilter(group=next_group_id)
 
-        # Remove the single joint connecting the two new cells
-        connecting_joint_index = (self.division_site - 1) * 2
-        connecting_joint = self.joints[connecting_joint_index]
-        connecting_limit = self.joints[connecting_joint_index + 1]
-        self.space.remove(connecting_joint, connecting_limit)
+        # Remove the connecting joint between mother and daughter
+        connecting_joint_index = (mother_final_len - 1) * 2
+        if connecting_joint_index < len(self.joints) and connecting_joint_index + 1 < len(self.joints):
+            connecting_joint = self.joints[connecting_joint_index]
+            connecting_limit = self.joints[connecting_joint_index + 1]
+            self.space.remove(connecting_joint, connecting_limit)
 
-        # Trim the mother cell
-        self.bodies = self.bodies[:self.division_site]
-        self.shapes = self.shapes[:self.division_site]
+        # Trim the mother cell to its final, correct length
+        self.bodies = self.bodies[:mother_final_len]
+        self.shapes = self.shapes[:mother_final_len]
         self.joints = self.joints[:connecting_joint_index]
 
         self._update_colors()
         daughter_cell._update_colors()
 
         return daughter_cell
-
-# In cell.py, add this new private method to the Cell class
 
     def _recreate_shape(self, shape_to_replace, new_radius):
         """

@@ -82,7 +82,7 @@ mouse_joint = None
 clock = pygame.time.Clock()
 running = True
 
-simulation_speed_multiplier = 10
+simulation_speed_multiplier = 2
 
 while running:
     for event in pygame.event.get():
@@ -149,8 +149,6 @@ while running:
 
     dt = 1.0 / 60.0
 
-    # In sim_loop.py, find this part of the main while loop
-
 
     for _ in range(simulation_speed_multiplier):
         newly_born_worms_map = {}
@@ -158,14 +156,10 @@ while running:
         for worm in colony[:]:
             worm.apply_noise(dt)
             worm.grow(dt)
-            # --- MODIFY THIS LINE ---
             new_worm = worm.divide(next_group_id, dt)  # Pass dt here
-            # --- END OF MODIFICATION ---
             if new_worm:
                 newly_born_worms_map[new_worm] = worm
                 next_group_id += 1
-
-        # ... (rest of the loop remains the same)
 
         if newly_born_worms_map:
             counter = 0
