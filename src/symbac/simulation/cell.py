@@ -5,43 +5,7 @@ from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
 from symbac.misc import generate_color
-from dataclasses import dataclass
-
-
-@dataclass(slots=True, frozen=True)
-class CellConfig:
-    GRANULARITY: int = 8  # Number of segments per cell radius
-    SEGMENT_RADIUS: float = 15.0
-    SEGMENT_MASS: float = 1.0
-    GROWTH_RATE: float = 5.0
-    MIN_LENGTH_AFTER_DIVISION: int = 10
-    MAX_LENGTH_VARIATION: float = 0.2
-    BASE_MAX_LENGTH: int = 40
-    SEED_CELL_SEGMENTS: int = 15
-    MAX_BEND_ANGLE: float = 0.05  # 0.01 normally, 0.05 also good for E. coli in MM
-    STIFFNESS: int = 300_000
-
-    DAMPED_ROTARY_SPRING: bool = False
-    ROTARY_SPRING_STIFFNESS: float | None = None
-    ROTARY_SPRING_DAMPING: float | None = None
-
-    def __post_init__(self):
-        if not self.DAMPED_ROTARY_SPRING:
-            if self.ROTARY_SPRING_STIFFNESS is not None or self.ROTARY_SPRING_DAMPING is not None:
-                raise ValueError(
-                    "Cannot set ROTARY_SPRING_STIFFNESS or ROTARY_SPRING_DAMPING "
-                    "when ROTARY_SPRING is False."
-                )
-        else:
-            if self.ROTARY_SPRING_STIFFNESS is None:
-                raise ValueError(
-                    "DAMPED_ROTARY_SPRING=True, but ROTARY_SPRING_STIFFNESS was not provided."
-                )
-            if self.ROTARY_SPRING_DAMPING is None:
-                raise ValueError(
-                    "DAMPED_ROTARY_SPRING=True, but ROTARY_SPRING_DAMPING was not provided."
-                )
-
+from symbac.simulation.config import CellConfig
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
@@ -61,10 +25,9 @@ class Cell:
         self.group_id = group_id
         self.base_color = generate_color(group_id)
 
-        self.bodies = []
-        self.shapes = []
+        self.bodies: list[pymunk.Body] = []
+        self.shapes: list[pymunk.Circle] = []
 
-        # --- REFACTORED: Use separate lists for each joint type ---
         self.pivot_joints: list[pymunk.PivotJoint] = []
         self.limit_joints: list[pymunk.RotaryLimitJoint] = []
         self.spring_joints: list[pymunk.DampedRotarySpring] = []
@@ -76,7 +39,7 @@ class Cell:
         self.is_dividing = False
         self.septum_progress = 0.0
         self.septum_duration = 1.5
-        self.division_site = None
+        self.division_site: int | None = None
         self.num_septum_segments = self.config.GRANULARITY
         self.min_septum_radius = 0.1
         self.length_at_division_start = 0
@@ -127,18 +90,18 @@ class Cell:
             pivot = pymunk.PivotJoint(
                 prev_body, body, anchor_on_prev, anchor_on_curr
             )
-            pivot.max_force = self.config.STIFFNESS
+            pivot.max_force = self.config.STIFFNESS # - pivots should have a hardcoded max force I think?
             self.space.add(pivot)
 
-            limit = pymunk.RotaryLimitJoint(
-                prev_body, body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
-            )
-            limit.max_force = self.config.STIFFNESS
-            self.space.add(limit)
-
-            # --- REFACTORED: Append to specific joint lists ---
-            self.pivot_joints.append(pivot)
-            self.limit_joints.append(limit)
+            if self.config.ROTARY_LIMIT_JOINT:
+                assert self.config.STIFFNESS is not None
+                assert self.config.MAX_BEND_ANGLE is not None
+                limit = pymunk.RotaryLimitJoint(
+                    prev_body, body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
+                )
+                limit.max_force = self.config.STIFFNESS
+                self.space.add(limit)
+                self.limit_joints.append(limit)
 
             if self.config.DAMPED_ROTARY_SPRING:
                 assert self.config.ROTARY_SPRING_STIFFNESS is not None
@@ -147,8 +110,9 @@ class Cell:
                     prev_body, body, 0, self.config.ROTARY_SPRING_STIFFNESS, self.config.ROTARY_SPRING_DAMPING
                 )
                 self.space.add(spring)
-                # --- REFACTORED: Append to specific joint list ---
                 self.spring_joints.append(spring)
+
+            self.pivot_joints.append(pivot)
 
     def grow(self, dt):
         if not self.is_dividing and len(self.bodies) >= self._max_length:
@@ -200,15 +164,21 @@ class Cell:
             new_pivot.max_force = self.config.STIFFNESS
             self.space.add(new_pivot)
 
-            new_limit = pymunk.RotaryLimitJoint(
-                old_tail_body, new_tail_body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
-            )
-            new_limit.max_force = self.config.STIFFNESS
-            self.space.add(new_limit)
+
 
             # --- REFACTORED: Append to specific joint lists ---
             self.pivot_joints.append(new_pivot)
-            self.limit_joints.append(new_limit)
+
+
+            if self.config.ROTARY_LIMIT_JOINT:
+                assert self.config.STIFFNESS is not None
+                assert self.config.MAX_BEND_ANGLE is not None
+                new_limit = pymunk.RotaryLimitJoint(
+                    old_tail_body, new_tail_body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
+                )
+                new_limit.max_force = self.config.STIFFNESS
+                self.space.add(new_limit)
+                self.limit_joints.append(new_limit)
 
             if self.config.DAMPED_ROTARY_SPRING:
                 assert self.config.ROTARY_SPRING_STIFFNESS is not None
@@ -245,8 +215,8 @@ class Cell:
 
     def _split_cell(self, next_group_id: int) -> Optional['Cell']:
         """Splits the current cell into two distinct cells if septum formation is complete."""
-        # ... (septum shrinking logic is the same) ...
         progress = min(1.0, self.septum_progress)
+        assert self.division_site is not None # To keep mypy happy
         for i in range(self.num_septum_segments):
             mother_idx = self.division_site - 1 - i
             daughter_idx = self.division_site + i
@@ -295,13 +265,15 @@ class Cell:
 
         # 1. Assign the daughter's joints (all joints after the connection point)
         daughter_cell.pivot_joints = self.pivot_joints[mother_final_len:]
-        daughter_cell.limit_joints = self.limit_joints[mother_final_len:]
+        if self.config.ROTARY_LIMIT_JOINT:
+            daughter_cell.limit_joints = self.limit_joints[mother_final_len:]
         if self.config.DAMPED_ROTARY_SPRING:
             daughter_cell.spring_joints = self.spring_joints[mother_final_len:]
 
         # 2. Remove the connecting joints from the physics space
         self.space.remove(self.pivot_joints[connecting_joint_idx])
-        self.space.remove(self.limit_joints[connecting_joint_idx])
+        if self.config.ROTARY_LIMIT_JOINT:
+            self.space.remove(self.limit_joints[connecting_joint_idx])
         if self.config.DAMPED_ROTARY_SPRING:
             self.space.remove(self.spring_joints[connecting_joint_idx])
 
@@ -309,7 +281,8 @@ class Cell:
         self.bodies = self.bodies[:mother_final_len]
         self.shapes = self.shapes[:mother_final_len]
         self.pivot_joints = self.pivot_joints[:connecting_joint_idx]
-        self.limit_joints = self.limit_joints[:connecting_joint_idx]
+        if self.config.ROTARY_LIMIT_JOINT:
+            self.limit_joints = self.limit_joints[:connecting_joint_idx]
         if self.config.DAMPED_ROTARY_SPRING:
             self.spring_joints = self.spring_joints[:connecting_joint_idx]
 

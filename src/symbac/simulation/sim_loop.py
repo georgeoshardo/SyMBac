@@ -1,18 +1,26 @@
 import pygame
 import pymunk.pygame_util
-from symbac.simulation.cell import Cell, CellConfig
-
+from symbac.simulation.cell import Cell
+from symbac.simulation.config import CellConfig, SimViewerConfig, PhysicsConfig
+import numpy as np
 
 """
 Initializes Pygame and Pymunk and runs the main simulation loop.
 """
 pygame.init()
-screen_width, screen_height = 1200, 800
+
+
+screen_width, screen_height = SimViewerConfig.SCREEN_WIDTH, SimViewerConfig.SCREEN_HEIGHT
+simulation_speed_multiplier = SimViewerConfig.SIMULATION_SPEED_MULTIPLIER
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Cell Colony Simulation")
 
-space = pymunk.Space(threaded=True)
-space.threads = 2
+space = pymunk.Space(threaded=PhysicsConfig.THREADED)
+space.threads = PhysicsConfig.THREADS
+space.iterations = PhysicsConfig.ITERATIONS
+space.gravity = PhysicsConfig.GRAVITY
+space.damping = PhysicsConfig.DAMPING
+
 
 
 def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
@@ -42,9 +50,7 @@ def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
 frame_count = 0
 last_segment_count = 15  # Initial cell segments
 
-space.iterations = 30
-space.gravity = (0, 0)
-space.damping = 0.5
+
 # NEW: Camera and zoom variables
 zoom_level = 1.0
 camera_x, camera_y = 0, 0
@@ -71,11 +77,14 @@ initial_cell_config = CellConfig(
     MAX_LENGTH_VARIATION=0.2,
     MIN_LENGTH_AFTER_DIVISION=10,
     SEED_CELL_SEGMENTS=30,
+    ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
-    STIFFNESS=300_000, # Common values: (bend angle = 0.005, stiffness = 300_000),
-    DAMPED_ROTARY_SPRING=False  # A good starting point
+    STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
+    #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs
+    #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
+    #ROTARY_SPRING_DAMPING=200_000, # A good starting point
+    #PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
 )
-
 
 initial_cell = Cell(
     space,
@@ -97,7 +106,6 @@ clock = pygame.time.Clock()
 running = True
 show_joints = True
 
-simulation_speed_multiplier = 10
 
 while running:
     for event in pygame.event.get():
@@ -219,8 +227,8 @@ while running:
 
 
     # Clear both surfaces
-    screen.fill((20, 30, 40))
-    virtual_surface.fill((20, 30, 40))
+    screen.fill(SimViewerConfig.BACKGROUND_COLOR)
+    virtual_surface.fill(SimViewerConfig.BACKGROUND_COLOR)
 
     # Draw to virtual surface with transform
     space.debug_draw(draw_options)
@@ -229,7 +237,7 @@ while running:
     screen.blit(virtual_surface, (0, 0))
 
     # NEW: Display zoom level, pause status, and controls
-    font = pygame.font.Font(None, 36)
+    font = pygame.font.Font(None, SimViewerConfig.FONT_SIZE)
     zoom_text = font.render(f"Zoom: {zoom_level:.2f}x", True, (255, 255, 255))
     # NEW: Show pause status
     pause_text = font.render(f"{'PAUSED' if is_paused else 'Running'}", True, (255, 255, 0) if is_paused else (0, 255, 0))
