@@ -71,11 +71,9 @@ initial_cell_config = CellConfig(
     MAX_LENGTH_VARIATION=0.2,
     MIN_LENGTH_AFTER_DIVISION=10,
     SEED_CELL_SEGMENTS=30,
-    MAX_BEND_ANGLE=0.01,
-    STIFFNESS=300_00000,
-    DAMPED_ROTARY_SPRING=True,
-    ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
-    ROTARY_SPRING_DAMPING=200_000,     # A good starting point
+    MAX_BEND_ANGLE=0.005,
+    STIFFNESS=300_000, # Common values: (bend angle = 0.005, stiffness = 300_000),
+    DAMPED_ROTARY_SPRING=False  # A good starting point
 )
 
 
