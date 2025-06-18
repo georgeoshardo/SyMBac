@@ -63,16 +63,16 @@ colony = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=3,
+    GRANULARITY=8,
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=5, #TODO when the growth rate is too high (e.g 20), the division asymmetry returns because the mother grows too fast as the septum forms
-    BASE_MAX_LENGTH=600, # Why does very long max length lead to instability?
+    BASE_MAX_LENGTH=60, # Very long max lengths require more space iterations or lower dt to keep the sim stable
     MAX_LENGTH_VARIATION=0.2, # don't go above 1!
     MIN_LENGTH_AFTER_DIVISION=10,
     SEED_CELL_SEGMENTS=30,
-    MAX_BEND_ANGLE=0.001, # 0.01 normally, 0.05 also good for E. coli in MM
-    STIFFNESS=300_00
+    MAX_BEND_ANGLE=0.01, # 0.01 normally, 0.05 also good for E. coli in MM
+    STIFFNESS=300_000
 )
 
 initial_cell = Cell(
@@ -80,7 +80,7 @@ initial_cell = Cell(
     config=initial_cell_config,
     start_pos=(screen_width / 2, screen_height / 2),
     group_id=next_group_id,
-    noise_strength=0.1,  # NEW: Small environmental noise
+    noise_strength=0, #Can go as high as 20+  but normally around 0.5
 )
 colony.append(initial_cell)
 next_group_id += 1
