@@ -4,42 +4,29 @@ from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
 from symbac.misc import generate_color
+from dataclasses import dataclass, field
+
+@dataclass(slots=True, frozen=True)
+class CellConfig:
+    GRANULARITY: int = 8 # Number of segments per cell radius
+    SEGMENT_RADIUS: float = 15.0
+    SEGMENT_MASS: float = 1.0
+    GROWTH_RATE: float = 5.0
+    MIN_LENGTH_AFTER_DIVISION: int = 10
+    MAX_LENGTH_VARIATION: float = 0.2
+    BASE_MAX_LENGTH: int = 40
+    SEED_CELL_SEGMENTS: int = 15
+
 
 #Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
-    space: pymunk.Space
-    start_pos: tuple[float, float]
-    num_segments: int
-    segment_radius: float
-    segment_mass: float
-    group_id: int
-    growth_rate: float
-    min_length_after_division: int
-    max_length_variation: float
-    base_max_length: Optional[int]
-    _from_division: Optional[bool]
-
-    max_bend_angle: float
-    base_min_length_after_division: int
-    base_max_length_variation: float
-    noise_strength: float
-    _max_length: int
-    base_color: tuple[int, int, int]
-
-
     def __init__(
             self,
             space: pymunk.Space,
+            config: CellConfig,
             start_pos: tuple[float, float],
-            num_segments: int,
-            segment_radius: float,
-            segment_mass: float,
             group_id: int = 0,
-            growth_rate: float = 5.0,
-            min_length_after_division: int = 10,
-            max_length_variation: float = 0.2,
             noise_strength: float = 0.05,
-            base_max_length: int = 40,
             _from_division: bool = False
     ) -> None:
         """
@@ -76,28 +63,14 @@ class Cell:
             Indicates whether the cell is being created as a result of division.
         """
         self.space = space
+        self.config = config
         self.start_pos = start_pos
-        self.segment_radius = segment_radius
-        self.segment_mass = segment_mass
-        self.growth_rate = growth_rate
         self.max_bend_angle = 0.005  # 0.01 normally, 0.05 also good for E. coli in MM
         self.noise_strength = noise_strength
 
         self.group_id = group_id
         self.base_color = generate_color(group_id)
 
-        # Store the original base max_length for consistent inheritance
-        self.base_max_length = base_max_length
-
-        # Always randomise from the original base, not the parent's randomised value
-        variation = self.base_max_length * max_length_variation
-        random_max_len = np.random.uniform(
-            self.base_max_length - variation, self.base_max_length + variation
-        )
-        self._max_length = max(min_length_after_division * 2, int(random_max_len))
-
-        self.min_length_after_division = min_length_after_division
-        self.max_length_variation = max_length_variation
 
         # Rest of the existing code...
         self.bodies = []
@@ -105,8 +78,8 @@ class Cell:
         self.joints = []
 
         self.growth_accumulator = 0.0
-        self.growth_threshold = self.segment_radius / 3
-        self.joint_distance = self.segment_radius / 4
+        self.growth_threshold = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
+        self.joint_distance = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
         self.joint_max_force = 300000 # Increase this a lot to make cells rigid, and reduce the max bend angle to 0 (may cause instability)
 
         # --- TODO: ADD/MODIFY THESE ATTRIBUTES, make them controllable? ---
@@ -114,14 +87,22 @@ class Cell:
         self.septum_progress = 0.0
         self.septum_duration = 1.5  # Duration of septum formation in seconds
         self.division_site = None
-        self.num_septum_segments = 4  # HOW MANY segments on each side form the septum
+        self.num_septum_segments = self.config.GRANULARITY  # HOW MANY segments on each side form the septum
         self.min_septum_radius = 0.1  # HOW SMALL the center of the septum gets
         self.length_at_division_start = 0
-        self.division_bias = 3 # Segment-level division bias
+        self.division_bias = self.config.GRANULARITY # Segment-level division bias
 
+        # Always randomise from the original base, not the parent's randomised value
+        variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
+        random_max_len = np.random.uniform(
+            self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation
+        )
 
-        if not _from_division:
-            for i in range(num_segments):
+        self._max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
+        #print(self.config.BASE_MAX_LENGTH, random_max_len, self._max_length)
+
+        if not _from_division: #Seed cell
+            for i in range(self.config.SEED_CELL_SEGMENTS):
                 self._add_initial_segment(i == 0)
             self._update_colors()
 
@@ -131,9 +112,9 @@ class Cell:
             Adds a single segment to the cell during initialization.
             """
         moment = pymunk.moment_for_circle(
-            self.segment_mass, 0, self.segment_radius
+            self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS
         )
-        body = pymunk.Body(self.segment_mass, moment)
+        body = pymunk.Body(self.config.SEGMENT_MASS, moment)
 
         if is_first:
             body.position = self.start_pos
@@ -148,7 +129,7 @@ class Cell:
             noise_y = np.random.uniform(-0.1, 0.1)
             body.position += Vec2d(noise_x, noise_y)
 
-        shape = pymunk.Circle(body, self.segment_radius)
+        shape = pymunk.Circle(body, self.config.SEGMENT_RADIUS)
         shape.friction = 0.0
         shape.filter = pymunk.ShapeFilter(group=self.group_id)
 
@@ -204,7 +185,7 @@ class Cell:
 
         # User change: randomized growth
         self.growth_accumulator += (
-                self.growth_rate * dt * np.random.uniform(0, 4)
+                self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
         )
 
         last_pivot_joint = self.joints[-2]
@@ -227,9 +208,9 @@ class Cell:
             old_tail_body.angle = pre_tail_body.angle
 
             moment = pymunk.moment_for_circle(
-                self.segment_mass, 0, self.segment_radius
+                self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS
             )
-            new_tail_body = pymunk.Body(self.segment_mass, moment)
+            new_tail_body = pymunk.Body(self.config.SEGMENT_MASS, moment)
 
             # Keep growth direction perfectly straight
             new_tail_offset = Vec2d(self.joint_distance, 0).rotated(
@@ -243,7 +224,7 @@ class Cell:
             noise_y = np.random.uniform(-0.1, 0.1)
             new_tail_body.position += Vec2d(noise_x, noise_y)
 
-            new_tail_shape = pymunk.Circle(new_tail_body, self.segment_radius)
+            new_tail_shape = pymunk.Circle(new_tail_body, self.config.SEGMENT_RADIUS)
             new_tail_shape.friction = 0.0  # User change
             new_tail_shape.filter = pymunk.ShapeFilter(group=self.group_id)
 
@@ -284,8 +265,8 @@ class Cell:
                 return None
 
             split_index = len(self.bodies) // 2
-            if split_index < self.min_length_after_division or \
-                    (len(self.bodies) - split_index) < self.min_length_after_division:
+            if split_index < self.config.MIN_LENGTH_AFTER_DIVISION or \
+                    (len(self.bodies) - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
                 return None
 
             # Start the division process
@@ -318,7 +299,7 @@ class Cell:
         """
         Safely removes the last segment of the cell.
         """
-        if len(self.bodies) <= self.min_length_after_division:
+        if len(self.bodies) <= self.config.MIN_LENGTH_AFTER_DIVISION:
             return
 
         tail_body = self.bodies.pop()
@@ -400,8 +381,8 @@ class Cell:
 
             if mother_idx >= 0 and daughter_idx < len(self.shapes):
                 falloff = (self.num_septum_segments - i) / self.num_septum_segments
-                shrinkage = (self.segment_radius - self.min_septum_radius) * progress * falloff
-                new_radius = self.segment_radius - shrinkage
+                shrinkage = (self.config.SEGMENT_RADIUS - self.min_septum_radius) * progress * falloff
+                new_radius = self.config.SEGMENT_RADIUS - shrinkage
 
                 # Recreate shapes to apply the new radius
                 old_mother_shape = self.shapes[mother_idx]
@@ -420,8 +401,8 @@ class Cell:
             mother_idx = self.division_site - 1 - i
             daughter_idx = self.division_site + i
             if mother_idx >= 0 and daughter_idx < len(self.shapes):
-                self.shapes[mother_idx] = self._recreate_shape(self.shapes[mother_idx], self.segment_radius)
-                self.shapes[daughter_idx] = self._recreate_shape(self.shapes[daughter_idx], self.segment_radius)
+                self.shapes[mother_idx] = self._recreate_shape(self.shapes[mother_idx], self.config.SEGMENT_RADIUS)
+                self.shapes[daughter_idx] = self._recreate_shape(self.shapes[daughter_idx], self.config.SEGMENT_RADIUS)
 
         # Calculate symmetric division accounting for growth during division
         current_length = len(self.bodies)
@@ -440,25 +421,19 @@ class Cell:
 
         # Ensure both cells meet minimum length requirements
         daughter_length = current_length - mother_final_len
-        if mother_final_len < self.min_length_after_division:
-            mother_final_len = self.min_length_after_division
-        elif daughter_length < self.min_length_after_division:
-            mother_final_len = current_length - self.min_length_after_division
+        if mother_final_len < self.config.MIN_LENGTH_AFTER_DIVISION:
+            mother_final_len = self.config.MIN_LENGTH_AFTER_DIVISION
+        elif daughter_length < self.config.MIN_LENGTH_AFTER_DIVISION:
+            mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
         elif mother_final_len >= current_length:
-            mother_final_len = current_length - self.min_length_after_division
+            mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
 
         # Create daughter cell with inherited bias
         daughter_cell = Cell(
             space=self.space,
+            config=self.config,
             start_pos=self.bodies[mother_final_len].position,
-            num_segments=0,
-            segment_radius=self.segment_radius,
-            segment_mass=self.segment_mass,
             group_id=next_group_id,
-            growth_rate=self.growth_rate,
-            base_max_length=self.base_max_length,
-            min_length_after_division=self.min_length_after_division,
-            max_length_variation=self.max_length_variation,
             noise_strength=self.noise_strength,
             _from_division=True)
 

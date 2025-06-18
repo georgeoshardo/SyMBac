@@ -1,6 +1,6 @@
 import pygame
 import pymunk.pygame_util
-from symbac.simulation.cell import Cell
+from symbac.simulation.cell import Cell, CellConfig
 
 
 """
@@ -19,7 +19,7 @@ def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     """Setup spatial hash with estimated parameters"""
     dim, count = estimate_spatial_hash_params(colony)
     space.use_spatial_hash(dim, count)
-    print(f"Spatial hash enabled: dim={dim:.1f}, count={count}")
+    #print(f"Spatial hash enabled: dim={dim:.1f}, count={count}")
     return dim, count
 
 
@@ -29,14 +29,13 @@ def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
         return 36.0, 1000
 
     total_segments = sum(len(cell.bodies) for cell in colony)
-    segment_radius = colony[0].segment_radius if colony else 15
+    segment_radius = colony[0].config.SEGMENT_RADIUS if colony else 15
 
     # dim: slightly larger than segment diameter for optimal performance
     dim = segment_radius * 2 * 1.2
 
     # count: ~10x total objects, with reasonable bounds
     count = max(1000, min(100000, total_segments * 10))
-    print(f"Spatial hash updated: dim={dim:.1f}, count={count}")
     return dim, count
 
 # Add periodic updates in your main loop:
@@ -63,14 +62,22 @@ pymunk.pygame_util.positive_y_is_up = False
 colony = []
 next_group_id = 1
 
+initial_cell_config = CellConfig(
+    GRANULARITY=8,
+    SEGMENT_RADIUS=15,
+    SEGMENT_MASS=1.0,
+    GROWTH_RATE=5, #TODO when the growth rate is too high (e.g 20), the division asymmetry returns because the mother grows too fast as the septum forms
+    BASE_MAX_LENGTH=60,
+    MAX_LENGTH_VARIATION=0.2, # don't go above 1!
+    MIN_LENGTH_AFTER_DIVISION=10,
+    SEED_CELL_SEGMENTS=30,
+)
+
 initial_worm = Cell(
     space,
+    config=initial_cell_config,
     start_pos=(screen_width / 2, screen_height / 2),
-    num_segments=15,
-    segment_radius=15,
-    segment_mass=2,
     group_id=next_group_id,
-    base_max_length=60,  # This is now the mean length
     noise_strength=0.1,  # NEW: Small environmental noise
 )
 colony.append(initial_worm)
@@ -121,7 +128,6 @@ while running:
                 camera_x, camera_y = 0, 0
             elif event.key == pygame.K_j:  # NEW: Toggle joint visibility
                 show_joints = not show_joints
-                print(draw_options.flags, pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS)
             elif event.key == pygame.K_p:  # NEW: Toggle pause
                 is_paused = not is_paused
                 print(f"Simulation {'paused' if is_paused else 'resumed'}")
