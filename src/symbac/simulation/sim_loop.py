@@ -42,7 +42,7 @@ def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
 frame_count = 0
 last_segment_count = 15  # Initial cell segments
 
-space.iterations = 60
+space.iterations = 30
 space.gravity = (0, 0)
 space.damping = 0.5
 # NEW: Camera and zoom variables
@@ -63,17 +63,21 @@ colony = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=8,
+    GRANULARITY=3,
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=5, #TODO when the growth rate is too high (e.g 20), the division asymmetry returns because the mother grows too fast as the septum forms
-    BASE_MAX_LENGTH=60, # Very long max lengths require more space iterations or lower dt to keep the sim stable
-    MAX_LENGTH_VARIATION=0.2, # don't go above 1!
+    GROWTH_RATE=2,
+    BASE_MAX_LENGTH=35, # This should be stable now!
+    MAX_LENGTH_VARIATION=0.2,
     MIN_LENGTH_AFTER_DIVISION=10,
     SEED_CELL_SEGMENTS=30,
-    MAX_BEND_ANGLE=0.01, # 0.01 normally, 0.05 also good for E. coli in MM
-    STIFFNESS=300_000
+    MAX_BEND_ANGLE=0.01,
+    STIFFNESS=300_00000,
+    DAMPED_ROTARY_SPRING=True,
+    ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
+    ROTARY_SPRING_DAMPING=200_000,     # A good starting point
 )
+
 
 initial_cell = Cell(
     space,
