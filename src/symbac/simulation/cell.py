@@ -16,6 +16,8 @@ class CellConfig:
     MAX_LENGTH_VARIATION: float = 0.2
     BASE_MAX_LENGTH: int = 40
     SEED_CELL_SEGMENTS: int = 15
+    MAX_BEND_ANGLE: float = 0.05 # 0.01 normally, 0.05 also good for E. coli in MM
+    STIFFNESS: int = 300_000
 
 
 #Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
@@ -65,7 +67,6 @@ class Cell:
         self.space = space
         self.config = config
         self.start_pos = start_pos
-        self.max_bend_angle = 0.005  # 0.01 normally, 0.05 also good for E. coli in MM
         self.noise_strength = noise_strength
 
         self.group_id = group_id
@@ -80,7 +81,6 @@ class Cell:
         self.growth_accumulator = 0.0
         self.growth_threshold = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
         self.joint_distance = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
-        self.joint_max_force = 300000 # Increase this a lot to make cells rigid, and reduce the max bend angle to 0 (may cause instability)
 
         # --- TODO: ADD/MODIFY THESE ATTRIBUTES, make them controllable? ---
         self.is_dividing = False
@@ -95,7 +95,7 @@ class Cell:
         # Always randomise from the original base, not the parent's randomised value
         variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
         random_max_len = np.random.uniform(
-            self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation
+            self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation # TODO what is the true distribution of division lengths?
         )
 
         self._max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
@@ -145,14 +145,14 @@ class Cell:
             pivot = pymunk.PivotJoint(
                 prev_body, body, anchor_on_prev, anchor_on_curr
             )
-            pivot.max_force = self.joint_max_force
+            pivot.max_force = self.config.STIFFNESS
             self.space.add(pivot)
             self.joints.append(pivot)
 
             limit = pymunk.RotaryLimitJoint(
-                prev_body, body, -self.max_bend_angle, self.max_bend_angle
+                prev_body, body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
             )
-            limit.max_force = self.joint_max_force
+            limit.max_force = self.config.STIFFNESS
             self.space.add(limit)
             self.joints.append(limit)
 
@@ -237,17 +237,17 @@ class Cell:
             new_pivot = pymunk.PivotJoint(
                 old_tail_body, new_tail_body, anchor_on_prev, anchor_on_curr
             )
-            new_pivot.max_force = self.joint_max_force
+            new_pivot.max_force = self.config.STIFFNESS
             self.space.add(new_pivot)
             self.joints.append(new_pivot)
 
             new_limit = pymunk.RotaryLimitJoint(
                 old_tail_body,
                 new_tail_body,
-                -self.max_bend_angle,
-                self.max_bend_angle,
+                -self.config.MAX_BEND_ANGLE,
+                self.config.MAX_BEND_ANGLE,
             )
-            new_limit.max_force = self.joint_max_force
+            new_limit.max_force = self.config.STIFFNESS
             self.space.add(new_limit)
             self.joints.append(new_limit)
 

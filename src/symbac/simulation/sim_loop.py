@@ -9,7 +9,7 @@ Initializes Pygame and Pymunk and runs the main simulation loop.
 pygame.init()
 screen_width, screen_height = 1200, 800
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Dividing Worm Colony Simulation")
+pygame.display.set_caption("Cell Colony Simulation")
 
 space = pymunk.Space(threaded=True)
 space.threads = 2
@@ -40,7 +40,7 @@ def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
 
 # Add periodic updates in your main loop:
 frame_count = 0
-last_segment_count = 15  # Initial worm segments
+last_segment_count = 15  # Initial cell segments
 
 space.iterations = 60
 space.gravity = (0, 0)
@@ -63,27 +63,29 @@ colony = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=8,
+    GRANULARITY=3,
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=5, #TODO when the growth rate is too high (e.g 20), the division asymmetry returns because the mother grows too fast as the septum forms
-    BASE_MAX_LENGTH=60,
+    BASE_MAX_LENGTH=600, # Why does very long max length lead to instability?
     MAX_LENGTH_VARIATION=0.2, # don't go above 1!
     MIN_LENGTH_AFTER_DIVISION=10,
     SEED_CELL_SEGMENTS=30,
+    MAX_BEND_ANGLE=0.001, # 0.01 normally, 0.05 also good for E. coli in MM
+    STIFFNESS=300_00
 )
 
-initial_worm = Cell(
+initial_cell = Cell(
     space,
     config=initial_cell_config,
     start_pos=(screen_width / 2, screen_height / 2),
     group_id=next_group_id,
     noise_strength=0.1,  # NEW: Small environmental noise
 )
-colony.append(initial_worm)
+colony.append(initial_cell)
 next_group_id += 1
 
-# In your main() function, after creating initial_worm:
+# In your main() function, after creating initial_cell:
 setup_spatial_hash(space, colony)
 
 mouse_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
@@ -166,19 +168,19 @@ while running:
     # NEW: Only run simulation if not paused
     if not is_paused:
         for _ in range(simulation_speed_multiplier):
-            newly_born_worms_map = {}
+            newly_born_cells_map = {}
 
-            for worm in colony[:]:
-                worm.apply_noise(dt)
-                worm.grow(dt)
-                new_worm = worm.divide(next_group_id, dt)  # Pass dt here
-                if new_worm:
-                    newly_born_worms_map[new_worm] = worm
+            for cell in colony[:]:
+                cell.apply_noise(dt)
+                cell.grow(dt)
+                new_cell = cell.divide(next_group_id, dt)  # Pass dt here
+                if new_cell:
+                    newly_born_cells_map[new_cell] = cell
                     next_group_id += 1
 
-            if newly_born_worms_map:
+            if newly_born_cells_map:
                 counter = 0
-                for daughter, mother in newly_born_worms_map.items():
+                for daughter, mother in newly_born_cells_map.items():
                     while True:
                         overlap_found = False
                         for daughter_shape in daughter.shapes:
@@ -198,7 +200,7 @@ while running:
                         if counter > 100:
                             break
 
-            colony.extend(newly_born_worms_map.keys())
+            colony.extend(newly_born_cells_map.keys())
             space.step(dt)
 
     # NEW: Apply camera transform to draw options
@@ -243,7 +245,7 @@ while running:
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
         if frame_count % 60 == 0:
-            current_segment_count = sum(len(worm.bodies) for worm in colony)
+            current_segment_count = sum(len(cell.bodies) for cell in colony)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
                 dim, count = estimate_spatial_hash_params(colony)
                 space.use_spatial_hash(dim, count)
