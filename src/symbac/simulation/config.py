@@ -76,5 +76,5 @@ class PhysicsConfig:
     ITERATIONS: int = 60
     DAMPING: float = 0.5
     GRAVITY: tuple[float, float] = (0.0, 0.0)
-    THREADED: bool = True
-    THREADS: int = 2
+    THREADED: bool = False # Use pymunk.Space(threaded=True) for multithreading but non-deterministic results, even with random seed set
+    THREADS: int = 1

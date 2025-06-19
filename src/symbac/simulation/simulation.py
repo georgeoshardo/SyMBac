@@ -1,3 +1,5 @@
+import numpy as np
+np.random.seed(42)
 import pymunk
 from symbac.simulation.cell import Cell
 from symbac.simulation.config import CellConfig, PhysicsConfig
@@ -42,11 +44,11 @@ colony: list[Cell] = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=3,
+    GRANULARITY=8,
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=2,
-    BASE_MAX_LENGTH=55, # This should be stable now!
+    BASE_MAX_LENGTH=40,
     MAX_LENGTH_VARIATION=0.5,
     MIN_LENGTH_AFTER_DIVISION=10,
     NOISE_STRENGTH=0.05,
@@ -173,7 +175,7 @@ while True:
     frame_count += 1
 
     # Update spatial hash every 60 steps
-    if frame_count % 20 == 0:
+    if frame_count % 1 == 0:
         current_segment_count = sum(len(cell.segments) for cell in colony)
         if current_segment_count > last_segment_count * 1.5:  # 50% growth
             dim, count = estimate_spatial_hash_params(colony)

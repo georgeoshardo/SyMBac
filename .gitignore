@@ -151,3 +151,4 @@ for_reviewers/
 
 
 .DS_Store
+/src/symbac/simulation/frames

@@ -31,13 +31,14 @@ class Cell:
         self.limit_joints: list[pymunk.RotaryLimitJoint] = []
         self.spring_joints: list[pymunk.DampedRotarySpring] = []
 
-        self.growth_accumulator = 0.0
+        self.growth_accumulator_head = 0.0
+        self.growth_accumulator_tail = 0.0
         self.is_dividing = False
         self.septum_progress = 0.0
         self.septum_duration = 1.5
         self.division_site: int | None = None
-        self.num_septum_segments = self.config.GRANULARITY
-        self.min_septum_radius = 0.1
+        self.num_septum_segments = self.config.GRANULARITY - 1
+        self.min_septum_radius = self.config.SEGMENT_RADIUS * 0.25
         self.length_at_division_start = 0
         self.division_bias = self.config.GRANULARITY
 
@@ -107,61 +108,127 @@ class Cell:
         if len(self.segments) < 2:
             return
 
-        self.growth_accumulator += (
-                self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
+        added_length = self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
+
+        half_growth = added_length / 2
+
+        self.growth_accumulator_head += (
+            half_growth
+        ) # Head increases in length by half the total added length
+
+        self.growth_accumulator_tail += (
+            half_growth
+        )  # Tail increases in length by half the total added length
+
+        # Adjust and stretch the head joint anchor
+        first_pivot_joint = self.pivot_joints[0]
+        first_pivot_joint.anchor_a = (
+            self.config.JOINT_DISTANCE / 2 + self.growth_accumulator_head,
+            0
         )
+
+        # Adjust and stretch the tail joint anchor
         last_pivot_joint = self.pivot_joints[-1]
-        original_anchor_x = -self.config.JOINT_DISTANCE / 2
         last_pivot_joint.anchor_b = (
-            original_anchor_x - self.growth_accumulator,
+            -self.config.JOINT_DISTANCE / 2 - self.growth_accumulator_tail,
             0,
         )
 
-        if self.growth_accumulator >= self.config.GROWTH_THRESHOLD:
-            pre_tail_segment = self.segments[-2]
-            old_tail_segment = self.segments[-1]
-            last_pivot_joint.anchor_b = (original_anchor_x, 0)
-
-            stable_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(pre_tail_segment.angle)
-            old_tail_segment.position = pre_tail_segment.position + stable_offset
-            old_tail_segment.angle = pre_tail_segment.angle
-
-            new_tail_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(old_tail_segment.angle)
-            new_position = old_tail_segment.position + new_tail_offset
-
-            noise_x = np.random.uniform(-0.1, 0.1)
-            noise_y = np.random.uniform(-0.1, 0.1)
-            new_position += Vec2d(noise_x, noise_y)
-            new_position = new_position[0], new_position[1] # Convert Vec2d to tuple for mypy
-
-            new_tail_segment = CellSegment(
-                config=self.config,
-                group_id=self.group_id,
-                position=new_position,
-                angle=old_tail_segment.angle,
-                space=self.space,
-            )
-
-            self.space.add(new_tail_segment.body, new_tail_segment.shape)
-            self.segments.append(new_tail_segment)
-
-            # Add joints connecting the old tail to the new tail
-            new_pivot = CellJoint(old_tail_segment, new_tail_segment, self.config)
-            self.space.add(new_pivot)
-            self.pivot_joints.append(new_pivot)
-
-            if self.config.ROTARY_LIMIT_JOINT:
-                new_limit = CellRotaryLimitJoint(old_tail_segment, new_tail_segment, self.config)
-                self.space.add(new_limit)
-                self.limit_joints.append(new_limit)
-
-            if self.config.DAMPED_ROTARY_SPRING:
-                new_spring = CellDampedRotarySpring(old_tail_segment, new_tail_segment, self.config)
-                self.space.add(new_spring)
-                self.spring_joints.append(new_spring)
-
-            self.growth_accumulator = 0.0
+        if self.growth_accumulator_head >= self.config.GROWTH_THRESHOLD:
+            first_pivot_joint.anchor_a = (self.config.JOINT_DISTANCE / 2, 0)
+            self._add_head_segment()
+            self.growth_accumulator_head = 0.0
             self._update_colors()
+
+        if self.growth_accumulator_tail >= self.config.GROWTH_THRESHOLD:
+            last_pivot_joint.anchor_b = (-self.config.JOINT_DISTANCE / 2, 0)
+            self._add_tail_segment()
+            self.growth_accumulator_tail = 0.0
+            self._update_colors()
+
+    def _add_head_segment(self):
+        """Adds a new segment to the head of the cell."""
+        # This is the mirror logic of _add_segment_to_tail
+        old_head_segment = self.segments[0]
+        post_head_segment = self.segments[1]
+
+        # Stabilize the old head segment
+        stable_offset = Vec2d(-self.config.JOINT_DISTANCE, 0).rotated(post_head_segment.angle)
+        old_head_segment.position = post_head_segment.position + stable_offset
+        old_head_segment.angle = post_head_segment.angle
+
+        # Calculate position for the new head segment
+        new_head_offset = Vec2d(-self.config.JOINT_DISTANCE, 0).rotated(old_head_segment.angle)
+        new_position = old_head_segment.position + new_head_offset
+        new_position = new_position[0], new_position[1] # Convert Vec2d to tuple
+
+        new_head_segment = CellSegment(
+            config=self.config,
+            group_id=self.group_id,
+            position=new_position,
+            angle=old_head_segment.angle,
+            space=self.space
+        )
+
+        self.space.add(new_head_segment.body, new_head_segment.shape)
+        self.segments.insert(0, new_head_segment)
+
+        # Add joints connecting the new head to the old head
+        new_pivot = CellJoint(new_head_segment, old_head_segment, self.config)
+        self.space.add(new_pivot)
+        self.pivot_joints.insert(0, new_pivot)
+
+        if self.config.ROTARY_LIMIT_JOINT:
+            new_limit = CellRotaryLimitJoint(new_head_segment, old_head_segment, self.config)
+            self.space.add(new_limit)
+            self.limit_joints.insert(0, new_limit)
+
+        if self.config.DAMPED_ROTARY_SPRING:
+            new_spring = CellDampedRotarySpring(new_head_segment, old_head_segment, self.config)
+            self.space.add(new_spring)
+            self.spring_joints.insert(0, new_spring)
+
+    def _add_tail_segment(self):
+        pre_tail_segment = self.segments[-2]
+        old_tail_segment = self.segments[-1]
+
+        stable_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(pre_tail_segment.angle)
+        old_tail_segment.position = pre_tail_segment.position + stable_offset
+        old_tail_segment.angle = pre_tail_segment.angle
+
+        new_tail_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(old_tail_segment.angle)
+        new_position = old_tail_segment.position + new_tail_offset
+
+        noise_x = np.random.uniform(-0.1, 0.1)
+        noise_y = np.random.uniform(-0.1, 0.1)
+        new_position += Vec2d(noise_x, noise_y)
+        new_position = new_position[0], new_position[1]  # Convert Vec2d to tuple for mypy
+
+        new_tail_segment = CellSegment(
+            config=self.config,
+            group_id=self.group_id,
+            position=new_position,
+            angle=old_tail_segment.angle,
+            space=self.space,
+        )
+
+        self.space.add(new_tail_segment.body, new_tail_segment.shape)
+        self.segments.append(new_tail_segment)
+
+        # Add joints connecting the old tail to the new tail
+        new_pivot = CellJoint(old_tail_segment, new_tail_segment, self.config)
+        self.space.add(new_pivot)
+        self.pivot_joints.append(new_pivot)
+
+        if self.config.ROTARY_LIMIT_JOINT:
+            new_limit = CellRotaryLimitJoint(old_tail_segment, new_tail_segment, self.config)
+            self.space.add(new_limit)
+            self.limit_joints.append(new_limit)
+
+        if self.config.DAMPED_ROTARY_SPRING:
+            new_spring = CellDampedRotarySpring(old_tail_segment, new_tail_segment, self.config)
+            self.space.add(new_spring)
+            self.spring_joints.append(new_spring)
 
     def remove_tail_segment(self):
         """Safely removes the last segment of the cell."""
