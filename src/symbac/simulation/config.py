@@ -12,6 +12,7 @@ class CellConfig:
     BASE_MAX_LENGTH: int = 40
     SEED_CELL_SEGMENTS: int = 15
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
+    NOISE_STRENGTH: float = 0.05
 
     DAMPED_ROTARY_SPRING: bool = False
     ROTARY_SPRING_STIFFNESS: float | None = None

@@ -15,13 +15,11 @@ class Cell:
             config: CellConfig,
             start_pos: tuple[float, float],
             group_id: int = 0,
-            noise_strength: float = 0.05,
             _from_division: bool = False
     ) -> None:
         self.space = space
         self.config = config
         self.start_pos = start_pos
-        self.noise_strength = noise_strength
         self.group_id = group_id
         self.base_color = generate_color(group_id)
 
@@ -90,7 +88,7 @@ class Cell:
             pivot = pymunk.PivotJoint(
                 prev_body, body, anchor_on_prev, anchor_on_curr
             )
-            pivot.max_force = self.config.STIFFNESS # - pivots should have a hardcoded max force I think?
+            pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS # - pivots should have a hardcoded max force I think?
             self.space.add(pivot)
 
             if self.config.ROTARY_LIMIT_JOINT:
@@ -161,7 +159,7 @@ class Cell:
             new_pivot = pymunk.PivotJoint(
                 old_tail_body, new_tail_body, anchor_on_prev, anchor_on_curr
             )
-            new_pivot.max_force = self.config.STIFFNESS
+            new_pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS
             self.space.add(new_pivot)
 
 
@@ -251,7 +249,7 @@ class Cell:
 
         daughter_cell = Cell(
             space=self.space, config=self.config, start_pos=self.bodies[mother_final_len].position,
-            group_id=next_group_id, noise_strength=self.noise_strength, _from_division=True
+            group_id=next_group_id, _from_division=True
         )
 
         daughter_cell.bodies = self.bodies[mother_final_len:]
@@ -293,10 +291,10 @@ class Cell:
 
     def apply_noise(self, dt: float):
         for body in self.bodies:
-            force_x = np.random.uniform(-self.noise_strength, self.noise_strength)
-            force_y = np.random.uniform(-self.noise_strength, self.noise_strength)
+            force_x = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
+            force_y = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
             body.force += Vec2d(force_x, force_y)
-            torque = np.random.uniform(-self.noise_strength * 0.1, self.noise_strength * 0.1)
+            torque = np.random.uniform(-self.config.NOISE_STRENGTH * 0.1, self.config.NOISE_STRENGTH * 0.1)
             body.torque += torque
 
     def divide(self, next_group_id: int, dt: float) -> Optional['Cell']:

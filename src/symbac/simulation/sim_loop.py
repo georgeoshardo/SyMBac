@@ -76,6 +76,7 @@ initial_cell_config = CellConfig(
     BASE_MAX_LENGTH=35, # This should be stable now!
     MAX_LENGTH_VARIATION=0.2,
     MIN_LENGTH_AFTER_DIVISION=10,
+    NOISE_STRENGTH=0.05,
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
@@ -91,7 +92,6 @@ initial_cell = Cell(
     config=initial_cell_config,
     start_pos=(screen_width / 2, screen_height / 2),
     group_id=next_group_id,
-    noise_strength=0, #Can go as high as 20+  but normally around 0.5
 )
 colony.append(initial_cell)
 next_group_id += 1
