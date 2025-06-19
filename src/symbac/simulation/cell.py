@@ -6,7 +6,7 @@ from typing import Optional
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
 from symbac.simulation.segments import CellSegment
-from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint
+from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
 
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
@@ -34,9 +34,6 @@ class Cell:
         self.spring_joints: list[pymunk.DampedRotarySpring] = []
 
         self.growth_accumulator = 0.0
-        self.growth_threshold = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
-        self.joint_distance = self.config.SEGMENT_RADIUS / self.config.GRANULARITY
-
         self.is_dividing = False
         self.septum_progress = 0.0
         self.septum_duration = 1.5
@@ -75,13 +72,11 @@ class Cell:
                       of the cell.
         """
 
-
-
         if is_first:
             segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos)
         else:
             prev_body = self.bodies[-1]
-            offset = Vec2d(self.joint_distance, 0).rotated(prev_body.angle)
+            offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(prev_body.angle)
 
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
@@ -96,29 +91,17 @@ class Cell:
         self.segments.append(segment)
 
         if not is_first:
-            prev_body = self.bodies[-2]
             prev_segment = self.segments[-2]
             joint = CellJoint(prev_segment, segment, self.config)
             self.space.add(joint)
 
             if self.config.ROTARY_LIMIT_JOINT:
-
-                #limit = pymunk.RotaryLimitJoint(
-                #    prev_body, segment.body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
-                #)
-                #limit.max_force = self.config.STIFFNESS
-
                 limit = CellRotaryLimitJoint(prev_segment, segment, self.config)
-
                 self.space.add(limit)
                 self.limit_joints.append(limit)
 
             if self.config.DAMPED_ROTARY_SPRING:
-                assert self.config.ROTARY_SPRING_STIFFNESS is not None
-                assert self.config.ROTARY_SPRING_DAMPING is not None
-                spring = pymunk.DampedRotarySpring(
-                    prev_body, segment.body, 0, self.config.ROTARY_SPRING_STIFFNESS, self.config.ROTARY_SPRING_DAMPING
-                )
+                spring = CellDampedRotarySpring(prev_segment, segment, self.config)
                 self.space.add(spring)
                 self.spring_joints.append(spring)
 
@@ -134,27 +117,27 @@ class Cell:
         self.growth_accumulator += (
                 self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
         )
-
         last_pivot_joint = self.pivot_joints[-1]
-        original_anchor_x = -self.joint_distance / 2
+        original_anchor_x = -self.config.JOINT_DISTANCE / 2
         last_pivot_joint.anchor_b = (
             original_anchor_x - self.growth_accumulator,
             0,
         )
 
-        if self.growth_accumulator >= self.growth_threshold:
+        if self.growth_accumulator >= self.config.GROWTH_THRESHOLD:
             pre_tail_body = self.bodies[-2]
             old_tail_body = self.bodies[-1]
             last_pivot_joint.anchor_b = (original_anchor_x, 0)
-            stable_offset = Vec2d(self.joint_distance, 0).rotated(pre_tail_body.angle)
+            stable_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(pre_tail_body.angle)
             old_tail_body.position = pre_tail_body.position + stable_offset
             old_tail_body.angle = pre_tail_body.angle
 
-
+           # pre_tail_segment = self.segments[-2]
+           # old_tail_segment = self.segments[-1]
 
             moment = pymunk.moment_for_circle(self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS)
             new_tail_body = pymunk.Body(self.config.SEGMENT_MASS, moment)
-            new_tail_offset = Vec2d(self.joint_distance, 0).rotated(old_tail_body.angle)
+            new_tail_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(old_tail_body.angle)
             new_tail_body.position = old_tail_body.position + new_tail_offset
             new_tail_body.angle = old_tail_body.angle
 
@@ -169,8 +152,8 @@ class Cell:
             self.shapes.append(new_tail_shape)
 
 
-            anchor_on_prev = (self.joint_distance / 2, 0)
-            anchor_on_curr = (-self.joint_distance / 2, 0)
+            anchor_on_prev = (self.config.JOINT_DISTANCE / 2, 0)
+            anchor_on_curr = (-self.config.JOINT_DISTANCE / 2, 0)
             new_pivot = pymunk.PivotJoint(
                 old_tail_body, new_tail_body, anchor_on_prev, anchor_on_curr
             )

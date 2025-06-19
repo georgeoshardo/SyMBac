@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 @dataclass(slots=True, frozen=True)
@@ -21,8 +21,11 @@ class CellConfig:
     ROTARY_LIMIT_JOINT: bool = True  # Whether to use rotary limit joints
     MAX_BEND_ANGLE: float | None = None  # 0.01 normally, 0.05 also good for E. coli in MM
     STIFFNESS: float | None = None  # Stiffness for limit joints, can be np.inf for max stiffness
+    JOINT_DISTANCE: float = field(init=False)
+    GROWTH_THRESHOLD: float = field(init=False)
 
     def __post_init__(self):
+
         if not self.DAMPED_ROTARY_SPRING:
             if self.ROTARY_SPRING_STIFFNESS is not None or self.ROTARY_SPRING_DAMPING is not None:
                 raise ValueError(
@@ -53,6 +56,11 @@ class CellConfig:
                 raise ValueError(
                     "ROTARY_LIMIT_JOINT=False, but STIFFNESS was not provided."
                 )
+
+        # Use object.__setattr__ because the class is frozen
+        object.__setattr__(self, "JOINT_DISTANCE", self.SEGMENT_RADIUS / self.GRANULARITY)
+        object.__setattr__(self, "GROWTH_THRESHOLD", self.SEGMENT_RADIUS / self.GRANULARITY)
+
 
 
 class SimViewerConfig:

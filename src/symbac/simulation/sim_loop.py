@@ -81,7 +81,7 @@ initial_cell_config = CellConfig(
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
     STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
-    #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs
+    #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
     #PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
