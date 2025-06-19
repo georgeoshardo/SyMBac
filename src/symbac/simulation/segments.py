@@ -1,7 +1,7 @@
 import pymunk
 import pymunk.pygame_util
 from symbac.simulation.config import CellConfig
-
+from typing import Optional
 
 class CellSegment:
     """
@@ -27,7 +27,8 @@ class CellSegment:
             config: CellConfig,
             group_id: int,
             position: tuple[float, float] = (0.0, 0.0),
-            angle: float = 0.0
+            angle: float = 0.0,
+            space: pymunk.Space = None
     ) -> None:
         """
         Parameters
@@ -60,6 +61,7 @@ class CellSegment:
         self.shape.filter = pymunk.ShapeFilter(group=self.group_id)
         self.angle = angle
         self.position = position
+        self.space = space
 
     @property
     def position(self) -> tuple[float, float]:
@@ -79,4 +81,14 @@ class CellSegment:
     def angle(self, angle: float) -> None:
         self.body.angle = angle
 
+    @property
+    def radius(self) -> float:
+        return self.shape.radius
 
+    @radius.setter
+    def radius(self, new_radius: float) -> None:
+        friction, filter, color = self.shape.friction, self.shape.filter, self.shape.color
+        self.space.remove(self.shape)
+        self.shape = pymunk.Circle(self.body, new_radius)
+        self.shape.friction, self.shape.filter, self.shape.color = friction, filter, color
+        self.space.add(self.shape)

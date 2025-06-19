@@ -69,17 +69,17 @@ class Cell:
         """
 
         if is_first:
-            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos)
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos, space=self.space)
         else:
             prev_segment = self.segments[-1]
             offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(prev_segment.angle)
 
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
-            segment_position = prev_segment.position + offset + Vec2d(noise_x, noise_y)
+            segment_position = prev_segment.position[0] + offset[0] + noise_x, prev_segment.position[1] + offset[1] + noise_y
             segment_angle = prev_segment.angle
             segment = CellSegment(config=self.config, group_id=self.group_id, position=segment_position,
-                                  angle=segment_angle)
+                                  angle=segment_angle, space=self.space)
 
         self.space.add(segment.body, segment.shape)
         self.segments.append(segment)
@@ -132,12 +132,14 @@ class Cell:
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
             new_position += Vec2d(noise_x, noise_y)
+            new_position = new_position[0], new_position[1] # Convert Vec2d to tuple for mypy
 
             new_tail_segment = CellSegment(
                 config=self.config,
                 group_id=self.group_id,
                 position=new_position,
-                angle=old_tail_segment.angle
+                angle=old_tail_segment.angle,
+                space=self.space,
             )
 
             self.space.add(new_tail_segment.body, new_tail_segment.shape)
@@ -191,8 +193,8 @@ class Cell:
                 new_radius = self.config.SEGMENT_RADIUS - shrinkage
 
                 # Recreate shape and update the segment's shape reference
-                self.segments[mother_idx].shape = self._recreate_shape(self.segments[mother_idx].shape, new_radius)
-                self.segments[daughter_idx].shape = self._recreate_shape(self.segments[daughter_idx].shape, new_radius)
+                self.segments[mother_idx].radius = new_radius
+                self.segments[daughter_idx].radius = new_radius
 
         if progress < 1.0:
             return None
@@ -202,11 +204,8 @@ class Cell:
             mother_idx = self.division_site - 1 - i
             daughter_idx = self.division_site + i
             if mother_idx >= 0 and daughter_idx < len(self.segments):
-                self.segments[mother_idx].shape = self._recreate_shape(self.segments[mother_idx].shape,
-                                                                       self.config.SEGMENT_RADIUS)
-                self.segments[daughter_idx].shape = self._recreate_shape(self.segments[daughter_idx].shape,
-                                                                         self.config.SEGMENT_RADIUS)
-
+                self.segments[mother_idx].radius = self.config.SEGMENT_RADIUS
+                self.segments[daughter_idx].radius = self.config.SEGMENT_RADIUS
         current_length = len(self.segments)
         growth_during_division = current_length - self.length_at_division_start
         original_half_length = self.length_at_division_start // 2
@@ -302,12 +301,3 @@ class Cell:
             segment.shape.color = body_color
         self.segments[0].shape.color = head_color
         self.segments[-1].shape.color = tail_color
-
-    def _recreate_shape(self, shape_to_replace: pymunk.Circle, new_radius: float) -> pymunk.Circle:
-        body = shape_to_replace.body
-        friction, filter, color = shape_to_replace.friction, shape_to_replace.filter, shape_to_replace.color
-        self.space.remove(shape_to_replace)
-        new_shape = pymunk.Circle(body, new_radius)
-        new_shape.friction, new_shape.filter, new_shape.color = friction, filter, color
-        self.space.add(new_shape)
-        return new_shape
