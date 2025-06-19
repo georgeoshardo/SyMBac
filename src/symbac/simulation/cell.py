@@ -6,6 +6,7 @@ from typing import Optional
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
 from symbac.simulation.segments import CellSegment
+from symbac.simulation.joints import CellJoint
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
@@ -25,6 +26,7 @@ class Cell:
 
         self.bodies: list[pymunk.Body] = []
         self.shapes: list[pymunk.Circle] = []
+        self.segments: list[CellSegment] = []
 
         self.pivot_joints: list[pymunk.PivotJoint] = []
         self.limit_joints: list[pymunk.RotaryLimitJoint] = []
@@ -72,35 +74,37 @@ class Cell:
                       of the cell.
         """
 
-        segment = CellSegment(config = self.config, group_id=self.group_id)
+
 
         if is_first:
-            segment.body.position = self.start_pos
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos)
         else:
             prev_body = self.bodies[-1]
             offset = Vec2d(self.joint_distance, 0).rotated(prev_body.angle)
-            segment.body.position = prev_body.position + offset
-            segment.body.angle = prev_body.angle
+
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
-            segment.body.position += Vec2d(noise_x, noise_y)
-
+            segment_position = prev_body.position + offset + Vec2d(noise_x, noise_y)# Convert Vec2d to tuple for mypy
+            segment_angle = prev_body.angle
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=segment_position, angle=segment_angle)
 
 
         self.space.add(segment.body, segment.shape)
         self.bodies.append(segment.body)
         self.shapes.append(segment.shape)
+        self.segments.append(segment)
 
         if not is_first:
             prev_body = self.bodies[-2]
 
-            anchor_on_prev = (self.joint_distance / 2, 0)
-            anchor_on_curr = (-self.joint_distance / 2, 0)
-            pivot = pymunk.PivotJoint(
-                prev_body, segment.body, anchor_on_prev, anchor_on_curr
-            )
-            pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS # - pivots should have a hardcoded max force I think?
-            self.space.add(pivot)
+            joint = CellJoint(prev_body, segment.body, self.config)
+            #anchor_on_prev = (self.joint_distance / 2, 0) # Local coordinates relative to the body for the pivot joint
+            #anchor_on_curr = (-self.joint_distance / 2, 0)
+            #pivot = pymunk.PivotJoint(
+            #    prev_body, segment.body, anchor_on_prev, anchor_on_curr
+            #)
+            #pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS # - pivots should have a hardcoded max force I think?
+            self.space.add(joint)
 
             if self.config.ROTARY_LIMIT_JOINT:
                 assert self.config.STIFFNESS is not None
@@ -121,7 +125,7 @@ class Cell:
                 self.space.add(spring)
                 self.spring_joints.append(spring)
 
-            self.pivot_joints.append(pivot)
+            self.pivot_joints.append(joint)
 
     def grow(self, dt):
         if not self.is_dividing and len(self.bodies) >= self._max_length:
@@ -148,6 +152,8 @@ class Cell:
             stable_offset = Vec2d(self.joint_distance, 0).rotated(pre_tail_body.angle)
             old_tail_body.position = pre_tail_body.position + stable_offset
             old_tail_body.angle = pre_tail_body.angle
+
+
 
             moment = pymunk.moment_for_circle(self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS)
             new_tail_body = pymunk.Body(self.config.SEGMENT_MASS, moment)
