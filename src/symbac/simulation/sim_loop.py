@@ -80,7 +80,7 @@ initial_cell_config = CellConfig(
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
-    STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
+    STIFFNESS=300_0000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
@@ -90,7 +90,7 @@ initial_cell_config = CellConfig(
 initial_cell = Cell(
     space,
     config=initial_cell_config,
-    start_pos=(screen_width / 2, screen_height / 2),
+    start_pos=(0, 0),
     group_id=next_group_id,
 )
 colony.append(initial_cell)
