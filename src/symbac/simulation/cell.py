@@ -1,4 +1,3 @@
-# cell.py (Refactored)
 import pymunk
 import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
@@ -6,6 +5,7 @@ import numpy as np
 from typing import Optional
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
+from symbac.simulation.segments import CellSegment
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
@@ -52,33 +52,44 @@ class Cell:
 
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
-                self._add_initial_segment(i == 0)
+                self._add_seed_cell_segments(i == 0)
             self._update_colors()
 
-    def _add_initial_segment(self, is_first: bool) -> None:
-        moment = pymunk.moment_for_circle(
-            self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS
-        )
-        body = pymunk.Body(self.config.SEGMENT_MASS, moment)
+
+    def _add_seed_cell_segments(self, is_first: bool) -> None:
+        """Adds a single new segment during the initial construction of the very first cell.
+
+        This method creates a pymunk body and shape for one segment. It
+        has two modes:
+        1. If `is_first` is True, it places the segment at the cell's
+           designated start position.
+        2. If `is_first` is False, it places the segment adjacent to the
+           previously added segment and creates the necessary physical joints
+           (Pivot, and optionally Rotary Limit and Spring) to connect them.
+
+        Args:
+            is_first: A flag to indicate if this is the very first segment
+                      of the cell.
+        """
+
+        segment = CellSegment(config = self.config, group_id=self.group_id)
 
         if is_first:
-            body.position = self.start_pos
+            segment.body.position = self.start_pos
         else:
             prev_body = self.bodies[-1]
             offset = Vec2d(self.joint_distance, 0).rotated(prev_body.angle)
-            body.position = prev_body.position + offset
-            body.angle = prev_body.angle
+            segment.body.position = prev_body.position + offset
+            segment.body.angle = prev_body.angle
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
-            body.position += Vec2d(noise_x, noise_y)
+            segment.body.position += Vec2d(noise_x, noise_y)
 
-        shape = pymunk.Circle(body, self.config.SEGMENT_RADIUS)
-        shape.friction = 0.0
-        shape.filter = pymunk.ShapeFilter(group=self.group_id)
 
-        self.space.add(body, shape)
-        self.bodies.append(body)
-        self.shapes.append(shape)
+
+        self.space.add(segment.body, segment.shape)
+        self.bodies.append(segment.body)
+        self.shapes.append(segment.shape)
 
         if not is_first:
             prev_body = self.bodies[-2]
@@ -86,7 +97,7 @@ class Cell:
             anchor_on_prev = (self.joint_distance / 2, 0)
             anchor_on_curr = (-self.joint_distance / 2, 0)
             pivot = pymunk.PivotJoint(
-                prev_body, body, anchor_on_prev, anchor_on_curr
+                prev_body, segment.body, anchor_on_prev, anchor_on_curr
             )
             pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS # - pivots should have a hardcoded max force I think?
             self.space.add(pivot)
@@ -95,7 +106,7 @@ class Cell:
                 assert self.config.STIFFNESS is not None
                 assert self.config.MAX_BEND_ANGLE is not None
                 limit = pymunk.RotaryLimitJoint(
-                    prev_body, body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
+                    prev_body, segment.body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
                 )
                 limit.max_force = self.config.STIFFNESS
                 self.space.add(limit)
@@ -105,7 +116,7 @@ class Cell:
                 assert self.config.ROTARY_SPRING_STIFFNESS is not None
                 assert self.config.ROTARY_SPRING_DAMPING is not None
                 spring = pymunk.DampedRotarySpring(
-                    prev_body, body, 0, self.config.ROTARY_SPRING_STIFFNESS, self.config.ROTARY_SPRING_DAMPING
+                    prev_body, segment.body, 0, self.config.ROTARY_SPRING_STIFFNESS, self.config.ROTARY_SPRING_DAMPING
                 )
                 self.space.add(spring)
                 self.spring_joints.append(spring)
@@ -123,7 +134,6 @@ class Cell:
                 self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
         )
 
-        # --- REFACTORED: Get last pivot joint explicitly. No more IndexError! ---
         last_pivot_joint = self.pivot_joints[-1]
         original_anchor_x = -self.joint_distance / 2
         last_pivot_joint.anchor_b = (
@@ -132,18 +142,19 @@ class Cell:
         )
 
         if self.growth_accumulator >= self.growth_threshold:
-            # ... (rest of the segment creation logic is the same)
             pre_tail_body = self.bodies[-2]
             old_tail_body = self.bodies[-1]
             last_pivot_joint.anchor_b = (original_anchor_x, 0)
             stable_offset = Vec2d(self.joint_distance, 0).rotated(pre_tail_body.angle)
             old_tail_body.position = pre_tail_body.position + stable_offset
             old_tail_body.angle = pre_tail_body.angle
+
             moment = pymunk.moment_for_circle(self.config.SEGMENT_MASS, 0, self.config.SEGMENT_RADIUS)
             new_tail_body = pymunk.Body(self.config.SEGMENT_MASS, moment)
             new_tail_offset = Vec2d(self.joint_distance, 0).rotated(old_tail_body.angle)
             new_tail_body.position = old_tail_body.position + new_tail_offset
             new_tail_body.angle = old_tail_body.angle
+
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
             new_tail_body.position += Vec2d(noise_x, noise_y)
