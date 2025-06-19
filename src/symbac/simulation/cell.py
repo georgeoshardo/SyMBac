@@ -6,7 +6,8 @@ from typing import Optional
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
 from symbac.simulation.segments import CellSegment
-from symbac.simulation.joints import CellJoint
+from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint
+
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
@@ -96,23 +97,19 @@ class Cell:
 
         if not is_first:
             prev_body = self.bodies[-2]
-
-            joint = CellJoint(prev_body, segment.body, self.config)
-            #anchor_on_prev = (self.joint_distance / 2, 0) # Local coordinates relative to the body for the pivot joint
-            #anchor_on_curr = (-self.joint_distance / 2, 0)
-            #pivot = pymunk.PivotJoint(
-            #    prev_body, segment.body, anchor_on_prev, anchor_on_curr
-            #)
-            #pivot.max_force = self.config.PIVOT_JOINT_STIFFNESS # - pivots should have a hardcoded max force I think?
+            prev_segment = self.segments[-2]
+            joint = CellJoint(prev_segment, segment, self.config)
             self.space.add(joint)
 
             if self.config.ROTARY_LIMIT_JOINT:
-                assert self.config.STIFFNESS is not None
-                assert self.config.MAX_BEND_ANGLE is not None
-                limit = pymunk.RotaryLimitJoint(
-                    prev_body, segment.body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
-                )
-                limit.max_force = self.config.STIFFNESS
+
+                #limit = pymunk.RotaryLimitJoint(
+                #    prev_body, segment.body, -self.config.MAX_BEND_ANGLE, self.config.MAX_BEND_ANGLE
+                #)
+                #limit.max_force = self.config.STIFFNESS
+
+                limit = CellRotaryLimitJoint(prev_segment, segment, self.config)
+
                 self.space.add(limit)
                 self.limit_joints.append(limit)
 
@@ -170,6 +167,7 @@ class Cell:
             self.space.add(new_tail_body, new_tail_shape)
             self.bodies.append(new_tail_body)
             self.shapes.append(new_tail_shape)
+
 
             anchor_on_prev = (self.joint_distance / 2, 0)
             anchor_on_curr = (-self.joint_distance / 2, 0)
