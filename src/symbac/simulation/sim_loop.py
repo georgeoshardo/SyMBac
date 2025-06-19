@@ -31,12 +31,12 @@ def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     return dim, count
 
 
-def estimate_spatial_hash_params(colony: list) -> tuple[float, int]:
+def estimate_spatial_hash_params(colony: list[Cell]) -> tuple[float, int]:
     """Estimate good spatial hash parameters for current colony size"""
     if not colony:
         return 36.0, 1000
 
-    total_segments = sum(len(cell.bodies) for cell in colony)
+    total_segments = sum(len(cell.segments) for cell in colony)
     segment_radius = colony[0].config.SEGMENT_RADIUS if colony else 15
 
     # dim: slightly larger than segment diameter for optimal performance
@@ -65,7 +65,7 @@ virtual_surface = pygame.Surface((screen_width, screen_height))
 draw_options = pymunk.pygame_util.DrawOptions(virtual_surface)
 pymunk.pygame_util.positive_y_is_up = False
 
-colony = []
+colony: list[Cell] = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
@@ -191,13 +191,15 @@ while running:
             if newly_born_cells_map:
                 counter = 0
                 for daughter, mother in newly_born_cells_map.items():
+                    # Create a set of the mother's shapes for efficient lookup
+                    mother_shapes = {s.shape for s in mother.segments}
                     while True:
                         overlap_found = False
-                        for daughter_shape in daughter.shapes:
-                            query_result = space.shape_query(daughter_shape)
+                        for daughter_segment in daughter.segments:
+                            query_result = space.shape_query(daughter_segment.shape)
 
                             for info in query_result:
-                                if info.shape in mother.shapes:
+                                if info.shape in mother_shapes:
                                     mother.remove_tail_segment()
                                     overlap_found = True
                                     break
@@ -255,7 +257,7 @@ while running:
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
         if frame_count % 60 == 0:
-            current_segment_count = sum(len(cell.bodies) for cell in colony)
+            current_segment_count = sum(len(cell.segments) for cell in colony)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
                 dim, count = estimate_spatial_hash_params(colony)
                 space.use_spatial_hash(dim, count)
