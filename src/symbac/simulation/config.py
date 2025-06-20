@@ -68,7 +68,7 @@ class SimViewerConfig:
     SCREEN_WIDTH: int = 1200
     SCREEN_HEIGHT: int = 800
     FPS: int = 1
-    SIMULATION_SPEED_MULTIPLIER: int = 10
+    SIMULATION_SPEED_MULTIPLIER: int = 1
     BACKGROUND_COLOR: tuple[int, int, int] = (20, 30, 40)
     FONT_SIZE: int = 36
 
