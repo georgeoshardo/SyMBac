@@ -1,9 +1,10 @@
 import numpy as np
 np.random.seed(42)
 import pymunk
-from symbac.simulation.cell import Cell
-from symbac.simulation.config import CellConfig, PhysicsConfig
-
+from cell import Cell
+from config import CellConfig, PhysicsConfig
+import time
+from joblib import Parallel, delayed
 space = pymunk.Space(threaded=PhysicsConfig.THREADED)
 space.threads = PhysicsConfig.THREADS
 space.iterations = PhysicsConfig.ITERATIONS
@@ -48,7 +49,7 @@ initial_cell_config = CellConfig(
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=60, # This should be stable now!
+    BASE_MAX_LENGTH=40, # This should be stable now!
     MAX_LENGTH_VARIATION=0.5,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
@@ -173,7 +174,9 @@ while True:
     newly_born_cells_map = {}
 
     for cell in colony[:]:
-        cell.apply_noise(dt)
+        if frame_count % 60 == 0:
+            cell.apply_noise(dt)
+
         cell.grow(dt)
         new_cell = cell.divide(next_group_id, dt)  # Pass dt here
         if new_cell:
@@ -224,7 +227,9 @@ while True:
             dim, count = estimate_spatial_hash_params(colony)
             space.use_spatial_hash(dim, count)
             last_segment_count = current_segment_count
+        start = time.perf_counter()
         draw_colony_matplotlib(colony, image_count, output_directory)
+        end = time.perf_counter()
         image_count += 1
-        print("Drew frame", frame_count, "with", current_segment_count, "segments.")
+        print("Drew frame", frame_count, "with", current_segment_count, "segments.", "took", end - start, "seconds")
 

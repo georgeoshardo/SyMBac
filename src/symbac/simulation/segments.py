@@ -68,7 +68,7 @@ class CellSegment:
         self.body = pymunk.Body(self.config.SEGMENT_MASS, moment)
 
         self.shape = pymunk.Circle(self.body, self.config.SEGMENT_RADIUS)
-        self.shape.friction = 0.0
+        self.shape.friction = 0.1 #TODO make it configurable
         self.shape.filter = pymunk.ShapeFilter(group=self.group_id)
         self.angle = angle
         self.position = position

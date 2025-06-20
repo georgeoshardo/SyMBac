@@ -72,12 +72,12 @@ colony: list[Cell] = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=6, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
+    GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
     BASE_MAX_LENGTH=40, # This should be stable now!
-    MAX_LENGTH_VARIATION=0.5,
+    MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
     SEED_CELL_SEGMENTS=30,
@@ -87,7 +87,7 @@ initial_cell_config = CellConfig(
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
 initial_cell = Cell(
@@ -109,6 +109,8 @@ clock = pygame.time.Clock()
 running = True
 show_joints = True
 
+frames_to_render = [] # List to store data for rendering
+image_count = 0
 
 while running:
     for event in pygame.event.get():
@@ -186,7 +188,7 @@ while running:
             for cell in colony[:]:
                 if frame_count % 60 == 0:
                     cell.apply_noise(dt)
-                cell.check_total_compression(compression_threshold=0.1)
+                cell.check_total_compression()
                 cell.grow(dt)
 
                 new_cell = cell.divide(next_group_id, dt)  # Pass dt here
@@ -272,4 +274,91 @@ while running:
                 space.use_spatial_hash(dim, count)
                 last_segment_count = current_segment_count
 
+        current_segment_count = sum(len(cell.segments) for cell in colony)
+        print(f"Simulating step: {frame_count}, Segments: {current_segment_count}")
+
+        # Capture the state for rendering later
+        current_frame_data = [
+            {
+                'position': (seg.body.position.x, seg.body.position.y),
+                'radius': seg.shape.radius,
+                'color': seg.shape.color
+            }
+            for cell in colony for seg in cell.segments
+        ]
+        frames_to_render.append((image_count, current_frame_data))
+        image_count += 1
+
+        if current_segment_count > last_segment_count * 1.5:
+            setup_spatial_hash(space, colony)
+            last_segment_count = current_segment_count
+
 pygame.quit()
+
+from joblib import Parallel, delayed
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import os
+import time
+from tqdm import tqdm
+
+def render_frame(frame_data: list, frame_number: int, output_dir: str):
+    """
+    Draws a single frame from pre-collected data using Matplotlib and saves it.
+    This function is designed to be called in parallel.
+    """
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    if not frame_data:
+        ax.set_xlim(-100, 100)
+        ax.set_ylim(100, -100)
+    else:
+        all_positions = np.array([seg['position'] for seg in frame_data])
+        min_coords = all_positions.min(axis=0)
+        max_coords = all_positions.max(axis=0)
+        center = (min_coords + max_coords) / 2
+        view_range = (max_coords - min_coords).max() * 1.2 + 200
+        ax.set_xlim(center[0] - view_range / 2, center[0] + view_range / 2)
+        ax.set_ylim(center[1] + view_range / 2, center[1] - view_range / 2)
+
+    for segment_info in frame_data:
+        x, y = segment_info['position']
+        r = segment_info['radius']
+        rgba_fill_color = np.array(segment_info['color']) / 255.0
+        circle = patches.Circle((x, y), radius=r, facecolor=rgba_fill_color)
+        ax.add_patch(circle)
+
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_title(f"Colony State at Frame {frame_number}")
+    ax.set_facecolor('black')
+    plt.axis('off')
+    plt.tight_layout()
+
+    output_path = os.path.join(output_dir, f"frame_{frame_number:05d}.jpg")
+    plt.savefig(output_path)
+    plt.close(fig)
+
+# Clean output directory
+output_directory = "frames"
+os.makedirs(output_directory, exist_ok=True)
+print(f"Clearing old frames from ./{output_directory}/")
+for filename in os.listdir(output_directory):
+    if filename.endswith(".jpg") or filename.endswith(".jpeg"):
+        os.remove(os.path.join(output_directory, filename))
+
+# --- PARALLEL RENDERING ---
+if frames_to_render:
+    print(f"\nStarting parallel rendering of {len(frames_to_render)} frames using all available CPU cores...")
+    start_render_time = time.perf_counter()
+
+    # Use joblib to parallelize the rendering of saved frames
+    # n_jobs=-1 uses all available CPU cores
+    Parallel(n_jobs=-1)(
+        delayed(render_frame)(data, num, output_directory)
+        for num, data in tqdm(frames_to_render, desc="Rendering frames")
+    )
+
+    end_render_time = time.perf_counter()
+    print(f"Parallel rendering completed in {end_render_time - start_render_time:.2f} seconds.")
+    print(f"Output frames are saved in the '{output_directory}' directory.")

@@ -60,6 +60,8 @@ class Cell:
         self.adjusted_growth_rate = self.config.GROWTH_RATE
         self.check_total_compression()
 
+        self.num_divisions = 0
+
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
                 self._add_seed_cell_segments(i == 0)
@@ -67,6 +69,7 @@ class Cell:
 
         self._mother_septum_segments = None
         self._daughter_septum_segments = None
+
 
     def _add_seed_cell_segments(self, is_first: bool) -> None:
         """Adds a single new segment during the initial construction of the very first cell.
@@ -347,14 +350,14 @@ class Cell:
         h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
         # 3. Mutate the Hue to change the color while preserving lineage
         #    A small hue shift changes the color along the color wheel (e.g., red -> orange)
-        hue_shift = np.random.uniform(-1, 1) / (next_group_id*0.5)  # Shift hue with biased rw
-        s_shift = np.random.uniform(-0.05, 0.05) / (next_group_id*0.25)  # Slight saturation shift
-        v_shift = np.random.uniform(-0.05, 0.05) / (next_group_id*0.25) # Slight brightness shift
+        hue_shift = np.random.uniform(-1, 1) / (np.sqrt(next_group_id) * 2)  # Shift hue with biased rw
+        #s_shift = np.random.uniform(-0.2, 0.2) / (np.sqrt(next_group_id) / 1.8)  # Slight saturation shift
+        #v_shift = np.random.uniform(-0.2, 0.2) / (np.sqrt(next_group_id) / 1.8) # Slight brightness shift
         new_h = (h + hue_shift) % 1.0  # Use modulo to wrap around the color wheel
         #    This prevents colors from becoming grayish or dark.
         #    We'll clamp them to a minimum vibrancy level.
-        new_s = max(0.6, min(1,s + s_shift)) # Ensure saturation
-        new_v = max(0.6, min(1,v + v_shift)) # Ensure brightness
+        new_s = s
+        new_v = v
 
         # 5. Convert the new HSV color back to RGB
         new_r, new_g, new_b = colorsys.hsv_to_rgb(new_h, new_s, new_v)
@@ -402,6 +405,7 @@ class Cell:
         daughter_cell.growth_accumulator_tail = self.growth_accumulator_tail
 
         self.growth_accumulator_tail = 0.0
+        self.num_divisions += 1
 
         return daughter_cell
 
@@ -441,6 +445,18 @@ class Cell:
         if not self.segments: return
         a = 255
         r, g, b = self.base_color
+
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+
+        # 2. Convert RGB to HSV
+        h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+        new_s = max(s / np.sqrt(self.num_divisions+1), 0.3)  # Ensure saturation is not too low
+        new_v = max(v / np.sqrt(self.num_divisions+1), 0.3) # Ensure brightness is not too low
+
+        # 5. Convert the new HSV color back to RGB
+        r, g, b = colorsys.hsv_to_rgb(h, new_s, new_v)
+        r, g, b = (int(r * 255), int(g * 255), int(b * 255))
+
         body_color = (r,g,b,a)
         head_color = (min(255, int(r * 1.3)), min(255, int(g * 1.3)), min(255, int(b * 1.3)), a)
         tail_color = (int(r * 0.7), int(g * 0.7), int(b * 0.7), a)
@@ -532,7 +548,7 @@ class Cell:
         # Get the actual tip-to-tip length
         actual_total_length = self.get_continuous_length()
 
-        self.adjusted_growth_rate = max(self.config.GROWTH_RATE *  actual_total_length / expected_total_length, self.config.GROWTH_RATE)
+        self.adjusted_growth_rate = min(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
 
         # Check for overall cell compression
         if actual_total_length < expected_total_length:
@@ -543,5 +559,5 @@ class Cell:
                     f"Expected Length: {expected_total_length:.2f}, "
                     f"Actual Length: {actual_total_length:.2f}, "
                     f"Deviation: {deviation:.2f}",
-                    f"Fractional Growth Rate: {actual_total_length / expected_total_length:.2f}"
+                    f"Fractional Growth Rate: {self.adjusted_growth_rate / self.config.GROWTH_RATE:.2f}"
                 )
