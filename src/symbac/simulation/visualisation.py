@@ -85,7 +85,8 @@ class ColonyVisualiser:
                     radius=r,
                     facecolor=rgba_fill_color,
                     edgecolor=rgba_border_color,
-                    linewidth=1.0
+                    linewidth=1.0,
+                    alpha=0.25
                 )
                 ax.add_patch(circle)
 

@@ -36,7 +36,7 @@ class CellSegment:
             self,
             config: 'CellConfig',
             group_id: int,
-            position: tuple[float, float] = (0.0, 0.0),
+            position: pymunk.Vec2d,
             angle: float = 0.0,
             space: 'pymunk.Space | None' = None
     ) -> None:
@@ -75,12 +75,13 @@ class CellSegment:
         self.space = space
 
     @property
-    def position(self) -> tuple[float, float]:
+    def position(self) -> pymunk.Vec2d:
         """Returns the current position of the segment."""
-        return self.body.position[0], self.body.position[1]  # To return a tuple instead of Vec2d
+        return self.body.position  # To return a tuple instead of Vec2d
 
     @position.setter
-    def position(self, position: tuple[float, float]) -> None:
+    def position(self, position: pymunk.Vec2d) -> None:
+        assert isinstance(position, pymunk.Vec2d), "Position must be a pymunk.Vec2d"
         self.body.position = position
 
     @property

@@ -2,16 +2,11 @@ import pymunk
 import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
-from typing import Optional
-import sys
-
-from symbac.simulation.physics_representation import PhysicsRepresentation
-
-sys.path.insert(0, '..')
+from typing import Optional, cast
 from symbac.misc import generate_color
-from config import CellConfig
-from segments import CellSegment
-from joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
+from symbac.simulation.config import CellConfig
+from symbac.simulation.segments import CellSegment
+from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
 import colorsys
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
@@ -22,11 +17,15 @@ class Cell:
             self,
             space: pymunk.Space,
             config: CellConfig,
-            start_pos: tuple[float, float],
+            start_pos: Vec2d,
             group_id: int = 0,
             _from_division: bool = False,
             base_color: Optional[tuple[int, int, int]] = None
     ) -> None:
+
+        if isinstance(start_pos, tuple):
+            start_pos = Vec2d(*start_pos)
+
         self.space = space
         self.config = config
         self.start_pos = start_pos
@@ -120,7 +119,8 @@ class Cell:
 
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
-            segment_position = prev_segment.position[0] + offset[0] + noise_x, prev_segment.position[1] + offset[1] + noise_y
+            noise = Vec2d(noise_x, noise_y)
+            segment_position = prev_segment.position + cast(tuple[float,float], offset) + cast(tuple[float,float], noise)
             segment_angle = prev_segment.angle
             segment = CellSegment(config=self.config, group_id=self.group_id, position=segment_position,
                                   angle=segment_angle, space=self.space)
@@ -203,8 +203,8 @@ class Cell:
 
         # Calculate the position for the new segment. It will be placed one joint distance
         # away from the post_head_segment, in the direction of the final_head_segment.
-        direction = (Vec2d(*final_head_segment.position) - Vec2d(*post_head_segment.position)).normalized()
-        new_segment_pos = Vec2d(*post_head_segment.position) + direction * self.config.JOINT_DISTANCE
+        direction = (final_head_segment.position - cast(tuple[float,float], post_head_segment.position)).normalized() # Insanity to keep the type checker happy
+        new_segment_pos = post_head_segment.position + cast(tuple[float,float], direction * self.config.JOINT_DISTANCE)
         new_segment_angle = post_head_segment.angle
 
         # Create the new segment to be inserted.
@@ -263,8 +263,8 @@ class Cell:
 
         # Calculate the position for the new segment. It will be placed one joint distance
         # away from the pre_tail_segment, in the direction of the final_tail_segment.
-        direction = (Vec2d(*final_tail_segment.position) - Vec2d(*pre_tail_segment.position)).normalized()
-        new_segment_pos = Vec2d(*pre_tail_segment.position) + direction * self.config.JOINT_DISTANCE
+        direction = (final_tail_segment.position - cast(tuple[float,float],pre_tail_segment.position)).normalized()
+        new_segment_pos = Vec2d(*pre_tail_segment.position) + cast(tuple[float,float],direction * self.config.JOINT_DISTANCE)
         new_segment_angle = pre_tail_segment.angle
 
         # Create the new segment to be inserted.
@@ -538,7 +538,7 @@ class Cell:
         for i in range(1, len(self.segments)):
             segment_a = self.segments[i - 1]
             segment_b = self.segments[i]
-            distance = Vec2d(*segment_b.position) - Vec2d(*segment_a.position)
+            distance = segment_b.position - cast(tuple[float,float],segment_a.position)
             total_length += distance.length
 
         # Add the radius of the first and last segments to get the tip-to-tip length
@@ -563,7 +563,7 @@ class Cell:
             segment_a = self.segments[i]
             segment_b = self.segments[i + 1]
 
-            actual_distance = (Vec2d(*segment_b.position) - Vec2d(*segment_a.position)).length
+            actual_distance = (segment_b.position - cast(tuple[float,float],segment_a.position)).length
 
             expected_distance = self.config.JOINT_DISTANCE
             # The first joint is stretched by head growth

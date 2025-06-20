@@ -19,8 +19,6 @@ class PhysicsRepresentation:
 
         Parameters
         ----------
-
-
         """
 
         self.space = space

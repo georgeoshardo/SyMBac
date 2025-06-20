@@ -1,4 +1,6 @@
 import numpy as np
+from pymunk import Vec2d
+
 np.random.seed(42)
 import pygame
 import pymunk.pygame_util
@@ -73,7 +75,7 @@ initial_cell_config = CellConfig(
     GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=4, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
+    GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
     BASE_MAX_LENGTH=40, # This should be stable now!
     MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
@@ -93,7 +95,7 @@ next_group_id = 1
 initial_cell = Cell(
     space,
     config=initial_cell_config,
-    start_pos=(0, 0),
+    start_pos= Vec2d(0, 0),
     group_id=next_group_id,
 )
 colony.append(initial_cell)
