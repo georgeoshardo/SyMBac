@@ -5,7 +5,7 @@ import pymunk.pygame_util
 from cell import Cell
 from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
-
+from tqdm import tqdm
 """
 Initializes Pygame and Pymunk and runs the main simulation loop.
 """
@@ -111,7 +111,7 @@ show_joints = True
 
 frames_to_render = [] # List to store data for rendering
 image_count = 0
-
+pbar = tqdm(desc="Simulating...", unit="step", smoothing=0.1, dynamic_ncols=True)
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (
@@ -183,6 +183,7 @@ while running:
     # NEW: Only run simulation if not paused
     if not is_paused:
         for _ in range(simulation_speed_multiplier):
+            pbar.update(1)
             newly_born_cells_map = {}
 
             for cell in colony[:]:
@@ -198,6 +199,14 @@ while running:
 
             if newly_born_cells_map:
                 colony.extend(newly_born_cells_map.keys())
+                if len(colony) == 50:
+                    print("Reached 50 cells")
+                if len(colony) == 100:
+                    print("Reached 100 cells")
+                if len(colony) == 200:
+                    print("Reached 200 cells")
+                if len(colony) == 500:
+                    print("Reached 500 cells")
                 for daughter, mother in newly_born_cells_map.items():
                     mother_shapes = [s.shape for s in mother.segments]
 
@@ -275,7 +284,6 @@ while running:
                 last_segment_count = current_segment_count
 
         current_segment_count = sum(len(cell.segments) for cell in colony)
-        print(f"Simulating step: {frame_count}, Segments: {current_segment_count}")
 
         # Capture the state for rendering later
         current_frame_data = [
@@ -293,7 +301,9 @@ while running:
             setup_spatial_hash(space, colony)
             last_segment_count = current_segment_count
 
+
 pygame.quit()
+pbar.close()
 
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt

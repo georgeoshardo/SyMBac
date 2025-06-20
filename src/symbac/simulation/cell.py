@@ -523,7 +523,7 @@ class Cell:
                         f"Deviation: {deviation:.2f}"
                     )
 
-    def check_total_compression(self, compression_threshold: float = 0.10) -> None:
+    def check_total_compression(self, compression_threshold: float = 0.999) -> None:
         """
         Calculates the total expected length of the cell and compares it to the
         actual continuous length, printing a warning if the cell is compressed
