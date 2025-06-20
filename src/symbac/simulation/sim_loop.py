@@ -68,8 +68,6 @@ virtual_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
 draw_options = pymunk.pygame_util.DrawOptions(virtual_surface)
 pymunk.pygame_util.positive_y_is_up = False
 
-colony: list[Cell] = []
-next_group_id = 1
 
 initial_cell_config = CellConfig(
     GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
@@ -90,6 +88,8 @@ initial_cell_config = CellConfig(
     PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
+colony: list[Cell] = []
+next_group_id = 1
 initial_cell = Cell(
     space,
     config=initial_cell_config,

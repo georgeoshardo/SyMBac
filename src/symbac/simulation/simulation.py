@@ -4,14 +4,14 @@ import pymunk
 from cell import Cell
 from config import CellConfig, PhysicsConfig
 import time
-from joblib import Parallel, delayed
+
 space = pymunk.Space(threaded=PhysicsConfig.THREADED)
 space.threads = PhysicsConfig.THREADS
 space.iterations = PhysicsConfig.ITERATIONS
 space.gravity = PhysicsConfig.GRAVITY
 space.damping = PhysicsConfig.DAMPING
 
-
+from symbac.simulation.visualisation import ColonyVisualiser
 
 def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     """Setup spatial hash with estimated parameters"""
@@ -19,7 +19,6 @@ def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     space.use_spatial_hash(dim, count)
     #print(f"Spatial hash enabled: dim={dim:.1f}, count={count}")
     return dim, count
-
 
 def estimate_spatial_hash_params(colony: list[Cell]) -> tuple[float, int]:
     """Estimate good spatial hash parameters for current colony size"""
@@ -45,11 +44,11 @@ colony: list[Cell] = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=6, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
+    GRANULARITY=14, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=40, # This should be stable now!
+    GROWTH_RATE=2.5, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
+    BASE_MAX_LENGTH=50, # This should be stable now!
     MAX_LENGTH_VARIATION=0.5,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
@@ -71,9 +70,11 @@ initial_cell = Cell(
     group_id=next_group_id,
 )
 colony.append(initial_cell)
-print(colony[0].base_color)
 next_group_id += 1
 
+
+
+visualizer = ColonyVisualiser(initial_view_range=200, fill_threshold=0.9)
 setup_spatial_hash(space, colony)
 
 import os
@@ -92,7 +93,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 import os
-
 
 def get_opposite_color(rgba_color):
     """
@@ -147,8 +147,8 @@ def draw_colony_matplotlib(colony: list[Cell], frame_number: int, output_dir: st
                 (x, y),
                 radius=r,
                 facecolor=rgba_fill_color, # Use facecolor for the fill
-                #edgecolor=rgba_border_color, # Set the border color
-                #linewidth=1.0 # Set the width of the border
+                edgecolor=rgba_border_color, # Set the border color
+                linewidth=1.0 # Set the width of the border
             )
             ax.add_patch(circle)
 
@@ -201,9 +201,11 @@ while True:
                         if info.shape in mother_shapes:
 
                             mother.remove_tail_segment()
+                            visualizer.draw_colony_matplotlib(colony)
                             #draw_colony_matplotlib(colony, image_count, output_directory)
                             #image_count += 1
                             daughter.remove_head_segment()
+                            visualizer.draw_colony_matplotlib(colony)
                             #draw_colony_matplotlib(colony, image_count, output_directory)
                             #image_count += 1
                             # We must update the mother_shapes list since a shape was removed
@@ -221,15 +223,16 @@ while True:
     frame_count += 1
 
     # Update spatial hash every 60 steps
-    if frame_count % 20 == 0:
+    if frame_count % 1 == 0:
         current_segment_count = sum(len(cell.segments) for cell in colony)
         if current_segment_count > last_segment_count * 1.5:  # 50% growth
             dim, count = estimate_spatial_hash_params(colony)
             space.use_spatial_hash(dim, count)
             last_segment_count = current_segment_count
         start = time.perf_counter()
-        draw_colony_matplotlib(colony, image_count, output_directory)
+        visualizer.draw_colony_matplotlib(colony)
+#        draw_colony_matplotlib(colony, image_count, output_directory)
         end = time.perf_counter()
         image_count += 1
-        print("Drew frame", frame_count, "with", current_segment_count, "segments.", "took", end - start, "seconds")
+        #print("Drew frame", frame_count, "with", current_segment_count, "segments.", "took", end - start, "seconds")
 

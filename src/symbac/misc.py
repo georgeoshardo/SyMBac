@@ -129,9 +129,9 @@ def get_sample_images():
         A dict with sample images, current keys are: "E. coli 100x", "E. coli 100x stationary", "E. coli DeLTA"
     """
 
-    Ecoli100x = misc_load_img("../sample_images/sample_100x.tiff")
-    Ecoli100x_stationary = misc_load_img("../sample_images/sample_100x_stationary.tiff")
-    Ecoli_DeLTA = misc_load_img("../sample_images/sample_DeLTA.tiff")
+    Ecoli100x = misc_load_img("sample_images/sample_100x.tiff")
+    Ecoli100x_stationary = misc_load_img("sample_images/sample_100x_stationary.tiff")
+    Ecoli_DeLTA = misc_load_img("sample_images/sample_DeLTA.tiff")
     return {
         "E. coli 100x": Ecoli100x,
         "E. coli 100x stationary": Ecoli100x_stationary,

@@ -4,8 +4,11 @@ from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
 import sys
+
+from symbac.simulation.physics_representation import PhysicsRepresentation
+
 sys.path.insert(0, '..')
-from misc import generate_color
+from symbac.misc import generate_color
 from config import CellConfig
 from segments import CellSegment
 from joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
@@ -27,17 +30,28 @@ class Cell:
         self.space = space
         self.config = config
         self.start_pos = start_pos
-        self.group_id = group_id
+        self._group_id = group_id
         if not base_color:
             self.base_color = generate_color(group_id)
         else:
             self.base_color = base_color
 
-        self.segments: list[CellSegment] = []
+        #self.PhysicsRepresentation = PhysicsRepresentation(
+        #    space=self.space,
+        ##    config=self.config,
+        #    group_id=self._group_id,
+        #    start_pos=self.start_pos
+        #) # Use dependency injection pattern for the physics representation, can't think of a better way
 
-        self.pivot_joints: list[pymunk.PivotJoint] = []
-        self.limit_joints: list[pymunk.RotaryLimitJoint] = []
-        self.spring_joints: list[pymunk.DampedRotarySpring] = []
+        #self.segments =  self.PhysicsRepresentation.segments
+        #self.pivot_joints = self.PhysicsRepresentation.pivot_joints
+        #self.limit_joints = self.PhysicsRepresentation.limit_joints
+        #self.spring_joints = self.PhysicsRepresentation.spring_joints
+
+        self.segments: list[CellSegment] = []
+        self.pivot_joints: list[CellJoint] = []
+        self.limit_joints: list[CellRotaryLimitJoint] = []
+        self.spring_joints: list[CellDampedRotarySpring] = []
 
         self.growth_accumulator_head = 0.0
         self.growth_accumulator_tail = 0.0
@@ -69,6 +83,18 @@ class Cell:
 
         self._mother_septum_segments = None
         self._daughter_septum_segments = None
+
+    @property
+    def group_id(self) -> int:
+        """Returns the group ID of the cell, but it's immutable now."""
+        return self._group_id
+
+    @group_id.setter
+    def group_id(self, value: int) -> None:
+        """
+        Tell the user they shouldn't be trying to meddle with the group_id
+        """
+        raise AttributeError("Cell lineage ID (group_id) is immutable and cannot be changed after creation.")
 
 
     def _add_seed_cell_segments(self, is_first: bool) -> None:
@@ -180,6 +206,7 @@ class Cell:
         # Calculate position for the new head segment
         new_head_offset = Vec2d(-self.config.JOINT_DISTANCE, 0).rotated(old_head_segment.angle)
         new_position = old_head_segment.position + new_head_offset
+        print("Adding head segment at position:", new_position)
         new_position = new_position[0], new_position[1] # Convert Vec2d to tuple
 
         new_head_segment = CellSegment(
@@ -218,10 +245,8 @@ class Cell:
 
         new_tail_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(old_tail_segment.angle)
         new_position = old_tail_segment.position + new_tail_offset
+        print("Adding tail segment at position:", new_position)
 
-        noise_x = np.random.uniform(-0.1, 0.1)
-        noise_y = np.random.uniform(-0.1, 0.1)
-        new_position += Vec2d(noise_x, noise_y)
         new_position = new_position[0], new_position[1]  # Convert Vec2d to tuple for mypy
 
         new_tail_segment = CellSegment(
@@ -548,7 +573,7 @@ class Cell:
         # Get the actual tip-to-tip length
         actual_total_length = self.get_continuous_length()
 
-        self.adjusted_growth_rate = min(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
+        self.adjusted_growth_rate = max(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
 
         # Check for overall cell compression
         if actual_total_length < expected_total_length:
