@@ -3,27 +3,35 @@ import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
-from symbac.misc import generate_color
-from symbac.simulation.config import CellConfig
-from symbac.simulation.segments import CellSegment
-from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
-
+import sys
+sys.path.insert(0, '..')
+from misc import generate_color
+from config import CellConfig
+from segments import CellSegment
+from joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
+import colorsys
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
+    _daughter_septum_segments: Optional[list[CellSegment]] = None
+    _mother_septum_segments: Optional[list[CellSegment]] = None
     def __init__(
             self,
             space: pymunk.Space,
             config: CellConfig,
             start_pos: tuple[float, float],
             group_id: int = 0,
-            _from_division: bool = False
+            _from_division: bool = False,
+            base_color: Optional[tuple[int, int, int]] = None
     ) -> None:
         self.space = space
         self.config = config
         self.start_pos = start_pos
         self.group_id = group_id
-        self.base_color = generate_color(group_id)
+        if not base_color:
+            self.base_color = generate_color(group_id)
+        else:
+            self.base_color = base_color
 
         self.segments: list[CellSegment] = []
 
@@ -37,10 +45,10 @@ class Cell:
         self.septum_progress = 0.0
         self.septum_duration = 1.5
         self.division_site: int | None = None
-        self.num_septum_segments = self.config.GRANULARITY - 1
-        self.min_septum_radius = self.config.SEGMENT_RADIUS * 0.25
+        self.num_septum_segments = self.config.GRANULARITY
+        self.min_septum_radius = self.config.SEGMENT_RADIUS * 0.1
         self.length_at_division_start = 0
-        self.division_bias = self.config.GRANULARITY
+        self.division_bias = 0 #self.config.GRANULARITY # not needed when bidirectional growth I think
 
         variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
         random_max_len = np.random.uniform(
@@ -49,10 +57,16 @@ class Cell:
 
         self._max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
 
+        self.adjusted_growth_rate = self.config.GROWTH_RATE
+        self.check_total_compression()
+
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
                 self._add_seed_cell_segments(i == 0)
             self._update_colors()
+
+        self._mother_septum_segments = None
+        self._daughter_septum_segments = None
 
     def _add_seed_cell_segments(self, is_first: bool) -> None:
         """Adds a single new segment during the initial construction of the very first cell.
@@ -108,7 +122,7 @@ class Cell:
         if len(self.segments) < 2:
             return
 
-        added_length = self.config.GROWTH_RATE * dt * np.random.uniform(0, 4)
+        added_length = self.adjusted_growth_rate * dt * np.random.uniform(0, 4)
 
         half_growth = added_length / 2
 
@@ -138,13 +152,16 @@ class Cell:
             first_pivot_joint.anchor_a = (self.config.JOINT_DISTANCE / 2, 0)
             self._add_head_segment()
             self.growth_accumulator_head = 0.0
-            self._update_colors()
+            #print("added head segment, current length:", len(self.segments))
 
         if self.growth_accumulator_tail >= self.config.GROWTH_THRESHOLD:
             last_pivot_joint.anchor_b = (-self.config.JOINT_DISTANCE / 2, 0)
             self._add_tail_segment()
             self.growth_accumulator_tail = 0.0
-            self._update_colors()
+            #print("added tail segment, current length:", len(self.segments))
+
+        self._update_colors()
+
 
     def _add_head_segment(self):
         """Adds a new segment to the head of the cell."""
@@ -230,11 +247,12 @@ class Cell:
             self.space.add(new_spring)
             self.spring_joints.append(new_spring)
 
-    def remove_tail_segment(self):
+    def remove_tail_segment(self) -> Optional[CellSegment]:
         """Safely removes the last segment of the cell."""
         if len(self.segments) <= self.config.MIN_LENGTH_AFTER_DIVISION:
-            return
-
+            return None
+        assert len(self.limit_joints) == len(self.pivot_joints)
+        assert len(self.limit_joints) == len(self.segments) - 1
         tail_segment = self.segments.pop()
 
         if self.pivot_joints:
@@ -246,33 +264,62 @@ class Cell:
 
         self.space.remove(tail_segment.body, tail_segment.shape)
         self._update_colors()
+        return tail_segment
+
+    def remove_head_segment(self) -> Optional[CellSegment]:
+        """Safely removes the first segment of the cell."""
+        if len(self.segments) <= self.config.MIN_LENGTH_AFTER_DIVISION:
+            return None
+
+        head_segment = self.segments.pop(0)
+
+        if self.pivot_joints:
+            self.space.remove(self.pivot_joints.pop(0))
+        if self.config.ROTARY_LIMIT_JOINT and self.limit_joints:
+            self.space.remove(self.limit_joints.pop(0))
+        if self.config.DAMPED_ROTARY_SPRING and self.spring_joints:
+            self.space.remove(self.spring_joints.pop(0))
+
+        self.space.remove(head_segment.body, head_segment.shape)
+        self._update_colors()
+        return head_segment
 
     def _split_cell(self, next_group_id: int) -> Optional['Cell']:
         """Splits the current cell into two distinct cells if septum formation is complete."""
         progress = min(1.0, self.septum_progress)
-        assert self.division_site is not None  # To keep mypy happy
-        for i in range(self.num_septum_segments):
-            mother_idx = self.division_site - 1 - i
-            daughter_idx = self.division_site + i
-            if mother_idx >= 0 and daughter_idx < len(self.segments):
+        self.division_site = len(self.segments) // 2 # Dynamically determine the division site but TODO it has some instability when the segments are being added during division
+
+        if self._mother_septum_segments is None and self._daughter_septum_segments is None:
+            self._mother_septum_segments = []
+            self._daughter_septum_segments = []
+            for i in range(self.num_septum_segments):
+                mother_idx = self.division_site - 1 - i
+                daughter_idx = self.division_site + i
+                if mother_idx >= 0 and daughter_idx < len(self.segments):
+                    # Recreate shape and update the segment's shape reference
+                    self._mother_septum_segments.append(self.segments[mother_idx])
+                    self._daughter_septum_segments.append(self.segments[daughter_idx])
+
+        if self._mother_septum_segments is not None and self._daughter_septum_segments is not None:
+            for i in range(self.num_septum_segments):
                 falloff = (self.num_septum_segments - i) / self.num_septum_segments
                 shrinkage = (self.config.SEGMENT_RADIUS - self.min_septum_radius) * progress * falloff
                 new_radius = self.config.SEGMENT_RADIUS - shrinkage
 
                 # Recreate shape and update the segment's shape reference
-                self.segments[mother_idx].radius = new_radius
-                self.segments[daughter_idx].radius = new_radius
+                self._mother_septum_segments[i].radius = new_radius
+                self._daughter_septum_segments[i].radius = new_radius
 
         if progress < 1.0:
             return None
 
         # Restore original radius after split
+        assert self._mother_septum_segments is not None
+        assert self._daughter_septum_segments is not None
         for i in range(self.num_septum_segments):
-            mother_idx = self.division_site - 1 - i
-            daughter_idx = self.division_site + i
-            if mother_idx >= 0 and daughter_idx < len(self.segments):
-                self.segments[mother_idx].radius = self.config.SEGMENT_RADIUS
-                self.segments[daughter_idx].radius = self.config.SEGMENT_RADIUS
+            self._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
+            self._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
+
         current_length = len(self.segments)
         growth_during_division = current_length - self.length_at_division_start
         original_half_length = self.length_at_division_start // 2
@@ -288,9 +335,37 @@ class Cell:
         elif mother_final_len >= current_length:
             mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
 
+        self._mother_septum_segments = None
+        self._daughter_septum_segments = None
+        # --- START of MODIFIED SECTION for color inheritance ---
+
+        # 1. Get the mother's color and normalize it to the 0-1 range for colorsys
+        r, g, b = self.base_color
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+
+        # 2. Convert RGB to HSV
+        h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+        # 3. Mutate the Hue to change the color while preserving lineage
+        #    A small hue shift changes the color along the color wheel (e.g., red -> orange)
+        hue_shift = np.random.uniform(-1, 1) / (next_group_id*0.5)  # Shift hue with biased rw
+        s_shift = np.random.uniform(-0.05, 0.05) / (next_group_id*0.25)  # Slight saturation shift
+        v_shift = np.random.uniform(-0.05, 0.05) / (next_group_id*0.25) # Slight brightness shift
+        new_h = (h + hue_shift) % 1.0  # Use modulo to wrap around the color wheel
+        #    This prevents colors from becoming grayish or dark.
+        #    We'll clamp them to a minimum vibrancy level.
+        new_s = max(0.6, min(1,s + s_shift)) # Ensure saturation
+        new_v = max(0.6, min(1,v + v_shift)) # Ensure brightness
+
+        # 5. Convert the new HSV color back to RGB
+        new_r, new_g, new_b = colorsys.hsv_to_rgb(new_h, new_s, new_v)
+
+        # 6. Scale back to 0-255 and create the final tuple
+        daughter_color = (int(new_r * 255), int(new_g * 255), int(new_b * 255))
+
+
         daughter_cell = Cell(
             space=self.space, config=self.config, start_pos=self.segments[mother_final_len].position,
-            group_id=next_group_id, _from_division=True
+            group_id=next_group_id, _from_division=True, base_color=daughter_color
         )
 
         daughter_cell.segments = self.segments[mother_final_len:]
@@ -323,6 +398,10 @@ class Cell:
 
         self._update_colors()
         daughter_cell._update_colors()
+
+        daughter_cell.growth_accumulator_tail = self.growth_accumulator_tail
+
+        self.growth_accumulator_tail = 0.0
 
         return daughter_cell
 
@@ -358,13 +437,111 @@ class Cell:
             return daughter_cell
         return None
 
-    def _update_colors(self):
+    def _update_colors(self) -> None:
         if not self.segments: return
+        a = 255
         r, g, b = self.base_color
-        body_color = (r, g, b, 255)
-        head_color = (min(255, int(r * 1.3)), min(255, int(g * 1.3)), min(255, int(b * 1.3)), 255)
-        tail_color = (int(r * 0.7), int(g * 0.7), int(b * 0.7), 255)
+        body_color = (r,g,b,a)
+        head_color = (min(255, int(r * 1.3)), min(255, int(g * 1.3)), min(255, int(b * 1.3)), a)
+        tail_color = (int(r * 0.7), int(g * 0.7), int(b * 0.7), a)
         for segment in self.segments:
             segment.shape.color = body_color
         self.segments[0].shape.color = head_color
         self.segments[-1].shape.color = tail_color
+
+    def get_continuous_length(self) -> float:
+        """Calculates the continuous length of the cell from tip to tip."""
+        if not self.segments:
+            return 0.0
+
+        if len(self.segments) == 1:
+            return self.segments[0].radius * 2
+
+        total_length = 0.0
+        for i in range(1, len(self.segments)):
+            segment_a = self.segments[i - 1]
+            segment_b = self.segments[i]
+            distance = Vec2d(*segment_b.position) - Vec2d(*segment_a.position)
+            total_length += distance.length
+
+        # Add the radius of the first and last segments to get the tip-to-tip length
+        total_length += self.segments[0].radius + self.segments[-1].radius
+        return total_length
+
+    def check_joint_integrity(self, failure_threshold: float = 0.25) -> None:
+        """
+        Checks if pivot joints are failing to maintain segment spacing,
+        especially under compression. It prints a warning if the distance
+        between two segments is smaller than expected by a given threshold.
+
+        Args:
+            failure_threshold: The relative deviation from the expected
+                               distance that triggers a warning (e.g., 0.25 for 25%).
+        """
+        if len(self.segments) < 2:
+            return
+
+        num_joints = len(self.pivot_joints)
+        for i, joint in enumerate(self.pivot_joints):
+            segment_a = self.segments[i]
+            segment_b = self.segments[i + 1]
+
+            actual_distance = (Vec2d(*segment_b.position) - Vec2d(*segment_a.position)).length
+
+            expected_distance = self.config.JOINT_DISTANCE
+            # The first joint is stretched by head growth
+            if i == 0:
+                expected_distance += self.growth_accumulator_head
+            # The last joint is stretched by tail growth
+            if i == num_joints - 1:
+                expected_distance += self.growth_accumulator_tail
+
+            # Check for compression (actual distance is less than expected)
+            if actual_distance < expected_distance:
+                deviation = expected_distance - actual_distance
+                if deviation / expected_distance > failure_threshold:
+                    print(
+                        f"WARNING: Joint {i} in cell {self.group_id} is under high compression! "
+                        f"Expected: {expected_distance:.2f}, "
+                        f"Actual: {actual_distance:.2f}, "
+                        f"Deviation: {deviation:.2f}"
+                    )
+
+    def check_total_compression(self, compression_threshold: float = 0.10) -> None:
+        """
+        Calculates the total expected length of the cell and compares it to the
+        actual continuous length, printing a warning if the cell is compressed
+        beyond a given threshold.
+
+        Args:
+            compression_threshold: The relative deviation from the expected
+                                   length that triggers a warning (e.g., 0.10 for 10%).
+        """
+        if len(self.segments) < 2:
+            return
+
+        # Calculate the total expected length between the centers of the first and last segments
+        num_joints = len(self.pivot_joints)
+        expected_internal_length = (num_joints * self.config.JOINT_DISTANCE) + \
+                                   self.growth_accumulator_head + \
+                                   self.growth_accumulator_tail
+
+        # Add radii for tip-to-tip length
+        expected_total_length = expected_internal_length + self.segments[0].radius + self.segments[-1].radius
+
+        # Get the actual tip-to-tip length
+        actual_total_length = self.get_continuous_length()
+
+        self.adjusted_growth_rate = max(self.config.GROWTH_RATE *  actual_total_length / expected_total_length, self.config.GROWTH_RATE)
+
+        # Check for overall cell compression
+        if actual_total_length < expected_total_length:
+            deviation = expected_total_length - actual_total_length
+            if (deviation / expected_total_length) > compression_threshold:
+                print(
+                    f"WARNING: Cell {self.group_id} is under high compression! "
+                    f"Expected Length: {expected_total_length:.2f}, "
+                    f"Actual Length: {actual_total_length:.2f}, "
+                    f"Deviation: {deviation:.2f}",
+                    f"Fractional Growth Rate: {actual_total_length / expected_total_length:.2f}"
+                )

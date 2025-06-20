@@ -73,7 +73,7 @@ class SimViewerConfig:
     FONT_SIZE: int = 36
 
 class PhysicsConfig:
-    ITERATIONS: int = 60
+    ITERATIONS: int = 120 # Number of iterations for the physics simulation, long floppy cells might need to go higher than 60
     DAMPING: float = 0.5
     GRAVITY: tuple[float, float] = (0.0, 0.0)
     THREADED: bool = False # Use pymunk.Space(threaded=True) for multithreading but non-deterministic results, even with random seed set

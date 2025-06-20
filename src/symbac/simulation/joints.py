@@ -1,7 +1,7 @@
 import pymunk
 import pymunk.pygame_util
-from symbac.simulation.config import CellConfig
-from symbac.simulation.segments import CellSegment
+from config import CellConfig
+from segments import CellSegment
 
 class CellJoint(pymunk.PivotJoint):
     """

@@ -2,7 +2,7 @@ import unittest
 from symbac.drawing import generate_curve_props, gen_cell_props_for_draw, get_space_size
 from symbac.phase_contrast_drawing import *
 from symbac.PSF import get_phase_contrast_kernel, get_condensers
-from symbac.misc import get_sample_images
+from symbac.simulation.misc import get_sample_images
 import pymunk
 from tqdm import tqdm
 

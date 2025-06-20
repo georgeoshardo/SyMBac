@@ -1,9 +1,18 @@
 import pymunk
 import pymunk.pygame_util
-from symbac.simulation.config import CellConfig
+from  config import CellConfig
 from typing import Optional
 
 class CellSegment:
+    config: CellConfig
+    group_id: int
+    body: pymunk.Body
+    shape: pymunk.Circle
+    angle: float
+    position: tuple[float, float]
+    space: Optional[pymunk.Space] = None
+
+
     """
     Represents a cell segment, encapsulating both the physical body and shape used in the Pymunk physics simulation.
 
@@ -22,30 +31,32 @@ class CellSegment:
     position : tuple[float, float]
         The current position of the cell segment in the simulation space.
     """
+
     def __init__(
             self,
-            config: CellConfig,
+            config: 'CellConfig',
             group_id: int,
             position: tuple[float, float] = (0.0, 0.0),
             angle: float = 0.0,
-            space: pymunk.Space = None
+            space: 'pymunk.Space | None' = None
     ) -> None:
+
         """
-        Parameters
-        ----------
-        config : CellConfig
-            Configuration object containing physical parameters for the cell segment,
-            such as mass and radius.
-        group_id : int
-            Identifier for collision filtering. Shapes with the same group ID will
-            not collide with each other.
-        position : tuple[float, float], optional
-            The initial position of the cell segment in the simulation space.
-            Defaults to (0.0, 0.0).
-        angle : float, optional
-            The initial rotation angle of the cell segment in radians.
-            Defaults to 0.0.
-        """
+            Parameters
+            ----------
+            config : CellConfig
+                Configuration object containing physical parameters for the cell segment,
+                such as mass and radius.
+            group_id : int
+                Identifier for collision filtering. Shapes with the same group ID will
+                not collide with each other.
+            position : tuple[float, float], optional
+                The initial position of the cell segment in the simulation space.
+                Defaults to (0.0, 0.0).
+            angle : float, optional
+                The initial rotation angle of the cell segment in radians.
+                Defaults to 0.0.
+            """
         self.config = config
         self.group_id = group_id
 

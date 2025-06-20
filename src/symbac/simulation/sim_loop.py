@@ -1,7 +1,9 @@
+import numpy as np
+np.random.seed(42)
 import pygame
 import pymunk.pygame_util
-from symbac.simulation.cell import Cell
-from symbac.simulation.config import CellConfig, SimViewerConfig, PhysicsConfig
+from cell import Cell
+from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
 
 """
@@ -60,8 +62,9 @@ max_zoom = 5.0
 # NEW: Pause state
 is_paused = False
 
+
 # Create a virtual surface for drawing
-virtual_surface = pygame.Surface((screen_width, screen_height))
+virtual_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
 draw_options = pymunk.pygame_util.DrawOptions(virtual_surface)
 pymunk.pygame_util.positive_y_is_up = False
 
@@ -69,13 +72,13 @@ colony: list[Cell] = []
 next_group_id = 1
 
 initial_cell_config = CellConfig(
-    GRANULARITY=3,
+    GRANULARITY=6, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=2,
-    BASE_MAX_LENGTH=35, # This should be stable now!
-    MAX_LENGTH_VARIATION=0.2,
-    MIN_LENGTH_AFTER_DIVISION=10,
+    GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
+    BASE_MAX_LENGTH=40, # This should be stable now!
+    MAX_LENGTH_VARIATION=0.5,
+    MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
@@ -84,7 +87,7 @@ initial_cell_config = CellConfig(
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    #PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
 initial_cell = Cell(
@@ -181,38 +184,44 @@ while running:
             newly_born_cells_map = {}
 
             for cell in colony[:]:
-                cell.apply_noise(dt)
+                if frame_count % 60 == 0:
+                    cell.apply_noise(dt)
+                cell.check_total_compression(compression_threshold=0.1)
                 cell.grow(dt)
+
                 new_cell = cell.divide(next_group_id, dt)  # Pass dt here
                 if new_cell:
                     newly_born_cells_map[new_cell] = cell
                     next_group_id += 1
 
             if newly_born_cells_map:
-                counter = 0
+                colony.extend(newly_born_cells_map.keys())
                 for daughter, mother in newly_born_cells_map.items():
-                    # Create a set of the mother's shapes for efficient lookup
-                    mother_shapes = {s.shape for s in mother.segments}
+                    mother_shapes = [s.shape for s in mother.segments]
+
+                    # Symmetrical Overlap Removal Loop
                     while True:
                         overlap_found = False
-                        for daughter_segment in daughter.segments:
-                            query_result = space.shape_query(daughter_segment.shape)
+                        # We only need to check the daughter's head against the mother's body
+                        if daughter.segments:
+                            daughter_head = daughter.segments[0]
+                            query_result = space.shape_query(daughter_head.shape)
 
                             for info in query_result:
+                                # If the daughter's head is overlapping with the mother
                                 if info.shape in mother_shapes:
                                     mother.remove_tail_segment()
-                                    overlap_found = True
-                                    break
-                            if overlap_found:
-                                break
+                                    daughter.remove_head_segment()
+                                    # We must update the mother_shapes list since a shape was removed
+                                    mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high
 
+                                    overlap_found = True
+                                    break  # Exit the inner query loop
+
+                        # If we went through a full check without finding an overlap, we're done.
                         if not overlap_found:
                             break
-                        counter += 1
-                        if counter > 100:
-                            break
 
-            colony.extend(newly_born_cells_map.keys())
             space.step(dt)
 
     # NEW: Apply camera transform to draw options
@@ -249,7 +258,7 @@ while running:
     screen.blit(help_text, (10, 90))
 
     pygame.display.flip()
-    clock.tick(60)
+    clock.tick(60000)
 
     # NEW: Only increment frame counter and update spatial hash if not paused
     if not is_paused:

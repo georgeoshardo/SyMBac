@@ -8,6 +8,48 @@ from skimage.measure import label
 from skimage.segmentation import find_boundaries
 from skimage.transform import resize
 
+import math
+import pymunk
+from segments import CellSegment
+
+def calculate_overlap_fraction(segment_a: CellSegment, segment_b: CellSegment) -> float:
+    """
+    Calculates the overlapping area of two circles as a fraction of one circle's area.
+
+    Args:
+        segment_a: The first cell segment.
+        segment_b: The second cell segment.
+
+    Returns:
+        The fraction of area that is overlapping (from 0.0 to 1.0).
+    """
+    # Both segments should have the same radius
+    R = segment_a.radius
+
+    # Get the distance between the centers of the two shapes
+    pos_a = segment_a.body.position
+    pos_b = segment_b.body.position
+    d = pos_a.get_distance(pos_b)
+
+    # If the distance is greater than or equal to the sum of radii, there is no overlap.
+    if d >= 2 * R:
+        return 0.0
+
+    # If the distance is zero, one circle is completely on top of the other.
+    if d == 0:
+        return 1.0
+
+    # Apply the formula for the area of intersection
+    # Breaking it down for clarity
+    part1 = 2 * R ** 2 * math.acos(d / (2 * R))
+    part2 = (d / 2) * math.sqrt(4 * R ** 2 - d ** 2)
+    intersection_area = part1 - part2
+
+    # Calculate the area of a single circle
+    circle_area = math.pi * R ** 2
+
+    # Return the fraction
+    return intersection_area / circle_area
 
 def generate_color(group_id: int) -> tuple[int, int, int]:
     """
@@ -87,9 +129,9 @@ def get_sample_images():
         A dict with sample images, current keys are: "E. coli 100x", "E. coli 100x stationary", "E. coli DeLTA"
     """
 
-    Ecoli100x = misc_load_img("sample_images/sample_100x.tiff")
-    Ecoli100x_stationary = misc_load_img("sample_images/sample_100x_stationary.tiff")
-    Ecoli_DeLTA = misc_load_img("sample_images/sample_DeLTA.tiff")
+    Ecoli100x = misc_load_img("../sample_images/sample_100x.tiff")
+    Ecoli100x_stationary = misc_load_img("../sample_images/sample_100x_stationary.tiff")
+    Ecoli_DeLTA = misc_load_img("../sample_images/sample_DeLTA.tiff")
     return {
         "E. coli 100x": Ecoli100x,
         "E. coli 100x stationary": Ecoli100x_stationary,
