@@ -5,6 +5,7 @@ import numpy as np
 from typing import Optional, cast
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
+from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.physics_representation import PhysicsRepresentation
 from symbac.simulation.segments import CellSegment
 import colorsys
@@ -203,30 +204,6 @@ class Cell:
         self.num_divisions += 1
 
         return daughter_cell
-
-    def divide(self, next_group_id: int, dt: float) -> Optional['Cell']:
-        if not self.is_dividing:
-            if len(self.PhysicsRepresentation.segments) < self._max_length:
-                return None
-            split_index = len(self.PhysicsRepresentation.segments) // 2
-            if split_index < self.config.MIN_LENGTH_AFTER_DIVISION or \
-                    (len(self.PhysicsRepresentation.segments) - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
-                return None
-            self.is_dividing = True
-            self.septum_progress = 0.0
-            self.division_site = split_index
-            self.length_at_division_start = len(self.PhysicsRepresentation.segments)
-            return None
-        if self.is_dividing:
-            self.septum_progress += dt / self.septum_duration
-            daughter_cell = self._split_cell(next_group_id)
-            if daughter_cell:
-                self.is_dividing = False
-                self.septum_progress = 0.0
-                self.division_site = None
-                self.length_at_division_start = 0
-            return daughter_cell
-        return None
 
     def _update_colors(self) -> None:
         if not self.PhysicsRepresentation.segments: return

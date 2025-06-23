@@ -1,6 +1,7 @@
 import numpy as np
 from pymunk import Vec2d
 
+from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
 
 np.random.seed(42)
@@ -103,6 +104,7 @@ initial_cell = Cell(
 colony.append(initial_cell)
 next_group_id += 1
 growth_manager = GrowthManager()
+division_manager = DivisionManager()
 
 # In your main() function, after creating initial_cell:
 setup_spatial_hash(space, colony)
@@ -194,13 +196,23 @@ while running:
             for cell in colony[:]:
                 if frame_count % 60 == 0:
                     cell.PhysicsRepresentation.apply_noise(dt)
-                cell.PhysicsRepresentation.check_total_compression()
-                growth_manager.grow(cell,dt)
 
-                new_cell = cell.divide(next_group_id, dt)  # Pass dt here
-                if new_cell:
-                    newly_born_cells_map[new_cell] = cell
-                    next_group_id += 1
+                cell.PhysicsRepresentation.check_total_compression()
+                growth_manager.grow(cell,dt) #Grow the cell
+
+                # --- Handle cell division ---
+                if cell.is_dividing: #If a cell is dividing
+                    division_manager.update_septum(cell, dt) #Update the septum progress
+                    new_cell = cell._split_cell(next_group_id) #Attempt to split the cell and get a new cell
+                    if new_cell: #If the division was completed
+                        newly_born_cells_map[new_cell] = cell #Add the new cell to the map
+                        division_manager.reset_division_readiness(cell) #and reset the division readiness of the mother cell
+                        next_group_id += 1 # and increment the group ID
+                else: #If a cell is not dividing
+                    if division_manager.ready_to_divide(cell): #then check if it is ready to divide
+                        division_manager.set_division_readiness(cell) #and if it is, set its state to dividing
+
+
 
             if newly_born_cells_map:
                 colony.extend(newly_born_cells_map.keys())
