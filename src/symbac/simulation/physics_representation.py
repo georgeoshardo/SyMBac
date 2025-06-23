@@ -4,16 +4,19 @@ import numpy as np
 from symbac.simulation.segments import CellSegment
 from symbac.simulation.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
 import pymunk
-
+from typing import cast, Optional
 from symbac.simulation.config import CellConfig
 
 
 class PhysicsRepresentation:
+    _daughter_septum_segments: Optional[list[CellSegment]] = None
+    _mother_septum_segments: Optional[list[CellSegment]] = None
     """
     A class to hold all the cell's physics objects, such as segments, joints, and other physics-related attributes.
+    Does not deal with division or growth directly, but provides methods to manipulate the segments and joints.
     """
 
-    def __init__(self, space: pymunk.Space, config: CellConfig, group_id: int, start_pos: tuple[float, float]) -> None:
+    def __init__(self, space: pymunk.Space, config: CellConfig, group_id: int, start_pos: Vec2d, _from_division: bool = False) -> None:
         """
         Initialize the PhysicsRepresentation with a Cell object.
 
@@ -32,7 +35,20 @@ class PhysicsRepresentation:
         self.limit_joints: list[pymunk.RotaryLimitJoint] = []
         self.spring_joints: list[pymunk.DampedRotarySpring] = []
 
-    def _add_seed_cell_segments(self, is_first: bool) -> None:
+        self.mother_septum_segments = None
+        self.daughter_septum_segments = None
+
+        self.growth_accumulator_head = 0
+        self.growth_accumulator_tail = 0
+
+        self.check_total_compression()
+
+        if not _from_division:
+            for i in range(self.config.SEED_CELL_SEGMENTS):
+                self.add_seed_cell_segments(i == 0) # True for the first segment, False for the rest
+
+
+    def add_seed_cell_segments(self, is_first: bool) -> None:
         """Adds a single new segment during the initial construction of the very first cell.
 
         This method creates a CellSegment. It has two modes:
@@ -47,19 +63,18 @@ class PhysicsRepresentation:
                       of the cell.
         """
 
-        config = self.config
-
         if is_first:
-            segment = CellSegment(config=config, group_id=self.cell.group_id, position=self.cell.start_pos, space=self.space)
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos, space=self.space)
         else:
             prev_segment = self.segments[-1]
             offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(prev_segment.angle)
 
             noise_x = np.random.uniform(-0.1, 0.1)
             noise_y = np.random.uniform(-0.1, 0.1)
-            segment_position = prev_segment.position[0] + offset[0] + noise_x, prev_segment.position[1] + offset[1] + noise_y
+            noise = Vec2d(noise_x, noise_y)
+            segment_position = prev_segment.position + cast(tuple[float,float], offset) + cast(tuple[float,float], noise)
             segment_angle = prev_segment.angle
-            segment = CellSegment(config=self.config, group_id=self.cell.group_id, position=segment_position,
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=segment_position,
                                   angle=segment_angle, space=self.space)
 
         self.space.add(segment.body, segment.shape)
@@ -67,100 +82,277 @@ class PhysicsRepresentation:
 
         if not is_first:
             prev_segment = self.segments[-2]
-            joint = CellJoint(prev_segment, segment, config)
+            joint = CellJoint(prev_segment, segment, self.config)
             self.space.add(joint)
             self.pivot_joints.append(joint)
 
-            if config.ROTARY_LIMIT_JOINT:
-                limit = CellRotaryLimitJoint(prev_segment, segment, config)
+            if self.config.ROTARY_LIMIT_JOINT:
+                limit = CellRotaryLimitJoint(prev_segment, segment, self.config)
                 self.space.add(limit)
                 self.limit_joints.append(limit)
 
-            if config.DAMPED_ROTARY_SPRING:
-                spring = CellDampedRotarySpring(prev_segment, segment, config)
+            if self.config.DAMPED_ROTARY_SPRING:
+                spring = CellDampedRotarySpring(prev_segment, segment, self.config)
                 self.space.add(spring)
                 self.spring_joints.append(spring)
 
-    def _add_head_segment(self):
-        """Adds a new segment to the head of the cell."""
-        # This is the mirror logic of _add_segment_to_tail
-        old_head_segment = self.segments[0]
+    def add_head_segment(self):
+        """
+        Inserts a new segment between the head (segment 0) and the segment next to it (segment 1).
+        This method ensures the head segment does not "jump" but instead glides away smoothly.
+        """
+        # The head segment that should remain in place.
+        final_head_segment = self.segments[0]
+        # The segment that was previously connected to the head.
         post_head_segment = self.segments[1]
 
-        # Stabilize the old head segment
-        stable_offset = Vec2d(-self.config.JOINT_DISTANCE, 0).rotated(post_head_segment.angle)
-        old_head_segment.position = post_head_segment.position + stable_offset
-        old_head_segment.angle = post_head_segment.angle
+        # Calculate the position for the new segment. It will be placed one joint distance
+        # away from the post_head_segment, in the direction of the final_head_segment.
+        direction = (final_head_segment.position - cast(tuple[float,float], post_head_segment.position)).normalized() # Insanity to keep the type checker happy
+        new_segment_pos = post_head_segment.position + cast(tuple[float,float], direction * self.config.JOINT_DISTANCE)
+        new_segment_angle = post_head_segment.angle
 
-        # Calculate position for the new head segment
-        new_head_offset = Vec2d(-self.config.JOINT_DISTANCE, 0).rotated(old_head_segment.angle)
-        new_position = old_head_segment.position + new_head_offset
-        new_position = new_position[0], new_position[1] # Convert Vec2d to tuple
-
-        new_head_segment = CellSegment(
-            config=self.config,
-            group_id=self.cell.group_id,
-            position=new_position,
-            angle=old_head_segment.angle,
-            space=self.space
+        # Create the new segment to be inserted.
+        new_segment = CellSegment(
+            config=self.config, group_id=self.group_id, position=new_segment_pos,
+            angle=new_segment_angle, space=self.space
         )
+        self.space.add(new_segment.body, new_segment.shape)
 
-        self.space.add(new_head_segment.body, new_head_segment.shape)
-        self.segments.insert(0, new_head_segment)
+        # Insert the new segment into the list at the correct position.
+        self.segments.insert(1, new_segment)
 
-        # Add joints connecting the new head to the old head
-        new_pivot = CellJoint(new_head_segment, old_head_segment, self.config)
-        self.space.add(new_pivot)
-        self.pivot_joints.insert(0, new_pivot)
-
+        # --- Rewire the joints ---
+        # 1. Remove the old, stretched joint between the original head and post-head segments.
+        self.space.remove(self.pivot_joints.pop(0))
         if self.config.ROTARY_LIMIT_JOINT:
-            new_limit = CellRotaryLimitJoint(new_head_segment, old_head_segment, self.config)
-            self.space.add(new_limit)
-            self.limit_joints.insert(0, new_limit)
-
+            self.space.remove(self.limit_joints.pop(0))
         if self.config.DAMPED_ROTARY_SPRING:
-            new_spring = CellDampedRotarySpring(new_head_segment, old_head_segment, self.config)
-            self.space.add(new_spring)
-            self.spring_joints.insert(0, new_spring)
+            self.space.remove(self.spring_joints.pop(0))
 
-    def _add_tail_segment(self):
+        # 2. Create a new joint between the final head and the new segment.
+        joint1 = CellJoint(final_head_segment, new_segment, self.config)
+        self.space.add(joint1)
+        self.pivot_joints.insert(0, joint1)
+        if self.config.ROTARY_LIMIT_JOINT:
+            limit1 = CellRotaryLimitJoint(final_head_segment, new_segment, self.config)
+            self.space.add(limit1)
+            self.limit_joints.insert(0, limit1)
+        if self.config.DAMPED_ROTARY_SPRING:
+            spring1 = CellDampedRotarySpring(final_head_segment, new_segment, self.config)
+            self.space.add(spring1)
+            self.spring_joints.insert(0, spring1)
+
+        # 3. Create a new joint between the new segment and the post-head segment.
+        joint2 = CellJoint(new_segment, post_head_segment, self.config)
+        self.space.add(joint2)
+        self.pivot_joints.insert(1, joint2)
+        if self.config.ROTARY_LIMIT_JOINT:
+            limit2 = CellRotaryLimitJoint(new_segment, post_head_segment, self.config)
+            self.space.add(limit2)
+            self.limit_joints.insert(1, limit2)
+        if self.config.DAMPED_ROTARY_SPRING:
+            spring2 = CellDampedRotarySpring(new_segment, post_head_segment, self.config)
+            self.space.add(spring2)
+            self.spring_joints.insert(1, spring2)
+
+    def add_tail_segment(self):
+        """
+        Inserts a new segment between the tail (last segment) and the one before it.
+        This method ensures the tail segment does not "jump" but instead glides away smoothly.
+        """
+        # The tail segment that should remain in place.
+        final_tail_segment = self.segments[-1]
+        # The segment that was previously connected to the tail.
         pre_tail_segment = self.segments[-2]
-        old_tail_segment = self.segments[-1]
 
-        stable_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(pre_tail_segment.angle)
-        old_tail_segment.position = pre_tail_segment.position + stable_offset
-        old_tail_segment.angle = pre_tail_segment.angle
+        # Calculate the position for the new segment. It will be placed one joint distance
+        # away from the pre_tail_segment, in the direction of the final_tail_segment.
+        direction = (final_tail_segment.position - cast(tuple[float,float],pre_tail_segment.position)).normalized()
+        new_segment_pos = Vec2d(*pre_tail_segment.position) + cast(tuple[float,float],direction * self.config.JOINT_DISTANCE)
+        new_segment_angle = pre_tail_segment.angle
 
-        new_tail_offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(old_tail_segment.angle)
-        new_position = old_tail_segment.position + new_tail_offset
-
-        noise_x = np.random.uniform(-0.1, 0.1)
-        noise_y = np.random.uniform(-0.1, 0.1)
-        new_position += Vec2d(noise_x, noise_y)
-        new_position = new_position[0], new_position[1]  # Convert Vec2d to tuple for mypy
-
-        new_tail_segment = CellSegment(
-            config=self.config,
-            group_id=self.group_id,
-            position=new_position,
-            angle=old_tail_segment.angle,
-            space=self.space,
+        # Create the new segment to be inserted.
+        new_segment = CellSegment(
+            config=self.config, group_id=self.group_id, position=new_segment_pos,
+            angle=new_segment_angle, space=self.space
         )
+        self.space.add(new_segment.body, new_segment.shape)
 
-        self.space.add(new_tail_segment.body, new_tail_segment.shape)
-        self.segments.append(new_tail_segment)
+        # Insert the new segment into the list before the final tail segment.
+        self.segments.insert(-1, new_segment)
 
-        # Add joints connecting the old tail to the new tail
-        new_pivot = CellJoint(old_tail_segment, new_tail_segment, self.config)
-        self.space.add(new_pivot)
-        self.pivot_joints.append(new_pivot)
-
+        # --- Rewire the joints ---
+        # 1. Remove the old, stretched joint between the pre-tail and final-tail segments.
+        self.space.remove(self.pivot_joints.pop())
         if self.config.ROTARY_LIMIT_JOINT:
-            new_limit = CellRotaryLimitJoint(old_tail_segment, new_tail_segment, self.config)
-            self.space.add(new_limit)
-            self.limit_joints.append(new_limit)
-
+            self.space.remove(self.limit_joints.pop())
         if self.config.DAMPED_ROTARY_SPRING:
-            new_spring = CellDampedRotarySpring(old_tail_segment, new_tail_segment, self.config)
-            self.space.add(new_spring)
-            self.spring_joints.append(new_spring)
+            self.space.remove(self.spring_joints.pop())
+
+        # 2. Create a new joint between the pre-tail segment and the new segment.
+        joint1 = CellJoint(pre_tail_segment, new_segment, self.config)
+        self.space.add(joint1)
+        self.pivot_joints.append(joint1)  # Append, since we just popped the last one.
+        if self.config.ROTARY_LIMIT_JOINT:
+            limit1 = CellRotaryLimitJoint(pre_tail_segment, new_segment, self.config)
+            self.space.add(limit1)
+            self.limit_joints.append(limit1)
+        if self.config.DAMPED_ROTARY_SPRING:
+            spring1 = CellDampedRotarySpring(pre_tail_segment, new_segment, self.config)
+            self.space.add(spring1)
+            self.spring_joints.append(spring1)
+
+        # 3. Create a new joint between the new segment and the final tail segment.
+        joint2 = CellJoint(new_segment, final_tail_segment, self.config)
+        self.space.add(joint2)
+        self.pivot_joints.append(joint2)  # This now becomes the new last joint.
+        if self.config.ROTARY_LIMIT_JOINT:
+            limit2 = CellRotaryLimitJoint(new_segment, final_tail_segment, self.config)
+            self.space.add(limit2)
+            self.limit_joints.append(limit2)
+        if self.config.DAMPED_ROTARY_SPRING:
+            spring2 = CellDampedRotarySpring(new_segment, final_tail_segment, self.config)
+            self.space.add(spring2)
+            self.spring_joints.append(spring2)
+
+    def remove_tail_segment(self) -> Optional[CellSegment]:
+        """Safely removes the last segment of the cell."""
+        if len(self.segments) <= self.config.MIN_LENGTH_AFTER_DIVISION:
+            return None
+        assert len(self.limit_joints) == len(self.pivot_joints)
+        assert len(self.limit_joints) == len(self.segments) - 1
+        tail_segment = self.segments.pop()
+
+        if self.pivot_joints:
+            self.space.remove(self.pivot_joints.pop())
+        if self.limit_joints:
+            self.space.remove(self.limit_joints.pop())
+        if self.config.DAMPED_ROTARY_SPRING and self.spring_joints:
+            self.space.remove(self.spring_joints.pop())
+
+        self.space.remove(tail_segment.body, tail_segment.shape)
+        return tail_segment
+
+    def remove_head_segment(self) -> Optional[CellSegment]:
+        """Safely removes the first segment of the cell."""
+        if len(self.segments) <= self.config.MIN_LENGTH_AFTER_DIVISION:
+            return None
+
+        head_segment = self.segments.pop(0)
+
+        if self.pivot_joints:
+            self.space.remove(self.pivot_joints.pop(0))
+        if self.config.ROTARY_LIMIT_JOINT and self.limit_joints:
+            self.space.remove(self.limit_joints.pop(0))
+        if self.config.DAMPED_ROTARY_SPRING and self.spring_joints:
+            self.space.remove(self.spring_joints.pop(0))
+
+        self.space.remove(head_segment.body, head_segment.shape)
+        return head_segment
+
+    def apply_noise(self, dt: float):
+        for segment in self.segments:
+            force_x = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
+            force_y = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
+            segment.body.force += Vec2d(force_x, force_y)
+            torque = np.random.uniform(-self.config.NOISE_STRENGTH * 0.1, self.config.NOISE_STRENGTH * 0.1)
+            segment.body.torque += torque
+            
+
+    def check_joint_integrity(self, failure_threshold: float = 0.25) -> None:
+        """
+        Checks if pivot joints are failing to maintain segment spacing,
+        especially under compression. It prints a warning if the distance
+        between two segments is smaller than expected by a given threshold.
+
+        Args:
+            failure_threshold: The relative deviation from the expected
+                               distance that triggers a warning (e.g., 0.25 for 25%).
+        """
+        if len(self.segments) < 2:
+            return
+
+        num_joints = len(self.pivot_joints)
+        for i, joint in enumerate(self.pivot_joints):
+            segment_a = self.segments[i]
+            segment_b = self.segments[i + 1]
+
+            actual_distance = (segment_b.position - cast(tuple[float,float],segment_a.position)).length
+
+            expected_distance = self.config.JOINT_DISTANCE
+            # The first joint is stretched by head growth
+            if i == 0:
+                expected_distance += self.growth_accumulator_head
+            # The last joint is stretched by tail growth
+            if i == num_joints - 1:
+                expected_distance += self.growth_accumulator_tail
+
+            # Check for compression (actual distance is less than expected)
+            if actual_distance < expected_distance:
+                deviation = expected_distance - actual_distance
+                if deviation / expected_distance > failure_threshold:
+                    print(
+                        f"WARNING: Joint {i} in cell {self.group_id} is under high compression! "
+                        f"Expected: {expected_distance:.2f}, "
+                        f"Actual: {actual_distance:.2f}, "
+                        f"Deviation: {deviation:.2f}"
+                    )
+
+    def check_total_compression(self, compression_threshold: float = 0.999) -> None:
+        """
+        Calculates the total expected length of the cell and compares it to the
+        actual continuous length, printing a warning if the cell is compressed
+        beyond a given threshold.
+
+        Args:
+            compression_threshold: The relative deviation from the expected
+                                   length that triggers a warning (e.g., 0.10 for 10%).
+        """
+        if len(self.segments) < 2:
+            return
+
+        # Calculate the total expected length between the centers of the first and last segments
+        num_joints = len(self.pivot_joints)
+        expected_internal_length = (num_joints * self.config.JOINT_DISTANCE) + \
+                                   self.growth_accumulator_head + \
+                                   self.growth_accumulator_tail
+
+        # Add radii for tip-to-tip length
+        expected_total_length = expected_internal_length + self.segments[0].radius + self.segments[-1].radius
+
+        # Get the actual tip-to-tip length
+        actual_total_length = self.get_continuous_length()
+
+        self.adjusted_growth_rate = max(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
+
+        # Check for overall cell compression
+        if actual_total_length < expected_total_length:
+            deviation = expected_total_length - actual_total_length
+            if (deviation / expected_total_length) > compression_threshold:
+                print(
+                    f"WARNING: Cell {self.group_id} is under high compression! "
+                    f"Expected Length: {expected_total_length:.2f}, "
+                    f"Actual Length: {actual_total_length:.2f}, "
+                    f"Deviation: {deviation:.2f}",
+                    f"Fractional Growth Rate: {self.adjusted_growth_rate / self.config.GROWTH_RATE:.2f}"
+                )
+                
+    def get_continuous_length(self) -> float:
+        """Calculates the continuous length of the cell from tip to tip."""
+        if not self.segments:
+            return 0.0
+
+        if len(self.segments) == 1:
+            return self.segments[0].radius * 2
+
+        total_length = 0.0
+        for i in range(1, len(self.segments)):
+            segment_a = self.segments[i - 1]
+            segment_b = self.segments[i]
+            distance = segment_b.position - cast(tuple[float,float],segment_a.position)
+            total_length += distance.length
+
+        # Add the radius of the first and last segments to get the tip-to-tip length
+        total_length += self.segments[0].radius + self.segments[-1].radius
+        return total_length

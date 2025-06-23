@@ -1,6 +1,8 @@
 import numpy as np
 from pymunk import Vec2d
 
+from symbac.simulation.growth_manager import GrowthManager
+
 np.random.seed(42)
 import pygame
 import pymunk.pygame_util
@@ -40,7 +42,7 @@ def estimate_spatial_hash_params(colony: list[Cell]) -> tuple[float, int]:
     if not colony:
         return 36.0, 1000
 
-    total_segments = sum(len(cell.segments) for cell in colony)
+    total_segments = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
     segment_radius = colony[0].config.SEGMENT_RADIUS if colony else 15
 
     # dim: slightly larger than segment diameter for optimal performance
@@ -100,6 +102,7 @@ initial_cell = Cell(
 )
 colony.append(initial_cell)
 next_group_id += 1
+growth_manager = GrowthManager()
 
 # In your main() function, after creating initial_cell:
 setup_spatial_hash(space, colony)
@@ -190,9 +193,9 @@ while running:
 
             for cell in colony[:]:
                 if frame_count % 60 == 0:
-                    cell.apply_noise(dt)
-                cell.check_total_compression()
-                cell.grow(dt)
+                    cell.PhysicsRepresentation.apply_noise(dt)
+                cell.PhysicsRepresentation.check_total_compression()
+                growth_manager.grow(cell,dt)
 
                 new_cell = cell.divide(next_group_id, dt)  # Pass dt here
                 if new_cell:
@@ -210,21 +213,23 @@ while running:
                 if len(colony) == 500:
                     print("Reached 500 cells")
                 for daughter, mother in newly_born_cells_map.items():
-                    mother_shapes = [s.shape for s in mother.segments]
+                    mother_shapes = [s.shape for s in mother.PhysicsRepresentation.segments]
 
                     # Symmetrical Overlap Removal Loop
                     while True:
                         overlap_found = False
                         # We only need to check the daughter's head against the mother's body
-                        if daughter.segments:
-                            daughter_head = daughter.segments[0]
+                        if daughter.PhysicsRepresentation.segments:
+                            daughter_head = daughter.PhysicsRepresentation.segments[0]
                             query_result = space.shape_query(daughter_head.shape)
 
                             for info in query_result:
                                 # If the daughter's head is overlapping with the mother
                                 if info.shape in mother_shapes:
-                                    mother.remove_tail_segment()
-                                    daughter.remove_head_segment()
+                                    mother.PhysicsRepresentation.remove_tail_segment()
+                                    daughter.PhysicsRepresentation.remove_head_segment()
+                                    mother._update_colors()
+                                    daughter._update_colors()
                                     # We must update the mother_shapes list since a shape was removed
                                     mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high
 
@@ -248,8 +253,6 @@ while running:
     if show_joints and zoom_level >= 0.8:
         draw_options.flags |= pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS
 
-
-
     # Clear both surfaces
     screen.fill(SimViewerConfig.BACKGROUND_COLOR)
     virtual_surface.fill(SimViewerConfig.BACKGROUND_COLOR)
@@ -271,7 +274,7 @@ while running:
     screen.blit(help_text, (10, 90))
 
     pygame.display.flip()
-    clock.tick(60000)
+    clock.tick(np.inf)
 
     # NEW: Only increment frame counter and update spatial hash if not paused
     if not is_paused:
@@ -279,13 +282,13 @@ while running:
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
         if frame_count % 60 == 0:
-            current_segment_count = sum(len(cell.segments) for cell in colony)
+            current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
                 dim, count = estimate_spatial_hash_params(colony)
                 space.use_spatial_hash(dim, count)
                 last_segment_count = current_segment_count
 
-        current_segment_count = sum(len(cell.segments) for cell in colony)
+        current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
 
         # Capture the state for rendering later
         current_frame_data = [
@@ -294,7 +297,7 @@ while running:
                 'radius': seg.shape.radius,
                 'color': seg.shape.color
             }
-            for cell in colony for seg in cell.segments
+            for cell in colony for seg in cell.PhysicsRepresentation.segments
         ]
         frames_to_render.append((image_count, current_frame_data))
         image_count += 1
