@@ -1,3 +1,4 @@
+# Use sudo py-spy top --pid $(ps aux | grep python | grep -v grep | awk '{print $2, $3}' | sort -rn -k2 | head -1 | awk '{print $1}') for profiling
 from dataclasses import dataclass
 from typing import Optional
 
@@ -6,6 +7,7 @@ from pymunk import Vec2d
 
 from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
+from symbac.simulation.simulator import Simulator
 from symbac.simulation.visualisation.colony_visualiser import ColonyVisualiser
 from symbac.simulation.colony import Colony
 
@@ -21,17 +23,18 @@ Initializes Pygame and Pymunk and runs the main simulation loop.
 """
 pygame.init()
 
-
-screen_width, screen_height = SimViewerConfig.SCREEN_WIDTH, SimViewerConfig.SCREEN_HEIGHT
+sim_viewer_config = SimViewerConfig()
+screen_width, screen_height = sim_viewer_config.SCREEN_WIDTH, sim_viewer_config.SCREEN_HEIGHT
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Cell Colony Simulation")
 
-space = pymunk.Space(threaded=PhysicsConfig.THREADED)
-space.threads = PhysicsConfig.THREADS
-space.iterations = PhysicsConfig.ITERATIONS
-space.gravity = PhysicsConfig.GRAVITY
-space.damping = PhysicsConfig.DAMPING
-
+physics_config = PhysicsConfig()
+#space = pymunk.Space(threaded=physics_config.THREADED)
+#space.threads = physics_config.THREADS
+#space.iterations = physics_config.ITERATIONS
+#space.gravity = physics_config.GRAVITY
+#space.damping = physics_config.DAMPING
+#dt = physics_config.DT
 
 
 def setup_spatial_hash(space: pymunk.Space, colony: Colony) -> tuple[float, int]:
@@ -58,7 +61,6 @@ def estimate_spatial_hash_params(colony: Colony) -> tuple[float, int]:
     return dim, count
 
 # Add periodic updates in your main loop:
-frame_count = 0
 last_segment_count = 15  # Initial cell segments
 
 
@@ -97,20 +99,21 @@ initial_cell_config = CellConfig(
     PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
-next_group_id = 1
-initial_cell = SimCell(
-    space,
-    config=initial_cell_config,
-    start_pos= Vec2d(0, 0),
-    group_id=next_group_id,
-)
-colony = Colony(space, [initial_cell])
-next_group_id += 1
-growth_manager = GrowthManager()
-division_manager = DivisionManager(space, initial_cell_config)
+#next_group_id = 1
+#initial_cell = SimCell(
+#    space,
+#    config=initial_cell_config,
+#    start_pos= Vec2d(0, 0),
+#    group_id=next_group_id,
+#)
+#colony = Colony(space, [initial_cell])
+#next_group_id += 1
+#growth_manager = GrowthManager()
+#division_manager = DivisionManager(space, initial_cell_config)
+simulator = Simulator(physics_config, initial_cell_config)
 
 # In your main() function, after creating initial_cell:
-setup_spatial_hash(space, colony)
+setup_spatial_hash(simulator.space, simulator.colony)
 
 mouse_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
 mouse_joint = None
@@ -120,18 +123,15 @@ running = True
 show_joints = True
 
 
-@dataclass
-class SimulationContext:
-    """Holds shared data for a single simulation step."""
-    frame_count: int
-    dt: float
 
-def cell_hook(cell: SimCell, simulation_context: SimulationContext):
-    if simulation_context.frame_count % 60 == 0:
-        cell.PhysicsRepresentation.apply_noise(simulation_context.dt)  # Jiggle cells for randomness
-    cell.PhysicsRepresentation.check_total_compression()
+def cell_hook(simulator: Simulator, cell: SimCell):
+    if simulator.frame_count % 60 == 0:
+        cell.PhysicsRepresentation.apply_noise(simulator.dt)  # Jiggle cells for randomness
+    #cell.PhysicsRepresentation.check_total_compression()
 
-
+def post_division_hook(simulator: Simulator, cell: SimCell, daughter_cell: SimCell):
+    daughter_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,simulator.next_group_id)  # and set the daughter's base colour for the visualisation
+    ColonyVisualiser.update_colors(daughter_cell)  # update the colours of the cell according to rules
 
 frames_to_render = [] # List to store data for rendering
 image_count = 0
@@ -202,38 +202,13 @@ while running:
     world_mouse_y = (mouse_y - screen_height / 2) / zoom_level + camera_y
     mouse_body.position = (world_mouse_x, world_mouse_y)
 
-    dt = 1.0 / 60.0
-
-
 
     # NEW: Only run simulation if not paused
     if not is_paused:
-        for _ in range(SimViewerConfig.SIM_STEPS_PER_DRAW):
+        for _ in range(sim_viewer_config.SIM_STEPS_PER_DRAW):
             pbar.update(1)
-            simulation_context = SimulationContext(frame_count=frame_count, dt=dt)
-            newly_born_cells_map = {}
 
-
-            # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
-            for cell in colony.cells[:]:
-                cell_hook(cell, simulation_context)
-                growth_manager.grow(cell,dt) #Grow the cell
-
-                new_cell: Optional['SimCell'] = division_manager.handle_division(cell, next_group_id, dt) #Handle the cell division
-                if new_cell is not None: #If a new cell was created
-                    new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,next_group_id)  # and set the daughter's base colour for the visualisation
-                    ColonyVisualiser.update_colors(new_cell)  #update the colours of the cell according to rules
-                    newly_born_cells_map[new_cell] = cell #Add the new cell to the map
-                    next_group_id += 1 # and increment the group ID
-
-                ColonyVisualiser.update_colors(cell) #and handle the colour update of the current cell
-
-            # --- Handle adding newly born cells to the colony ---
-            if newly_born_cells_map:
-                colony.add_cells(newly_born_cells_map.keys())
-                colony.handle_cell_overlaps(newly_born_cells_map)
-
-            space.step(dt)
+            simulator.step()
 
     # NEW: Apply camera transform to draw options
     draw_options.transform = pymunk.Transform(
@@ -247,17 +222,17 @@ while running:
         draw_options.flags |= pymunk.pygame_util.DrawOptions.DRAW_CONSTRAINTS
 
     # Clear both surfaces
-    screen.fill(SimViewerConfig.BACKGROUND_COLOR)
-    virtual_surface.fill(SimViewerConfig.BACKGROUND_COLOR)
+    screen.fill(sim_viewer_config.BACKGROUND_COLOR)
+    virtual_surface.fill(sim_viewer_config.BACKGROUND_COLOR)
 
     # Draw to virtual surface with transform
-    space.debug_draw(draw_options)
+    simulator.space.debug_draw(draw_options)
 
     # Blit virtual surface to main screen
     screen.blit(virtual_surface, (0, 0))
 
     # NEW: Display zoom level, pause status, and controls
-    font = pygame.font.Font(None, SimViewerConfig.FONT_SIZE)
+    font = pygame.font.Font(None, sim_viewer_config.FONT_SIZE)
     zoom_text = font.render(f"Zoom: {zoom_level:.2f}x", True, (255, 255, 255))
     # NEW: Show pause status
     pause_text = font.render(f"{'PAUSED' if is_paused else 'Running'}", True, (255, 255, 0) if is_paused else (0, 255, 0))
@@ -271,17 +246,16 @@ while running:
 
     # NEW: Only increment frame counter and update spatial hash if not paused
     if not is_paused:
-        frame_count += 1
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
-        if frame_count % 1 == 0:
-            current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony.cells)
+        if simulator.frame_count % 1 == 0:
+            current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in simulator.colony.cells)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
-                dim, count = estimate_spatial_hash_params(colony)
-                space.use_spatial_hash(dim, count)
+                dim, count = estimate_spatial_hash_params(simulator.colony)
+                simulator.space.use_spatial_hash(dim, count)
                 last_segment_count = current_segment_count
 
-        current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony.cells)
+        current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in simulator.colony.cells)
 
         # Capture the state for rendering later
         current_frame_data = [
@@ -290,13 +264,13 @@ while running:
                 'radius': seg.shape.radius,
                 'color': seg.shape.color
             }
-            for cell in colony.cells for seg in cell.PhysicsRepresentation.segments
+            for cell in simulator.colony.cells for seg in cell.PhysicsRepresentation.segments
         ]
         frames_to_render.append((image_count, current_frame_data))
         image_count += 1
 
         if current_segment_count > last_segment_count * 1.5:
-            setup_spatial_hash(space, colony)
+            setup_spatial_hash(space, simulator.colony)
             last_segment_count = current_segment_count
 
 

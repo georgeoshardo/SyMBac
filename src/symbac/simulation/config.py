@@ -70,7 +70,7 @@ class CellConfig:
         object.__setattr__(self, "MIN_SEPTUM_RADIUS", self.SEGMENT_RADIUS * 0.1)
         object.__setattr__(self, "NUM_SEPTUM_SEGMENTS", self.GRANULARITY)
 
-
+@dataclass(slots=True, frozen=True)
 class SimViewerConfig:
     """ General simulation settings. """
     SCREEN_WIDTH: int = 1200
@@ -80,9 +80,11 @@ class SimViewerConfig:
     BACKGROUND_COLOR: tuple[int, int, int] = (20, 30, 40)
     FONT_SIZE: int = 36
 
+@dataclass(slots=True, frozen=True)
 class PhysicsConfig:
     ITERATIONS: int = 120 # Number of iterations for the physics simulation, long floppy cells might need to go higher than 60
     DAMPING: float = 0.5
     GRAVITY: tuple[float, float] = (0.0, 0.0)
     THREADED: bool = False # Use pymunk.Space(threaded=True) for multithreading but non-deterministic results, even with random seed set
     THREADS: int = 1
+    DT = 1.0 / 60.0  # Time step for the physics simulation, 60 FPS

@@ -1,14 +1,9 @@
 # colony.py
 from typing import Iterable, Callable, Optional
 
-from symbac.simulation.division_manager import DivisionManager
-from symbac.simulation.growth_manager import GrowthManager
 from symbac.simulation.simcell import SimCell
 from symbac.simulation.visualisation.colony_visualiser import ColonyVisualiser
 from pymunk.space import Space
-import typing
-if typing.TYPE_CHECKING:
-    from symbac.simulation.sim_loop import SimulationContext
 
 
 class Colony:

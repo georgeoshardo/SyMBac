@@ -41,7 +41,6 @@ class PhysicsRepresentation:
         self.growth_accumulator_head = 0
         self.growth_accumulator_tail = 0
 
-        self.check_total_compression()
 
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
