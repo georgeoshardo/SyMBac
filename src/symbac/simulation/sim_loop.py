@@ -23,7 +23,6 @@ pygame.init()
 
 
 screen_width, screen_height = SimViewerConfig.SCREEN_WIDTH, SimViewerConfig.SCREEN_HEIGHT
-simulation_speed_multiplier = SimViewerConfig.SIMULATION_SPEED_MULTIPLIER
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Cell Colony Simulation")
 
@@ -205,20 +204,19 @@ while running:
 
     dt = 1.0 / 60.0
 
-    simulation_context = SimulationContext(frame_count=frame_count, dt=dt)
 
 
     # NEW: Only run simulation if not paused
     if not is_paused:
-        for _ in range(simulation_speed_multiplier):
+        for _ in range(SimViewerConfig.SIM_STEPS_PER_DRAW):
             pbar.update(1)
+            simulation_context = SimulationContext(frame_count=frame_count, dt=dt)
             newly_born_cells_map = {}
 
-            for cell in colony.cells[:]:
-                if frame_count % 60 == 0:
-                    cell.PhysicsRepresentation.apply_noise(dt) #jiggle cells for randomness
 
-                cell.PhysicsRepresentation.check_total_compression()
+            # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
+            for cell in colony.cells[:]:
+                cell_hook(cell, simulation_context)
                 growth_manager.grow(cell,dt) #Grow the cell
 
                 new_cell: Optional['SimCell'] = division_manager.handle_division(cell, next_group_id, dt) #Handle the cell division
@@ -234,7 +232,6 @@ while running:
             if newly_born_cells_map:
                 colony.add_cells(newly_born_cells_map.keys())
                 colony.handle_cell_overlaps(newly_born_cells_map)
-
 
             space.step(dt)
 

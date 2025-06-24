@@ -27,15 +27,6 @@ class Colony:
     def add_cells(self, cells: Iterable[SimCell]) -> None:
         self.cells.extend(cells)
 
-    def update(self, dt: float, division_manager: DivisionManager, growth_manager: GrowthManager, simulation_context: 'SimulationContext', cell_hook: Callable[['SimCell', 'SimulationContext'], None]) -> None:
-        """
-        Update the colony by processing each cell for growth and division.
-        """
-        for cell in self.cells:
-
-            if cell_hook:
-                cell_hook(cell, simulation_context)
-
     def handle_cell_overlaps(self, newly_born_cells_map: dict[SimCell, SimCell]) -> None:
         for daughter, mother in newly_born_cells_map.items():
             mother_shapes = [s.shape for s in mother.PhysicsRepresentation.segments]
