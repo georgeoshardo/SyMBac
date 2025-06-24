@@ -48,6 +48,3 @@ class GrowthManager:
         if cell.PhysicsRepresentation.growth_accumulator_tail >= cell.config.GROWTH_THRESHOLD:
             cell.PhysicsRepresentation.add_tail_segment()
             cell.PhysicsRepresentation.growth_accumulator_tail = 0.0
-
-        cell._update_colors()
-

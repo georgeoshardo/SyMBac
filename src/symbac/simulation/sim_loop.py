@@ -3,6 +3,7 @@ from pymunk import Vec2d
 
 from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
+from symbac.simulation.visualisation import ColonyVisualiser
 
 np.random.seed(42)
 import pygame
@@ -75,11 +76,11 @@ pymunk.pygame_util.positive_y_is_up = False
 
 
 initial_cell_config = CellConfig(
-    GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
+    GRANULARITY=14, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=40, # This should be stable now!
+    BASE_MAX_LENGTH=80, # This should be stable now!
     MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
@@ -199,21 +200,30 @@ while running:
 
                 cell.PhysicsRepresentation.check_total_compression()
                 growth_manager.grow(cell,dt) #Grow the cell
+                ColonyVisualiser.update_colors(cell)
 
                 # --- Handle cell division ---
                 if cell.is_dividing: #If a cell is dividing
-                    division_manager.update_septum(cell, dt) #Update the septum progress
-                    new_cell = cell._split_cell(next_group_id) #Attempt to split the cell and get a new cell
+                    division_manager.update_septum_progress(cell, dt) #Update the septum progress
+                    division_manager.update_septum_segment_radii(cell) # and Update the septum segment radii
+                    if cell.septum_progress < 1.0: #If the septum is not fully formed
+                        new_cell = None # Do nothing, just wait for the septum to form
+                    else: #If the septum is fully formed
+                        division_manager.restore_segment_radii(cell) #Reset the segment radii to their original values ahead of splitting
+                        new_cell = division_manager.split_cell(cell, next_group_id) # split the cell and get a new cell
+                        new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell, next_group_id) #and set the daughter's base colour for the visualisation
+                        ColonyVisualiser.update_colors(new_cell) # and update the colours of the mother cell according to rules
                     if new_cell: #If the division was completed
                         newly_born_cells_map[new_cell] = cell #Add the new cell to the map
                         division_manager.reset_division_readiness(cell) #and reset the division readiness of the mother cell
                         next_group_id += 1 # and increment the group ID
                 else: #If a cell is not dividing
                     if division_manager.ready_to_divide(cell): #then check if it is ready to divide
+                        division_manager.initialise_mother_daughter_septum_segments(cell) #and if it is, initialise the septum segments
                         division_manager.set_division_readiness(cell) #and if it is, set its state to dividing
 
 
-
+            # --- Handle adding newly born cells to the colony ---
             if newly_born_cells_map:
                 colony.extend(newly_born_cells_map.keys())
                 if len(colony) == 50:
@@ -240,8 +250,9 @@ while running:
                                 if info.shape in mother_shapes:
                                     mother.PhysicsRepresentation.remove_tail_segment()
                                     daughter.PhysicsRepresentation.remove_head_segment()
-                                    mother._update_colors()
-                                    daughter._update_colors()
+                                    ColonyVisualiser.update_colors(daughter)
+                                    ColonyVisualiser.update_colors(mother)
+
                                     # We must update the mother_shapes list since a shape was removed
                                     mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high
 
@@ -293,7 +304,7 @@ while running:
         frame_count += 1
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
-        if frame_count % 60 == 0:
+        if frame_count % 1 == 0:
             current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
                 dim, count = estimate_spatial_hash_params(colony)
