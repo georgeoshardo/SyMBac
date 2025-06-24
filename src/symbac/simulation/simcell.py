@@ -1,15 +1,13 @@
-import pymunk
+import typing
 import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
-from typing import Optional, cast
+from typing import Optional
 from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
 from symbac.simulation.physics_representation import PhysicsRepresentation
-from symbac.simulation.segments import CellSegment
-import colorsys
-
-from symbac.simulation.visualisation import ColonyVisualiser
+if typing.TYPE_CHECKING:
+    import pymunk
 
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.

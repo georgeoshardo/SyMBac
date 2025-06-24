@@ -151,10 +151,26 @@ class DivisionManager:
         if self.config.DAMPED_ROTARY_SPRING:
             cell.PhysicsRepresentation.spring_joints = cell.PhysicsRepresentation.spring_joints[:connecting_joint_idx]
 
-
-
-
         cell.PhysicsRepresentation.growth_accumulator_tail = 0.0
         cell.num_divisions += 1
 
         return daughter_cell
+
+    def handle_division(self, cell: 'SimCell', next_group_id: int, dt: float) -> typing.Optional['SimCell']:
+        if cell.is_dividing:  # If a cell is dividing
+            self.update_septum_progress(cell, dt)  # Update the septum progress
+            self.update_septum_segment_radii(cell)  # and Update the septum segment radii
+            if cell.septum_progress < 1.0:  # If the septum is not fully formed
+                new_cell = None  # Do nothing, just wait for the septum to form
+            else:  # If the septum is fully formed
+                self.restore_segment_radii(cell)  # Reset the segment radii to their original values ahead of splitting
+                new_cell = self.split_cell(cell, next_group_id)  # split the cell and get a new cell
+            if new_cell:  # If the division was completed
+                self.reset_division_readiness(cell)  # and reset the division readiness of the mother cell
+        else:  # If a cell is not dividing
+            if self.ready_to_divide(cell):  # then check if it is ready to divide
+                self.initialise_mother_daughter_septum_segments(cell)  # and if it is, initialise the septum segments
+                self.set_division_readiness(cell)  # and if it is, set its state to dividing
+            new_cell = None
+
+        return new_cell

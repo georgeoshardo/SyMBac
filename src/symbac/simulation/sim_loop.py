@@ -1,9 +1,13 @@
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
 from pymunk import Vec2d
 
 from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
-from symbac.simulation.visualisation import ColonyVisualiser
+from symbac.simulation.visualisation.colony_visualiser import ColonyVisualiser
+from symbac.simulation.colony import Colony
 
 np.random.seed(42)
 import pygame
@@ -31,7 +35,7 @@ space.damping = PhysicsConfig.DAMPING
 
 
 
-def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
+def setup_spatial_hash(space: pymunk.Space, colony: Colony) -> tuple[float, int]:
     """Setup spatial hash with estimated parameters"""
     dim, count = estimate_spatial_hash_params(colony)
     space.use_spatial_hash(dim, count)
@@ -39,13 +43,13 @@ def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     return dim, count
 
 
-def estimate_spatial_hash_params(colony: list[SimCell]) -> tuple[float, int]:
+def estimate_spatial_hash_params(colony: Colony) -> tuple[float, int]:
     """Estimate good spatial hash parameters for current colony size"""
     if not colony:
         return 36.0, 1000
 
-    total_segments = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
-    segment_radius = colony[0].config.SEGMENT_RADIUS if colony else 15
+    total_segments = sum(len(cell.PhysicsRepresentation.segments) for cell in colony.cells)
+    segment_radius = colony.cells[0].config.SEGMENT_RADIUS if colony else 15
 
     # dim: slightly larger than segment diameter for optimal performance
     dim = segment_radius * 2 * 1.2
@@ -80,7 +84,7 @@ initial_cell_config = CellConfig(
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=80, # This should be stable now!
+    BASE_MAX_LENGTH=180, # This should be stable now!
     MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
@@ -94,7 +98,6 @@ initial_cell_config = CellConfig(
     PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
-colony: list[SimCell] = []
 next_group_id = 1
 initial_cell = SimCell(
     space,
@@ -102,7 +105,7 @@ initial_cell = SimCell(
     start_pos= Vec2d(0, 0),
     group_id=next_group_id,
 )
-colony.append(initial_cell)
+colony = Colony(space, [initial_cell])
 next_group_id += 1
 growth_manager = GrowthManager()
 division_manager = DivisionManager(space, initial_cell_config)
@@ -116,6 +119,20 @@ mouse_joint = None
 clock = pygame.time.Clock()
 running = True
 show_joints = True
+
+
+@dataclass
+class SimulationContext:
+    """Holds shared data for a single simulation step."""
+    frame_count: int
+    dt: float
+
+def cell_hook(cell: SimCell, simulation_context: SimulationContext):
+    if simulation_context.frame_count % 60 == 0:
+        cell.PhysicsRepresentation.apply_noise(simulation_context.dt)  # Jiggle cells for randomness
+    cell.PhysicsRepresentation.check_total_compression()
+
+
 
 frames_to_render = [] # List to store data for rendering
 image_count = 0
@@ -188,80 +205,36 @@ while running:
 
     dt = 1.0 / 60.0
 
+    simulation_context = SimulationContext(frame_count=frame_count, dt=dt)
+
+
     # NEW: Only run simulation if not paused
     if not is_paused:
         for _ in range(simulation_speed_multiplier):
             pbar.update(1)
             newly_born_cells_map = {}
 
-            for cell in colony[:]:
+            for cell in colony.cells[:]:
                 if frame_count % 60 == 0:
-                    cell.PhysicsRepresentation.apply_noise(dt)
+                    cell.PhysicsRepresentation.apply_noise(dt) #jiggle cells for randomness
 
                 cell.PhysicsRepresentation.check_total_compression()
                 growth_manager.grow(cell,dt) #Grow the cell
-                ColonyVisualiser.update_colors(cell)
 
-                # --- Handle cell division ---
-                if cell.is_dividing: #If a cell is dividing
-                    division_manager.update_septum_progress(cell, dt) #Update the septum progress
-                    division_manager.update_septum_segment_radii(cell) # and Update the septum segment radii
-                    if cell.septum_progress < 1.0: #If the septum is not fully formed
-                        new_cell = None # Do nothing, just wait for the septum to form
-                    else: #If the septum is fully formed
-                        division_manager.restore_segment_radii(cell) #Reset the segment radii to their original values ahead of splitting
-                        new_cell = division_manager.split_cell(cell, next_group_id) # split the cell and get a new cell
-                        new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell, next_group_id) #and set the daughter's base colour for the visualisation
-                        ColonyVisualiser.update_colors(new_cell) # and update the colours of the mother cell according to rules
-                    if new_cell: #If the division was completed
-                        newly_born_cells_map[new_cell] = cell #Add the new cell to the map
-                        division_manager.reset_division_readiness(cell) #and reset the division readiness of the mother cell
-                        next_group_id += 1 # and increment the group ID
-                else: #If a cell is not dividing
-                    if division_manager.ready_to_divide(cell): #then check if it is ready to divide
-                        division_manager.initialise_mother_daughter_septum_segments(cell) #and if it is, initialise the septum segments
-                        division_manager.set_division_readiness(cell) #and if it is, set its state to dividing
+                new_cell: Optional['SimCell'] = division_manager.handle_division(cell, next_group_id, dt) #Handle the cell division
+                if new_cell is not None: #If a new cell was created
+                    new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,next_group_id)  # and set the daughter's base colour for the visualisation
+                    ColonyVisualiser.update_colors(new_cell)  #update the colours of the cell according to rules
+                    newly_born_cells_map[new_cell] = cell #Add the new cell to the map
+                    next_group_id += 1 # and increment the group ID
 
+                ColonyVisualiser.update_colors(cell) #and handle the colour update of the current cell
 
             # --- Handle adding newly born cells to the colony ---
             if newly_born_cells_map:
-                colony.extend(newly_born_cells_map.keys())
-                if len(colony) == 50:
-                    print("Reached 50 cells")
-                if len(colony) == 100:
-                    print("Reached 100 cells")
-                if len(colony) == 200:
-                    print("Reached 200 cells")
-                if len(colony) == 500:
-                    print("Reached 500 cells")
-                for daughter, mother in newly_born_cells_map.items():
-                    mother_shapes = [s.shape for s in mother.PhysicsRepresentation.segments]
+                colony.add_cells(newly_born_cells_map.keys())
+                colony.handle_cell_overlaps(newly_born_cells_map)
 
-                    # Symmetrical Overlap Removal Loop
-                    while True:
-                        overlap_found = False
-                        # We only need to check the daughter's head against the mother's body
-                        if daughter.PhysicsRepresentation.segments:
-                            daughter_head = daughter.PhysicsRepresentation.segments[0]
-                            query_result = space.shape_query(daughter_head.shape)
-
-                            for info in query_result:
-                                # If the daughter's head is overlapping with the mother
-                                if info.shape in mother_shapes:
-                                    mother.PhysicsRepresentation.remove_tail_segment()
-                                    daughter.PhysicsRepresentation.remove_head_segment()
-                                    ColonyVisualiser.update_colors(daughter)
-                                    ColonyVisualiser.update_colors(mother)
-
-                                    # We must update the mother_shapes list since a shape was removed
-                                    mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high
-
-                                    overlap_found = True
-                                    break  # Exit the inner query loop
-
-                        # If we went through a full check without finding an overlap, we're done.
-                        if not overlap_found:
-                            break
 
             space.step(dt)
 
@@ -305,13 +278,13 @@ while running:
 
         # Update spatial hash every 60 frames (1 second) if colony grew significantly
         if frame_count % 1 == 0:
-            current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
+            current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony.cells)
             if current_segment_count > last_segment_count * 1.5:  # 50% growth
                 dim, count = estimate_spatial_hash_params(colony)
                 space.use_spatial_hash(dim, count)
                 last_segment_count = current_segment_count
 
-        current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony)
+        current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in colony.cells)
 
         # Capture the state for rendering later
         current_frame_data = [
@@ -320,7 +293,7 @@ while running:
                 'radius': seg.shape.radius,
                 'color': seg.shape.color
             }
-            for cell in colony for seg in cell.PhysicsRepresentation.segments
+            for cell in colony.cells for seg in cell.PhysicsRepresentation.segments
         ]
         frames_to_render.append((image_count, current_frame_data))
         image_count += 1

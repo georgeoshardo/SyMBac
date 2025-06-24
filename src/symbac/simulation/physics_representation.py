@@ -324,7 +324,7 @@ class PhysicsRepresentation:
         # Get the actual tip-to-tip length
         actual_total_length = self.get_continuous_length()
 
-        self.adjusted_growth_rate = max(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
+        self.adjusted_growth_rate = min(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
 
         # Check for overall cell compression
         if actual_total_length < expected_total_length:
