@@ -8,7 +8,7 @@ from symbac.simulation.visualisation import ColonyVisualiser
 np.random.seed(42)
 import pygame
 import pymunk.pygame_util
-from cell import Cell
+from simcell import SimCell
 from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
 from tqdm import tqdm
@@ -39,7 +39,7 @@ def setup_spatial_hash(space: pymunk.Space, colony: list) -> tuple[float, int]:
     return dim, count
 
 
-def estimate_spatial_hash_params(colony: list[Cell]) -> tuple[float, int]:
+def estimate_spatial_hash_params(colony: list[SimCell]) -> tuple[float, int]:
     """Estimate good spatial hash parameters for current colony size"""
     if not colony:
         return 36.0, 1000
@@ -94,9 +94,9 @@ initial_cell_config = CellConfig(
     PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
-colony: list[Cell] = []
+colony: list[SimCell] = []
 next_group_id = 1
-initial_cell = Cell(
+initial_cell = SimCell(
     space,
     config=initial_cell_config,
     start_pos= Vec2d(0, 0),

@@ -13,7 +13,7 @@ from symbac.simulation.visualisation import ColonyVisualiser
 
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
-class Cell:
+class SimCell:
 
     __slots__ = (
         "config",
@@ -28,8 +28,6 @@ class Cell:
         "_max_length",
         "adjusted_growth_rate",
         "num_divisions",
-        "growth_accumulator_head",
-        "growth_accumulator_tail",
     )
 
     def __init__(

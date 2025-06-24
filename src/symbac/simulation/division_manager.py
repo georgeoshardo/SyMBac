@@ -1,6 +1,6 @@
 import typing
 import pymunk
-from symbac.simulation.cell import Cell
+from symbac.simulation.simcell import SimCell
 from symbac.simulation.config import CellConfig
 
 
@@ -10,7 +10,7 @@ class DivisionManager:
         self.space = space
         self.config = config
 
-    def ready_to_divide(self, cell: 'Cell') -> bool:
+    def ready_to_divide(self, cell: 'SimCell') -> bool:
         """A simple state check. Returns True if the cell is ready to divide."""
         if cell.is_dividing:
             return False
@@ -26,28 +26,28 @@ class DivisionManager:
 
         return True
 
-    def get_split_index(self, cell: 'Cell') -> int:
+    def get_split_index(self, cell: 'SimCell') -> int:
         """
         Returns the index at which the cell should be split for division.
         This is typically the middle of the segments.
         """
         return len(cell.PhysicsRepresentation.segments) // 2
 
-    def set_division_readiness(self, cell: 'Cell') -> None:
+    def set_division_readiness(self, cell: 'SimCell') -> None:
         cell.is_dividing = True
         cell.septum_progress = 0.0
         cell.division_site = self.get_split_index(cell)
         cell.length_at_division_start = len(cell.PhysicsRepresentation.segments)
         return None
 
-    def reset_division_readiness(self, cell: 'Cell') -> None:
+    def reset_division_readiness(self, cell: 'SimCell') -> None:
         cell.is_dividing = False
         cell.septum_progress = 0.0
         cell.division_site = None
         cell.length_at_division_start = 0
         return None
 
-    def update_septum_progress(self, cell: 'Cell', dt: float) -> None:
+    def update_septum_progress(self, cell: 'SimCell', dt: float) -> None:
         """
         Updates the septum progress during division.
         This is a placeholder for actual septum formation logic.
@@ -55,7 +55,7 @@ class DivisionManager:
         cell.septum_progress += dt / self.config.SEPTUM_DURATION
 
 
-    def initialise_mother_daughter_septum_segments(self, cell: 'Cell') -> None:
+    def initialise_mother_daughter_septum_segments(self, cell: 'SimCell') -> None:
         """Initialises the septum segments for mother and daughter cells."""
         assert cell.PhysicsRepresentation._mother_septum_segments is None and cell.PhysicsRepresentation._daughter_septum_segments is None
         cell.PhysicsRepresentation._mother_septum_segments = []
@@ -68,7 +68,7 @@ class DivisionManager:
                 cell.PhysicsRepresentation._mother_septum_segments.append(cell.PhysicsRepresentation.segments[mother_idx])
                 cell.PhysicsRepresentation._daughter_septum_segments.append(cell.PhysicsRepresentation.segments[daughter_idx])
 
-    def update_septum_segment_radii(self, cell: 'Cell') -> None:
+    def update_septum_segment_radii(self, cell: 'SimCell') -> None:
         """
         Updates the radii of the septum segments based on the septum progress.
         This is a placeholder for actual septum formation logic.
@@ -83,7 +83,7 @@ class DivisionManager:
             cell.PhysicsRepresentation._mother_septum_segments[i].radius = new_radius
             cell.PhysicsRepresentation._daughter_septum_segments[i].radius = new_radius
 
-    def restore_segment_radii(self, cell: 'Cell') -> None:
+    def restore_segment_radii(self, cell: 'SimCell') -> None:
         """
         Restores the radii of the septum segments to their original values.
         This is called after division is complete.
@@ -95,7 +95,7 @@ class DivisionManager:
             cell.PhysicsRepresentation._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
             cell.PhysicsRepresentation._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
 
-    def split_cell(self, cell: 'Cell', next_group_id: int) -> 'Cell':
+    def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 
 
         current_length = len(cell.PhysicsRepresentation.segments)
@@ -118,7 +118,7 @@ class DivisionManager:
         # --- START of MODIFIED SECTION for color inheritance ---
 
 
-        daughter_cell = Cell(
+        daughter_cell = SimCell(
             space=self.space, config=self.config, start_pos=cell.PhysicsRepresentation.segments[mother_final_len].position,
             group_id=next_group_id, _from_division=True, base_color=None
         )
@@ -153,7 +153,6 @@ class DivisionManager:
 
 
 
-        daughter_cell.growth_accumulator_tail = cell.PhysicsRepresentation.growth_accumulator_tail
 
         cell.PhysicsRepresentation.growth_accumulator_tail = 0.0
         cell.num_divisions += 1

@@ -1,11 +1,11 @@
 import numpy as np
-from symbac.simulation.cell import Cell
+from symbac.simulation.simcell import SimCell
 
 # Follow the ECS paradigm and have a separate growth manager class that handles the growth of cells and is stateless
 # Can consider making this manager take a nutrient profile to adjust per cell growth rate. For now constant
 class GrowthManager:
 
-    def grow(self, cell: Cell, dt: float):
+    def grow(self, cell: SimCell, dt: float):
         """
         Handles the growth of the cell by elongating the joints at the head and tail.
         When a joint is stretched beyond a threshold, it triggers the insertion of a new segment.

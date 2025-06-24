@@ -5,7 +5,7 @@ import os
 import colorsys
 import typing
 if typing.TYPE_CHECKING:
-    from symbac.simulation.cell import Cell
+    from symbac.simulation.simcell import SimCell
 
 # from your_utility_module import get_opposite_color
 
@@ -33,7 +33,7 @@ class ColonyVisualiser:
         self.fill_threshold = fill_threshold
         self.frame_number = 0
 
-    def draw_colony_matplotlib(self, colony: list['Cell'], output_dir: str = "frames"):
+    def draw_colony_matplotlib(self, colony: list['SimCell'], output_dir: str = "frames"):
         """
         Draws the current state of the colony, updating the zoom level if the colony
         fills more than the specified threshold of the viewport.
@@ -104,7 +104,7 @@ class ColonyVisualiser:
 
 
     @staticmethod
-    def get_daughter_colour(cell: 'Cell', next_group_id: int) -> tuple[int, int, int]:
+    def get_daughter_colour(cell: 'SimCell', next_group_id: int) -> tuple[int, int, int]:
         # 1. Get the mother's color and normalize it to the 0-1 range for colorsys
         r, g, b = cell.base_color
         r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
