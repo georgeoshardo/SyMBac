@@ -14,9 +14,23 @@ from symbac.simulation.visualisation import ColonyVisualiser
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
 class Cell:
-    _daughter_septum_segments: Optional[list[CellSegment]] = None
-    _mother_septum_segments: Optional[list[CellSegment]] = None
 
+    __slots__ = (
+        "config",
+        "_group_id",
+        "base_color",
+        "PhysicsRepresentation",
+        "is_dividing",
+        "_septum_progress",
+        "_division_site",
+        "length_at_division_start",
+        "division_bias",
+        "_max_length",
+        "adjusted_growth_rate",
+        "num_divisions",
+        "growth_accumulator_head",
+        "growth_accumulator_tail",
+    )
 
     def __init__(
             self,
@@ -31,9 +45,7 @@ class Cell:
         if isinstance(start_pos, tuple):
             start_pos = Vec2d(*start_pos)
 
-        self.space = space
         self.config = config
-        self.start_pos = start_pos
         self._group_id = group_id
         if not base_color:
             self.base_color = generate_color(group_id)
@@ -41,19 +53,16 @@ class Cell:
             self.base_color = base_color
 
         self.PhysicsRepresentation = PhysicsRepresentation(
-            space=self.space,
+            space=space,
             config=self.config,
             group_id=self._group_id,
-            start_pos=self.start_pos,
+            start_pos=start_pos,
             _from_division=_from_division,
         ) # Use dependency injection pattern for the physics representation, can't think of a better way
 
         self.is_dividing = False
         self._septum_progress = 0.0
-        self.septum_duration = 1.5
         self.division_site: int | None = None
-        self.num_septum_segments = self.config.GRANULARITY
-        self.min_septum_radius = self.config.SEGMENT_RADIUS * 0.1
         self.length_at_division_start = 0
         self.division_bias = 0 #self.config.GRANULARITY # not needed when bidirectional growth I think
 
@@ -67,8 +76,6 @@ class Cell:
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
         self.num_divisions = 0
-        self._mother_septum_segments = None
-        self._daughter_septum_segments = None
 
     @property
     def group_id(self) -> int:

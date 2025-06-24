@@ -105,7 +105,7 @@ initial_cell = Cell(
 colony.append(initial_cell)
 next_group_id += 1
 growth_manager = GrowthManager()
-division_manager = DivisionManager()
+division_manager = DivisionManager(space, initial_cell_config)
 
 # In your main() function, after creating initial_cell:
 setup_spatial_hash(space, colony)

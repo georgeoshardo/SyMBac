@@ -14,6 +14,9 @@ class CellConfig:
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
     NOISE_STRENGTH: float = 0.05
 
+    #Septum configuration
+    SEPTUM_DURATION: float = 1.5  # Duration of septum formation in seconds
+
     DAMPED_ROTARY_SPRING: bool = False
     ROTARY_SPRING_STIFFNESS: float | None = None
     ROTARY_SPRING_DAMPING: float | None = None
@@ -21,8 +24,12 @@ class CellConfig:
     ROTARY_LIMIT_JOINT: bool = True  # Whether to use rotary limit joints
     MAX_BEND_ANGLE: float | None = None  # 0.01 normally, 0.05 also good for E. coli in MM
     STIFFNESS: float | None = None  # Stiffness for limit joints, can be np.inf for max stiffness
+
+    #Parameters to be set post init
     JOINT_DISTANCE: float = field(init=False)
     GROWTH_THRESHOLD: float = field(init=False)
+    MIN_SEPTUM_RADIUS: float = field(init=False)
+    NUM_SEPTUM_SEGMENTS: int = field(init=False)
 
     def __post_init__(self):
 
@@ -60,7 +67,8 @@ class CellConfig:
         # Use object.__setattr__ because the class is frozen
         object.__setattr__(self, "JOINT_DISTANCE", self.SEGMENT_RADIUS / self.GRANULARITY)
         object.__setattr__(self, "GROWTH_THRESHOLD", self.SEGMENT_RADIUS / self.GRANULARITY)
-
+        object.__setattr__(self, "MIN_SEPTUM_RADIUS", self.SEGMENT_RADIUS * 0.1)
+        object.__setattr__(self, "NUM_SEPTUM_SEGMENTS", self.GRANULARITY)
 
 
 class SimViewerConfig:
