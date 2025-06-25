@@ -1,16 +1,20 @@
 import pymunk
-import pymunk.pygame_util
-from  config import CellConfig
+from  symbac.simulation.config import CellConfig
 from typing import Optional
+import typing
+if typing.TYPE_CHECKING:
+    from pymunk.body import Body
+    from pymunk.shapes import Circle
+    from pymunk.space import Space
 
 class CellSegment:
     config: CellConfig
     group_id: int
-    body: pymunk.Body
-    shape: pymunk.Circle
+    body: 'Body'
+    shape: 'Circle'
     angle: float
     position: tuple[float, float]
-    space: Optional[pymunk.Space] = None
+    space: Optional['Space'] = None
 
 
     """
@@ -38,7 +42,7 @@ class CellSegment:
             group_id: int,
             position: pymunk.Vec2d,
             angle: float = 0.0,
-            space: 'pymunk.Space | None' = None
+            space: 'Space | None' = None
     ) -> None:
 
         """

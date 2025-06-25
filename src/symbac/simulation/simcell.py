@@ -1,5 +1,4 @@
 import typing
-import pymunk.pygame_util
 from pymunk.vec2d import Vec2d
 import numpy as np
 from typing import Optional
@@ -8,6 +7,7 @@ from symbac.simulation.config import CellConfig
 from symbac.simulation.physics_representation import PhysicsRepresentation
 if typing.TYPE_CHECKING:
     import pymunk
+    from pymunk.space import Space
 
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
@@ -30,7 +30,7 @@ class SimCell:
 
     def __init__(
             self,
-            space: pymunk.Space,
+            space: 'Space',
             config: CellConfig,
             start_pos: Vec2d,
             group_id: int = 0,
