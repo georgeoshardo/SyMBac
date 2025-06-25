@@ -2,7 +2,6 @@
 from typing import Iterable, Callable, Optional
 
 from symbac.simulation.simcell import SimCell
-from symbac.simulation.visualisation.colony_visualiser import ColonyVisualiser
 from pymunk.space import Space
 
 
