@@ -6,7 +6,7 @@ from pymunk import Vec2d
 from symbac.misc import generate_color
 from symbac.simulation.simulator import Simulator
 from symbac.simulation.visualisation.live.live_visualisation import LiveVisualisation
-from symbac.trench_geometry import trench_creator
+from symbac.trench_geometry import trench_creator, box_creator
 
 np.random.seed(42)
 from simcell import SimCell
@@ -35,21 +35,21 @@ initial_cell_config = CellConfig(
     GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=2, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=45, # This should be stable now!
+    GROWTH_RATE=5, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
+    BASE_MAX_LENGTH=40, # This should be stable now!
     MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
-    START_POS=Vec2d(0, 0),
+    START_POS=Vec2d(0, 100),
     START_ANGLE=np.pi/2,
     STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
 simulator = Simulator(physics_config, initial_cell_config)
@@ -62,7 +62,26 @@ def segment_creator(local_xy1, local_xy2, global_xy, thickness):
     segment_shape.friction = 0
     return segment_body, segment_shape
 
-trench_creator(50, 1000, (-25, -100), simulator.space)
+#trench_creator(50, 1000, (-0, -0), simulator.space)
+box_creator(1000, 1000, (0,0), simulator.space, barrier_thickness=10, fillet_radius = 100)
+def cell_remover(simulator: 'Simulator') -> None:
+    for cell in simulator.cells:
+        if cell.PhysicsRepresentation.segments[0].body.position.y > 1000:
+            simulator.colony.delete_cell(cell)
+
+def cell_growth_rate_updater(cell: SimCell) -> None:
+    compression_ratio = cell.PhysicsRepresentation.get_compression_ratio()
+    cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio**4
+
+    variation = cell.config.BASE_MAX_LENGTH * cell.config.MAX_LENGTH_VARIATION
+    random_max_len = np.random.uniform(
+        cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
+    ) * np.sqrt(compression_ratio)
+
+    cell._max_length = max(len(cell.PhysicsRepresentation.segments), int(random_max_len))
+
+simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
+simulator.add_post_step_hook(cell_remover)
 
 class CellColor:
     def __init__(self):
@@ -131,7 +150,8 @@ class CellColor:
 
 cell_colouriser = CellColor()
 
-simulator.add_post_cell_iter_hook(cell_colouriser.update_colour)
+simulator.add_pre_cell_grow_hook(cell_colouriser.update_colour)
+simulator.add_post_cell_grow_hook(cell_colouriser.update_colour)
 simulator.add_post_division_hook(cell_colouriser.update_daughter_colour)
 
 # Create an object to log the simulation context each frame for plotting later
@@ -173,7 +193,7 @@ class SimulationLogger:
 
     def log_cell_positions(self, simulator: 'Simulator') -> None:
         # Log the positions of all cell segments every 100 frames
-        if simulator.frame_count % 100 == 0:
+        if simulator.frame_count % 10 == 0:
             current_frame_data = [
                 {
                     'position': (seg.body.position.x, seg.body.position.y),
@@ -193,10 +213,73 @@ simulator.add_post_step_hook(my_logger.log_cell_positions)
 
 simulator.add_post_step_hook(live_visualisation.draw)
 
-
-
 frames_to_render = [] # List to store data for rendering
 image_count = 0
 while live_visualisation.running:
         simulator.step()
 
+from joblib import Parallel, delayed
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import os
+import numpy as np
+
+def render_frame(frame_data: list, frame_number: int, output_dir: str):
+    """
+    Draws a single frame from pre-collected data using Matplotlib and saves it.
+    This function is designed to be called in parallel.
+    """
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    if not frame_data:
+        ax.set_xlim(-100, 100)
+        ax.set_ylim(100, -100)
+    else:
+        all_positions = np.array([seg['position'] for seg in frame_data])
+        min_coords = all_positions.min(axis=0)
+        max_coords = all_positions.max(axis=0)
+        center = (min_coords + max_coords) / 2
+        view_range = (max_coords - min_coords).max() * 1.2 + 200
+        ax.set_xlim(center[0] - view_range / 2, center[0] + view_range / 2)
+        ax.set_ylim(center[1] + view_range / 2, center[1] - view_range / 2)
+
+    for segment_info in frame_data:
+        x, y = segment_info['position']
+        r = segment_info['radius']
+        rgba_fill_color = np.array(segment_info['color']) / 255.0
+        circle = patches.Circle((x, y), radius=r, facecolor=rgba_fill_color)
+        ax.add_patch(circle)
+
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_title(f"Colony State at Frame {frame_number}")
+    ax.set_facecolor('black')
+    plt.axis('off')
+    plt.tight_layout()
+
+    output_path = os.path.join(output_dir, f"frame_{frame_number:05d}.jpg")
+    plt.savefig(output_path)
+    plt.close(fig)
+
+# Clean output directory
+output_directory = "frames"
+os.makedirs(output_directory, exist_ok=True)
+print(f"Clearing old frames from ./{output_directory}/")
+for filename in os.listdir(output_directory):
+    if filename.endswith(".jpg") or filename.endswith(".jpeg"):
+        os.remove(os.path.join(output_directory, filename))
+
+# --- PARALLEL RENDERING ---
+print(f"\nStarting parallel rendering of {len(my_logger.frames_to_draw_mpl)} frames using all available CPU cores...")
+start_render_time = time.perf_counter()
+
+# Use joblib to parallelize the rendering of saved frames
+# n_jobs=-1 uses all available CPU cores
+Parallel(n_jobs=-1)(
+    delayed(render_frame)(data, num, output_directory)
+    for num, data in tqdm(my_logger.frames_to_draw_mpl, desc="Rendering frames")
+)
+
+end_render_time = time.perf_counter()
+print(f"Parallel rendering completed in {end_render_time - start_render_time:.2f} seconds.")
+print(f"Output frames are saved in the '{output_directory}' directory.")

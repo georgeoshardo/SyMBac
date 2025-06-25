@@ -297,7 +297,7 @@ class PhysicsRepresentation:
                         f"Deviation: {deviation:.2f}"
                     )
 
-    def check_total_compression(self, compression_threshold: float = 0.999) -> None:
+    def get_compression_ratio(self) -> float:
         """
         Calculates the total expected length of the cell and compares it to the
         actual continuous length, printing a warning if the cell is compressed
@@ -322,19 +322,8 @@ class PhysicsRepresentation:
         # Get the actual tip-to-tip length
         actual_total_length = self.get_continuous_length()
 
-        self.adjusted_growth_rate = min(self.config.GROWTH_RATE *  (actual_total_length / expected_total_length)**4, self.config.GROWTH_RATE)
+        return actual_total_length / expected_total_length
 
-        # Check for overall cell compression
-        if actual_total_length < expected_total_length:
-            deviation = expected_total_length - actual_total_length
-            if (deviation / expected_total_length) > compression_threshold:
-                print(
-                    f"WARNING: Cell {self.group_id} is under high compression! "
-                    f"Expected Length: {expected_total_length:.2f}, "
-                    f"Actual Length: {actual_total_length:.2f}, "
-                    f"Deviation: {deviation:.2f}",
-                    f"Fractional Growth Rate: {self.adjusted_growth_rate / self.config.GROWTH_RATE:.2f}"
-                )
                 
     def get_continuous_length(self) -> float:
         """Calculates the continuous length of the cell from tip to tip."""

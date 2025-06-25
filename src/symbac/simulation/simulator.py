@@ -22,7 +22,8 @@ class Simulator:
             self,
             physics_config: PhysicsConfig,
             initial_cell_config: CellConfig,
-            post_cell_iter_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
+            pre_cell_grow_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
+            post_cell_grow_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
             post_division_hooks: Optional[List[Callable[['SimCell', 'SimCell'], None]]] = None,
             post_step_hooks: Optional[List[Callable[['Simulator'], None]]] = None,
             adaptive_iterations: bool = False,
@@ -62,10 +63,15 @@ class Simulator:
         self.joint_impulse_threshold = 100
         self.adaptive_iterations = adaptive_iterations
 
-        self.post_cell_iter_hooks: List[Callable[['SimCell'], None]] = []
-        if post_cell_iter_hooks:
-            for hook in post_cell_iter_hooks:
-                self.add_post_cell_iter_hook(hook) # Use the registration method to validate
+        self.pre_cell_grow_hooks: List[Callable[['SimCell'], None]] = []
+        if pre_cell_grow_hooks:
+            for hook in pre_cell_grow_hooks:
+                self.add_pre_cell_grow_hook(hook)
+
+        self.post_cell_grow_hooks: List[Callable[['SimCell'], None]] = []
+        if post_cell_grow_hooks:
+            for hook in post_cell_grow_hooks:
+                self.add_post_cell_grow_hook(hook) # Use the registration method to validate
 
         self.post_division_hooks: List[Callable[['SimCell', 'SimCell'], None]] = []
         if post_division_hooks:
@@ -97,10 +103,13 @@ class Simulator:
         self._validate_hook_signature(hook, expected_params=1)
         self.post_step_hooks.append(hook)
 
-    def add_post_cell_iter_hook(self, hook: Callable[['SimCell'], None]) -> None:
+    def add_pre_cell_grow_hook(self, hook: Callable[['SimCell'], None]) -> None:
         self._validate_hook_signature(hook, expected_params=1)
-        self.post_cell_iter_hooks.append(hook)
+        self.pre_cell_grow_hooks.append(hook)
 
+    def add_post_cell_grow_hook(self, hook: Callable[['SimCell'], None]) -> None:
+        self._validate_hook_signature(hook, expected_params=1)
+        self.post_cell_grow_hooks.append(hook)
 
     def add_post_division_hook(self, hook: Callable[['SimCell', 'SimCell'], None]) -> None:
         self._validate_hook_signature(hook, expected_params=2)
@@ -112,8 +121,12 @@ class Simulator:
 
         # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
         for cell in self.colony.cells[:]:
+            for hook in self.pre_cell_grow_hooks:
+                hook(cell)
+
             self.growth_manager.grow(cell, self.dt)  # Grow the cell
-            for hook in self.post_cell_iter_hooks:
+
+            for hook in self.post_cell_grow_hooks:
                 hook(cell)
             new_cell: Optional['SimCell'] = self.division_manager.handle_division(cell, self.next_group_id,
                                                                              self.dt)  # Handle the cell division
