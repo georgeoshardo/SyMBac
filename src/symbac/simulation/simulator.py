@@ -9,7 +9,6 @@ from symbac.simulation.config import PhysicsConfig, CellConfig
 from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
 from symbac.simulation.simcell import SimCell
-from symbac.simulation.visualisation.colony_visualiser import ColonyVisualiser
 
 
 @dataclass
@@ -23,8 +22,8 @@ class Simulator:
             self,
             physics_config: PhysicsConfig,
             initial_cell_config: CellConfig,
-            post_division_hook: Optional[callable] = None,
-            post_cell_iter_hook: Optional[callable] = None,
+            post_cell_iter_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
+            post_division_hooks: Optional[List[Callable[['SimCell', 'SimCell'], None]]] = None,
             post_step_hooks: Optional[List[Callable[['Simulator'], None]]] = None,
             adaptive_iterations: bool = False,
     ) -> None: #TODO allow a list of initial cells to be passed with their corresponding configs to set up a colony
@@ -54,8 +53,6 @@ class Simulator:
 
         self.frame_count = 0
 
-        self.post_division_hook = post_division_hook
-        self.post_cell_iter_hook = post_cell_iter_hook
 
         self.max_impulse_this_frame = 0.0
         self.substeps = 1 # Start with 1 sub-step
@@ -64,6 +61,16 @@ class Simulator:
         self.max_joint_impulse = 0.0
         self.joint_impulse_threshold = 100
         self.adaptive_iterations = adaptive_iterations
+
+        self.post_cell_iter_hooks: List[Callable[['SimCell'], None]] = []
+        if post_cell_iter_hooks:
+            for hook in post_cell_iter_hooks:
+                self.add_post_cell_iter_hook(hook) # Use the registration method to validate
+
+        self.post_division_hooks: List[Callable[['SimCell', 'SimCell'], None]] = []
+        if post_division_hooks:
+            for hook in post_division_hooks:
+                self.add_post_division_hook(hook)
 
         self.post_step_hooks: List[Callable[['Simulator'], None]] = []
         if post_step_hooks:
@@ -88,24 +95,35 @@ class Simulator:
         self._validate_hook_signature(hook, expected_params=1)
         self.post_step_hooks.append(hook)
 
+    def add_post_cell_iter_hook(self, hook: Callable[['SimCell'], None]) -> None:
+        self._validate_hook_signature(hook, expected_params=1)
+        self.post_cell_iter_hooks.append(hook)
+
+
+    def add_post_division_hook(self, hook: Callable[['SimCell', 'SimCell'], None]) -> None:
+        self._validate_hook_signature(hook, expected_params=2)
+        self.post_division_hooks.append(hook)
+
     def step(self):
 
         newly_born_cells_map = {}
 
         # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
         for cell in self.colony.cells[:]:
-            # cell_hook(cell, simulation_context)
             self.growth_manager.grow(cell, self.dt)  # Grow the cell
-            ColonyVisualiser.update_colors(cell)  # and handle the colour update of the current cell
-
+            for hook in self.post_cell_iter_hooks:
+                hook(cell)
             new_cell: Optional['SimCell'] = self.division_manager.handle_division(cell, self.next_group_id,
                                                                              self.dt)  # Handle the cell division
             if new_cell is not None:  # If a new cell was created
-                new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,
-                                                                           self.next_group_id)  # and set the daughter's base colour for the visualisation
-                ColonyVisualiser.update_colors(new_cell)  # update the colours of the cell according to rules
+                #new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,
+                #                                                           self.next_group_id)  # and set the daughter's base colour for the visualisation
+                #ColonyVisualiser.update_colors(new_cell)  # update the colours of the cell according to rules
                 newly_born_cells_map[new_cell] = cell  # Add the new cell to the map
                 self.next_group_id += 1  # and increment the group ID
+                # --- Post division hooks ---
+                for hook in self.post_division_hooks:
+                    hook(cell, new_cell)
 
         # --- Handle adding newly born cells to the colony ---
         if newly_born_cells_map:

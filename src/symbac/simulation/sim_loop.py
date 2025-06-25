@@ -1,10 +1,12 @@
 # Use sudo py-spy top --pid $(ps aux | grep python | grep -v grep | awk '{print $2, $3}' | sort -rn -k2 | head -1 | awk '{print $1}') for profiling
+import colorsys
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 from pymunk import Vec2d
 
+from symbac.misc import generate_color
 from symbac.simulation.division_manager import DivisionManager
 from symbac.simulation.growth_manager import GrowthManager
 from symbac.simulation.simulator import Simulator
@@ -23,7 +25,7 @@ Initializes Pygame and Pymunk and runs the main simulation loop.
 """
 pygame.init()
 
-sim_viewer_config = SimViewerConfig()
+sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=10)
 screen_width, screen_height = sim_viewer_config.SCREEN_WIDTH, sim_viewer_config.SCREEN_HEIGHT
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Cell Colony Simulation")
@@ -31,7 +33,7 @@ pygame.display.set_caption("Cell Colony Simulation")
 physics_config = PhysicsConfig(
     THREADED=True,
     THREADS=2,
-    ITERATIONS=100
+    ITERATIONS=60,
 )
 #space = pymunk.Space(threaded=physics_config.THREADED)
 #space.threads = physics_config.THREADS
@@ -85,11 +87,11 @@ pymunk.pygame_util.positive_y_is_up = False
 
 
 initial_cell_config = CellConfig(
-    GRANULARITY=14, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
+    GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=15,
     SEGMENT_MASS=1.0,
-    GROWTH_RATE=10, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=180, # This should be stable now!
+    GROWTH_RATE=2, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
+    BASE_MAX_LENGTH=45, # This should be stable now!
     MAX_LENGTH_VARIATION=0.24,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
@@ -100,20 +102,9 @@ initial_cell_config = CellConfig(
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=np.inf # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
-#next_group_id = 1
-#initial_cell = SimCell(
-#    space,
-#    config=initial_cell_config,
-#    start_pos= Vec2d(0, 0),
-#    group_id=next_group_id,
-#)
-#colony = Colony(space, [initial_cell])
-#next_group_id += 1
-#growth_manager = GrowthManager()
-#division_manager = DivisionManager(space, initial_cell_config)
 simulator = Simulator(physics_config, initial_cell_config)
 
 # In your main() function, after creating initial_cell:
@@ -126,16 +117,75 @@ clock = pygame.time.Clock()
 running = True
 show_joints = True
 
+class CellColor:
+    def __init__(self):
+        self.cell_colors = {
+            1: generate_color(1) # Map a cell ID to a color
+        }
 
+    def get_daughter_colour(self, mother_cell: SimCell, daughter_cell: SimCell) -> tuple[int, int, int]:
+        """
+        Returns a color for the daughter cell based on the mother's color.
+        This can be customized to implement different inheritance strategies.
+        """
+        # 1. Get the mother's color and normalize it to the 0-1 range for colorsys
+        r, g, b = self.cell_colors[mother_cell.group_id]
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
 
-def cell_hook(simulator: Simulator, cell: SimCell):
-    if simulator.frame_count % 60 == 0:
-        cell.PhysicsRepresentation.apply_noise(simulator.dt)  # Jiggle cells for randomness
-    #cell.PhysicsRepresentation.check_total_compression()
+        # 2. Convert RGB to HSV
+        h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+        # 3. Mutate the Hue to change the color while preserving lineage
+        #    A small hue shift changes the color along the color wheel (e.g., red -> orange)
+        hue_shift = np.random.uniform(-1, 1) / (np.sqrt(daughter_cell.group_id) * 2)  # Shift hue with biased rw
+        new_h = (h + hue_shift) % 1.0  # Use modulo to wrap around the color wheel
+        #    This prevents colors from becoming grayish or dark.
+        #    We'll clamp them to a minimum vibrancy level.
+        new_s = s
+        new_v = v
 
-def post_division_hook(simulator: Simulator, cell: SimCell, daughter_cell: SimCell):
-    daughter_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,simulator.next_group_id)  # and set the daughter's base colour for the visualisation
-    ColonyVisualiser.update_colors(daughter_cell)  # update the colours of the cell according to rules
+        # 5. Convert the new HSV color back to RGB
+        new_r, new_g, new_b = colorsys.hsv_to_rgb(new_h, new_s, new_v)
+
+        # 6. Scale back to 0-255 and create the final tuple
+        daughter_color = (int(new_r * 255), int(new_g * 255), int(new_b * 255))
+        return daughter_color
+
+    def update_colour(self, cell) -> None:
+        a = 255
+        r, g, b = self.cell_colors[cell.group_id]
+
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+
+        # 2. Convert RGB to HSV
+        h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+        new_s = max(s / np.sqrt(cell.num_divisions+1), 0.3)  # Ensure saturation is not too low
+        new_v = max(v / np.sqrt(cell.num_divisions+1), 0.3) # Ensure brightness is not too low
+
+        # 5. Convert the new HSV color back to RGB
+        r, g, b = colorsys.hsv_to_rgb(h, new_s, new_v)
+        r, g, b = (int(r * 255), int(g * 255), int(b * 255))
+
+        body_color = (r,g,b,a)
+        head_color = (min(255, int(r * 1.3)), min(255, int(g * 1.3)), min(255, int(b * 1.3)), a)
+        tail_color = (int(r * 0.7), int(g * 0.7), int(b * 0.7), a)
+        for segment in cell.PhysicsRepresentation.segments: # You have to set a color attribute for pygame
+            segment.shape.color = body_color
+        cell.PhysicsRepresentation.segments[0].shape.color = head_color
+        cell.PhysicsRepresentation.segments[-1].shape.color = tail_color
+
+    def update_daughter_colour(self, mother_cell: SimCell, daughter_cell: SimCell):
+        """
+        Update the daughter cell's color based on the mother's color.
+        This is called after a division occurs.
+        """
+        daughter_colour = self.get_daughter_colour(mother_cell, daughter_cell)
+        self.cell_colors[daughter_cell.group_id] = daughter_colour
+        self.update_colour(daughter_cell)
+
+cell_colouriser = CellColor()
+
+simulator.add_post_cell_iter_hook(cell_colouriser.update_colour)
+simulator.add_post_division_hook(cell_colouriser.update_daughter_colour)
 
 frames_to_render = [] # List to store data for rendering
 image_count = 0
@@ -184,7 +234,7 @@ while running:
             world_y = (mouse_y - screen_height / 2) / zoom_level + camera_y
             pos = (world_x, world_y)
 
-            hit = space.point_query_nearest(pos, 5 / zoom_level, pymunk.ShapeFilter())
+            hit = simulator.space.point_query_nearest(pos, 5 / zoom_level, pymunk.ShapeFilter())
             if hit is not None and hit.shape.body.body_type == pymunk.Body.DYNAMIC:
                 shape = hit.shape
                 rest_point = shape.body.world_to_local(pos)
@@ -194,10 +244,10 @@ while running:
                 )
                 mouse_joint.max_force = 100000
                 mouse_joint.error_bias = (1 - 0.15) ** 60
-                space.add(mouse_joint)
+                simulator.space.add(mouse_joint)
         elif event.type == pygame.MOUSEBUTTONUP:
             if mouse_joint is not None:
-                space.remove(mouse_joint)
+                simulator.space.remove(mouse_joint)
                 mouse_joint = None
 
     # NEW: Update mouse body position in world coordinates
@@ -262,16 +312,16 @@ while running:
         current_segment_count = sum(len(cell.PhysicsRepresentation.segments) for cell in simulator.colony.cells)
 
         # Capture the state for rendering later
-        current_frame_data = [
-            {
-                'position': (seg.body.position.x, seg.body.position.y),
-                'radius': seg.shape.radius,
-                'color': seg.shape.color
-            }
-            for cell in simulator.colony.cells for seg in cell.PhysicsRepresentation.segments
-        ]
-        frames_to_render.append((image_count, current_frame_data))
-        image_count += 1
+        # current_frame_data = [
+        #     {
+        #         'position': (seg.body.position.x, seg.body.position.y),
+        #         'radius': seg.shape.radius,
+        #         'color': seg.shape.color
+        #     }
+        #     for cell in simulator.colony.cells for seg in cell.PhysicsRepresentation.segments
+        # ]
+        # frames_to_render.append((image_count, current_frame_data))
+        # image_count += 1
 
         if current_segment_count > last_segment_count * 1.5:
             setup_spatial_hash(space, simulator.colony)

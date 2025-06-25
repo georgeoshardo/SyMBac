@@ -39,8 +39,6 @@ class Colony:
                         if info.shape in mother_shapes:
                             mother.PhysicsRepresentation.remove_tail_segment()
                             daughter.PhysicsRepresentation.remove_head_segment()
-                            ColonyVisualiser.update_colors(daughter)
-                            ColonyVisualiser.update_colors(mother)
 
                             # We must update the mother_shapes list since a shape was removed
                             mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high

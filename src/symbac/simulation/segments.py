@@ -103,8 +103,8 @@ class CellSegment:
 
     @radius.setter
     def radius(self, new_radius: float) -> None:
-        friction, filter, color = self.shape.friction, self.shape.filter, self.shape.color
+        friction, filter = self.shape.friction, self.shape.filter
         self.space.remove(self.shape)
         self.shape = pymunk.Circle(self.body, new_radius)
-        self.shape.friction, self.shape.filter, self.shape.color = friction, filter, color
+        self.shape.friction, self.shape.filter = friction, filter
         self.space.add(self.shape)
