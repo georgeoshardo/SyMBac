@@ -1,7 +1,10 @@
 from symbac.simulation.simulator import Simulator
 from config import CellConfig, PhysicsConfig
 
-physics_config = PhysicsConfig()
+physics_config = PhysicsConfig(
+    THREADS=2,
+    THREADED=True,
+)
 
 initial_cell_config = CellConfig(
     GRANULARITY=14, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed

@@ -28,7 +28,12 @@ screen_width, screen_height = sim_viewer_config.SCREEN_WIDTH, sim_viewer_config.
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Cell Colony Simulation")
 
-physics_config = PhysicsConfig()
+physics_config = PhysicsConfig(
+    THREADED=True,
+    THREADS=2,
+    COLLISION_SLOP=0.9,
+    ITERATIONS=200
+)
 #space = pymunk.Space(threaded=physics_config.THREADED)
 #space.threads = physics_config.THREADS
 #space.iterations = physics_config.ITERATIONS
@@ -92,7 +97,7 @@ initial_cell_config = CellConfig(
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
-    STIFFNESS=300_0000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
+    STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point

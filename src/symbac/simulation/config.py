@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+from typing import Optional
+
 import numpy as np
 
 @dataclass(slots=True, frozen=True)
@@ -87,4 +89,13 @@ class PhysicsConfig:
     GRAVITY: tuple[float, float] = (0.0, 0.0)
     THREADED: bool = False # Use pymunk.Space(threaded=True) for multithreading but non-deterministic results, even with random seed set
     THREADS: int = 1
-    DT = 1.0 / 60.0  # Time step for the physics simulation, 60 FPS
+    DT = 1.0 / 60.0  # Time step for the physics simulation
+    COLLISION_SLOP: Optional[float] = False # Amount of overlap between shapes that is allowed. To improve stability, set this as high as you can without noticeable overlapping. It defaults to 0.1.
+
+    def __post_init__(self):
+        if self.THREADS > 2:
+            raise ValueError("THREADS cannot be greater than 2.")
+        if not self.THREADED and self.THREADS != 1:
+            raise ValueError("If THREADED is False, THREADS must be 1.")
+        if self.THREADED and self.THREADS != 2:
+            raise ValueError("If THREADED is True, THREADS must be 2.")

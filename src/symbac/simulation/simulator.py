@@ -28,13 +28,15 @@ class Simulator:
     ) -> None: #TODO allow a list of initial cells to be passed with their corresponding configs to set up a colony
 
 
-        space = pymunk.Space(threaded=PhysicsConfig.THREADED)
+        space = pymunk.Space(threaded=physics_config.THREADED)
         self.space = space
         self.space.threads = physics_config.THREADS
         self.space.iterations = physics_config.ITERATIONS
         self.space.gravity = physics_config.GRAVITY
         self.space.damping = physics_config.DAMPING
         self.dt = physics_config.DT
+        if physics_config.COLLISION_SLOP:
+            self.space.collision_slop = physics_config.COLLISION_SLOP
 
 
         self.next_group_id = 1
