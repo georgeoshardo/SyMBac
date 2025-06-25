@@ -43,7 +43,7 @@ class Simulator:
         initial_cell = SimCell(
             self.space,
             config=initial_cell_config,
-            start_pos=Vec2d(0, 0),
+            start_pos=initial_cell_config.START_POS,
             group_id=self.next_group_id,
         )
         self.colony = Colony(self.space, [initial_cell])
@@ -76,6 +76,8 @@ class Simulator:
         if post_step_hooks:
             for hook in post_step_hooks:
                 self.add_post_step_hook(hook) # Use the registration method to validate
+
+
 
     @staticmethod
     def _validate_hook_signature(hook: Callable, expected_params: int):

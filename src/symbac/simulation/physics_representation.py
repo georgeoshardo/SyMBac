@@ -41,7 +41,6 @@ class PhysicsRepresentation:
         self.growth_accumulator_head = 0
         self.growth_accumulator_tail = 0
 
-
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
                 self.add_seed_cell_segments(i == 0) # True for the first segment, False for the rest
@@ -63,7 +62,7 @@ class PhysicsRepresentation:
         """
 
         if is_first:
-            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos, space=self.space)
+            segment = CellSegment(config=self.config, group_id=self.group_id, position=self.start_pos, space=self.space, angle=self.config.START_ANGLE)
         else:
             prev_segment = self.segments[-1]
             offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(prev_segment.angle)

@@ -1,15 +1,14 @@
 # Use sudo py-spy top --pid $(ps aux | grep python | grep -v grep | awk '{print $2, $3}' | sort -rn -k2 | head -1 | awk '{print $1}') for profiling
 import colorsys
 import numpy as np
+from pymunk import Vec2d
 
 from symbac.misc import generate_color
 from symbac.simulation.simulator import Simulator
-from symbac.simulation.colony import Colony
 from symbac.simulation.visualisation.live.live_visualisation import LiveVisualisation
+from symbac.trench_geometry import trench_creator
 
 np.random.seed(42)
-import pygame
-import pymunk.pygame_util
 from simcell import SimCell
 from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
@@ -17,7 +16,6 @@ from tqdm import tqdm
 """
 Initializes Pygame and Pymunk and runs the main simulation loop.
 """
-pygame.init()
 
 
 
@@ -26,8 +24,6 @@ mouse_joint = None
 
 sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=10)
 live_visualisation = LiveVisualisation(sim_viewer_config)
-screen = live_visualisation.screen
-pygame.display.set_caption("Cell Colony Simulation")
 
 physics_config = PhysicsConfig(
     THREADED=True,
@@ -47,6 +43,8 @@ initial_cell_config = CellConfig(
     SEED_CELL_SEGMENTS=30,
     ROTARY_LIMIT_JOINT=True,
     MAX_BEND_ANGLE=0.005,
+    START_POS=Vec2d(0, 0),
+    START_ANGLE=np.pi/2,
     STIFFNESS=300_000 , # Common values: (bend angle = 0.005, stiffness = 300_000), you can use np.inf for max stiffness but ideally use np.iinfo(np.int64).max for integer type
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
@@ -55,6 +53,16 @@ initial_cell_config = CellConfig(
 )
 
 simulator = Simulator(physics_config, initial_cell_config)
+
+import pymunk
+def segment_creator(local_xy1, local_xy2, global_xy, thickness):
+    segment_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+    segment_shape = pymunk.Segment(segment_body, local_xy1, local_xy2, thickness)
+    segment_body.position = global_xy
+    segment_shape.friction = 0
+    return segment_body, segment_shape
+
+trench_creator(50, 1000, (-25, -100), simulator.space)
 
 class CellColor:
     def __init__(self):
@@ -184,6 +192,8 @@ simulator.add_post_step_hook(my_logger.get_step_comp_time)
 simulator.add_post_step_hook(my_logger.log_cell_positions)
 
 simulator.add_post_step_hook(live_visualisation.draw)
+
+
 
 frames_to_render = [] # List to store data for rendering
 image_count = 0

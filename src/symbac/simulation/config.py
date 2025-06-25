@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+from pymunk.vec2d import Vec2d
+
 
 @dataclass(slots=True, frozen=True)
 class CellConfig:
@@ -15,7 +17,8 @@ class CellConfig:
     SEED_CELL_SEGMENTS: int = 15
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
     NOISE_STRENGTH: float = 0.05
-
+    START_POS: Vec2d = (0.0, 0.0)  # Starting position of the cell
+    START_ANGLE: float = 0.0 #in RADIANS!!
     #Septum configuration
     SEPTUM_DURATION: float = 1.5  # Duration of septum formation in seconds
 
@@ -34,6 +37,9 @@ class CellConfig:
     NUM_SEPTUM_SEGMENTS: int = field(init=False)
 
     def __post_init__(self):
+
+        if isinstance(self.START_POS, tuple):
+            object.__setattr__(self, "START_POS", Vec2d(*self.START_POS))
 
         if not self.DAMPED_ROTARY_SPRING:
             if self.ROTARY_SPRING_STIFFNESS is not None or self.ROTARY_SPRING_DAMPING is not None:

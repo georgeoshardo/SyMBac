@@ -3,7 +3,7 @@ from typing import Iterable, Callable, Optional
 
 from symbac.simulation.simcell import SimCell
 from pymunk.space import Space
-
+import pymunk
 
 class Colony:
     def __init__(self, space: Space, cells: list[SimCell]) -> None:
@@ -36,6 +36,7 @@ class Colony:
                     for info in query_result:
                         # If the daughter's head is overlapping with the mother
                         if info.shape in mother_shapes:
+
                             mother.PhysicsRepresentation.remove_tail_segment()
                             daughter.PhysicsRepresentation.remove_head_segment()
 
