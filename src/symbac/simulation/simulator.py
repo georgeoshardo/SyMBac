@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Optional
-
+from typing import Optional, List, Callable
+import inspect
 import pymunk
 from pymunk import Vec2d
 
@@ -25,6 +25,7 @@ class Simulator:
             initial_cell_config: CellConfig,
             post_division_hook: Optional[callable] = None,
             post_cell_iter_hook: Optional[callable] = None,
+            post_step_hooks: Optional[List[Callable[['Simulator'], None]]] = None,
             adaptive_iterations: bool = False,
     ) -> None: #TODO allow a list of initial cells to be passed with their corresponding configs to set up a colony
 
@@ -64,6 +65,28 @@ class Simulator:
         self.joint_impulse_threshold = 100
         self.adaptive_iterations = adaptive_iterations
 
+        self.post_step_hooks: List[Callable[['Simulator'], None]] = []
+        if post_step_hooks:
+            for hook in post_step_hooks:
+                self.add_post_step_hook(hook) # Use the registration method to validate
+
+    @staticmethod
+    def _validate_hook_signature(hook: Callable, expected_params: int):
+        """Validates that a hook function has the expected number of parameters."""
+        try:
+            sig = inspect.signature(hook)
+            if len(sig.parameters) != expected_params:
+                raise ValueError(
+                    f"Hook '{hook.__name__}' has an invalid signature. "
+                    f"Expected {expected_params} parameters, but it has {len(sig.parameters)}."
+                )
+        except TypeError as e:
+            raise TypeError(f"Could not inspect signature of hook {hook}. Is it a valid callable?") from e
+
+    def add_post_step_hook(self, hook: Callable[['Simulator'], None]) -> None:
+        """Registers a hook to be called after each simulation step."""
+        self._validate_hook_signature(hook, expected_params=1)
+        self.post_step_hooks.append(hook)
 
     def step(self):
 
@@ -100,10 +123,23 @@ class Simulator:
 
 
         self.space.step(self.dt)
+        # --- Post step hooks ---
+        for hook in self.post_step_hooks:
+            hook(self)
 
         if self.adaptive_iterations:
             self.space.iterations = max(10, int(self.space.iterations * 0.9))
             self.max_joint_impulse *= 0.9
 
         self.frame_count += 1
+
+    @property
+    def cells(self):
+        """Convenience property which returns a list of all cells in the colony."""
+        return self.colony.cells
+
+    @property
+    def num_cells(self) -> int:
+        """Convenience property which returns the number of cells in the colony."""
+        return len(self.colony)
 
