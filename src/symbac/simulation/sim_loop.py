@@ -31,8 +31,7 @@ pygame.display.set_caption("Cell Colony Simulation")
 physics_config = PhysicsConfig(
     THREADED=True,
     THREADS=2,
-    COLLISION_SLOP=0.9,
-    ITERATIONS=200
+    ITERATIONS=100
 )
 #space = pymunk.Space(threaded=physics_config.THREADED)
 #space.threads = physics_config.THREADS

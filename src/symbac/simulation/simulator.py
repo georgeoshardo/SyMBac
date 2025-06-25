@@ -25,6 +25,7 @@ class Simulator:
             initial_cell_config: CellConfig,
             post_division_hook: Optional[callable] = None,
             post_cell_iter_hook: Optional[callable] = None,
+            adaptive_iterations: bool = False,
     ) -> None: #TODO allow a list of initial cells to be passed with their corresponding configs to set up a colony
 
 
@@ -37,7 +38,6 @@ class Simulator:
         self.dt = physics_config.DT
         if physics_config.COLLISION_SLOP:
             self.space.collision_slop = physics_config.COLLISION_SLOP
-
 
         self.next_group_id = 1
         initial_cell = SimCell(
@@ -55,6 +55,15 @@ class Simulator:
 
         self.post_division_hook = post_division_hook
         self.post_cell_iter_hook = post_cell_iter_hook
+
+        self.max_impulse_this_frame = 0.0
+        self.substeps = 1 # Start with 1 sub-step
+
+        self.max_impulse_this_step = 0.0
+        self.max_joint_impulse = 0.0
+        self.joint_impulse_threshold = 100
+        self.adaptive_iterations = adaptive_iterations
+
 
     def step(self):
 
@@ -80,7 +89,21 @@ class Simulator:
             self.colony.add_cells(newly_born_cells_map.keys())
             self.colony.handle_cell_overlaps(newly_born_cells_map)
 
+        if self.adaptive_iterations:
+            for constraint in self.space.constraints:
+                # Every joint type is a subclass of Constraint and has the 'impulse' property.
+                if constraint.impulse > self.max_joint_impulse:
+                    self.max_joint_impulse = constraint.impulse
+                    self.space.iterations = self.space.iterations +  1
+
+                    print("Increased space iterations to", self.space.iterations, "due to joint impulse of", constraint.impulse)
+
+
         self.space.step(self.dt)
+
+        if self.adaptive_iterations:
+            self.space.iterations = max(10, int(self.space.iterations * 0.9))
+            self.max_joint_impulse *= 0.9
+
         self.frame_count += 1
-        print(len(self.colony.cells), "cells in the colony after step", self.frame_count)
 
