@@ -42,7 +42,8 @@ class CellSegment:
             group_id: int,
             position: pymunk.Vec2d,
             angle: float = 0.0,
-            space: 'Space | None' = None
+            space: 'Space | None' = None,
+            use_unsafe_radius_set: bool = True
     ) -> None:
 
         """
@@ -77,6 +78,7 @@ class CellSegment:
         self.angle = angle
         self.position = position
         self.space = space
+        self.use_unsafe_radius_set = use_unsafe_radius_set
 
     @property
     def position(self) -> pymunk.Vec2d:
@@ -103,8 +105,11 @@ class CellSegment:
 
     @radius.setter
     def radius(self, new_radius: float) -> None:
-        friction, filter = self.shape.friction, self.shape.filter
-        self.space.remove(self.shape)
-        self.shape = pymunk.Circle(self.body, new_radius)
-        self.shape.friction, self.shape.filter = friction, filter
-        self.space.add(self.shape)
+        if self.use_unsafe_radius_set:
+            self.shape.unsafe_set_radius(new_radius)  # More efficient but is it okay?
+        else:
+            friction, filter = self.shape.friction, self.shape.filter
+            self.space.remove(self.shape)
+            self.shape = pymunk.Circle(self.body, new_radius)
+            self.shape.friction, self.shape.filter = friction, filter
+            self.space.add(self.shape)

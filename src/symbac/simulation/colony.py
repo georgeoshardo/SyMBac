@@ -65,15 +65,9 @@ class Colony:
 
         # 1. Remove all physics objects from the space
         phys_rep = cell.PhysicsRepresentation
+        objs_to_remove = phys_rep.pivot_joints + phys_rep.limit_joints + phys_rep.spring_joints + [segment.shape for segment in phys_rep.segments] + [segment.body for segment in phys_rep.segments]
 
-        # Remove all joints
-        for joint in phys_rep.pivot_joints + phys_rep.limit_joints + phys_rep.spring_joints:
-            self.space.remove(joint)
-
-        # Remove all segments (bodies and shapes)
-        for segment in phys_rep.segments:
-            self.space.remove(segment.shape)
-            self.space.remove(segment.body)
+        self.space.remove(*objs_to_remove) # Remove all joints and segments in one go, it's faster
 
         # 2. Remove the cell from the colony's list
         self.cells.remove(cell)

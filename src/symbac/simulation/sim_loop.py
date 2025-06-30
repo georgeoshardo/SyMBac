@@ -13,27 +13,18 @@ from simcell import SimCell
 from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
 from tqdm import tqdm
-"""
-Initializes Pygame and Pymunk and runs the main simulation loop.
-"""
 
 
-
-mouse_joint = None
-
-
-sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=10)
-live_visualisation = LiveVisualisation(sim_viewer_config)
 
 physics_config = PhysicsConfig(
     THREADED=True,
     THREADS=2,
-    ITERATIONS=60,
+    ITERATIONS=100,
 )
 
 initial_cell_config = CellConfig(
     GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
-    SEGMENT_RADIUS=15,
+    SEGMENT_RADIUS=10,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=5, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
     BASE_MAX_LENGTH=40, # This should be stable now!
@@ -49,10 +40,11 @@ initial_cell_config = CellConfig(
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    PIVOT_JOINT_STIFFNESS=5000 # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=50000 # This can be lowered from the default np.inf, and the cell will be able to compress
 )
 
 simulator = Simulator(physics_config, initial_cell_config)
+
 
 import pymunk
 def segment_creator(local_xy1, local_xy2, global_xy, thickness):
@@ -187,7 +179,7 @@ class SimulationLogger:
         # Calculate the time elapsed for this single step
         step_time_ms = (current_time - self.last_time) * 1000 / update_interval  # Convert to milliseconds and average over the last 20 steps
         self.last_time = current_time
-        self.pbar.set_postfix(cells=self.num_cells[-1], time_per_step=f"{step_time_ms:.2f}ms")
+        self.pbar.set_postfix(cells=simulator.num_cells, time_per_step=f"{step_time_ms:.2f}ms")
         # Advance the progress bar by one step
         self.pbar.update(update_interval)
 
@@ -202,7 +194,7 @@ class SimulationLogger:
                     'color': generate_color(cell.group_id),
                 }
                 for cell in simulator.cells for seg in cell.PhysicsRepresentation.segments
-            ]
+            ] # TODO This uses a lot of CPU time, maybe use batched pymunk queries?
             self.frames_to_draw_mpl.append((simulator.frame_count, current_frame_data))
 
 my_logger = SimulationLogger()
@@ -210,6 +202,10 @@ my_logger = SimulationLogger()
 simulator.add_post_step_hook(my_logger.log_frame)
 simulator.add_post_step_hook(my_logger.get_step_comp_time)
 simulator.add_post_step_hook(my_logger.log_cell_positions)
+
+
+sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=100)
+live_visualisation = LiveVisualisation(sim_viewer_config)
 
 simulator.add_post_step_hook(live_visualisation.draw)
 

@@ -27,25 +27,13 @@ classifiers = [
     "Topic :: Scientific/Engineering"
 ]
 dependencies = [
-    "tifffile",
-    "scikit-image",
     "matplotlib",
     "tqdm",
-    "pandas",
-    "natsort",
-    "jupyterlab",
     "ipywidgets",
     "joblib",
-    "scipy",
-    "napari[all]",
     "pymunk",
     "pyglet",
-    "matplotlib-scalebar",
-    "psfmodels",
-    "pandoc",
-    "zarr",
     "numpy",
-    "noise"
 ]
 
 [project.optional-dependencies]

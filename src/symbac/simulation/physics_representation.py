@@ -334,7 +334,7 @@ class PhysicsRepresentation:
             return self.segments[0].radius * 2
 
         total_length = 0.0
-        for i in range(1, len(self.segments)):
+        for i in range(1, len(self.segments)): # TODO use pymunk batching to get this data
             segment_a = self.segments[i - 1]
             segment_b = self.segments[i]
             distance = segment_b.position - cast(tuple[float,float],segment_a.position)

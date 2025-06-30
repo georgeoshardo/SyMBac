@@ -2,11 +2,11 @@ import pkgutil
 from io import BytesIO
 
 import numpy as np
-import tifffile
-from scipy.ndimage import distance_transform_edt
-from skimage.measure import label
-from skimage.segmentation import find_boundaries
-from skimage.transform import resize
+#import tifffile
+#from scipy.ndimage import distance_transform_edt
+#from skimage.measure import label
+#from skimage.segmentation import find_boundaries
+#from skimage.transform import resize
 
 import math
 import pymunk
