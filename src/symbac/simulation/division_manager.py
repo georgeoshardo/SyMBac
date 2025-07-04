@@ -118,10 +118,9 @@ class DivisionManager:
         # --- START of MODIFIED SECTION for color inheritance ---
 
 
-        daughter_cell = SimCell(
-            space=self.space, config=self.config, start_pos=cell.PhysicsRepresentation.segments[mother_final_len].position,
-            group_id=next_group_id, _from_division=True, base_color=None
-        )
+        daughter_cell = SimCell(space=self.space, config=self.config,
+                                start_pos=cell.PhysicsRepresentation.segments[mother_final_len].position,
+                                group_id=next_group_id, _from_division=True)
 
         daughter_cell.PhysicsRepresentation.segments = cell.PhysicsRepresentation.segments[mother_final_len:]
         for segment in daughter_cell.PhysicsRepresentation.segments:

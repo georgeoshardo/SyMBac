@@ -4,7 +4,7 @@ import numpy as np
 from pymunk import Vec2d
 
 from symbac.misc import generate_color
-from symbac.simulation.simulator import Simulator
+from symbac.simulation import Simulator
 from symbac.simulation.visualisation.live.live_visualisation import LiveVisualisation
 from symbac.trench_geometry import trench_creator, box_creator
 
@@ -13,7 +13,6 @@ from simcell import SimCell
 from config import CellConfig, SimViewerConfig, PhysicsConfig
 import numpy as np
 from tqdm import tqdm
-
 
 
 physics_config = PhysicsConfig(
@@ -55,11 +54,20 @@ def segment_creator(local_xy1, local_xy2, global_xy, thickness):
     return segment_body, segment_shape
 
 #trench_creator(50, 1000, (-0, -0), simulator.space)
-box_creator(1000, 1000, (0,0), simulator.space, barrier_thickness=10, fillet_radius = 100)
+
+#Use a closure to create a post-init hook that adds a box
+def box_adder(simulator: 'Simulator') -> None:
+    box_creator(1000, 1000, (0, 0), simulator.space, barrier_thickness=10, fillet_radius=100)
+
+simulator.add_and_run_post_init_hook(box_adder)
+
 def cell_remover(simulator: 'Simulator') -> None:
     for cell in simulator.cells:
         if cell.PhysicsRepresentation.segments[0].body.position.y > 1000:
             simulator.colony.delete_cell(cell)
+
+simulator.add_post_step_hook(cell_remover)
+
 
 def cell_growth_rate_updater(cell: SimCell) -> None:
     compression_ratio = cell.PhysicsRepresentation.get_compression_ratio()
@@ -73,7 +81,6 @@ def cell_growth_rate_updater(cell: SimCell) -> None:
     cell._max_length = max(len(cell.PhysicsRepresentation.segments), int(random_max_len))
 
 simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
-simulator.add_post_step_hook(cell_remover)
 
 class CellColor:
     def __init__(self):

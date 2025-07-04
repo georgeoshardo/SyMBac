@@ -10,9 +10,11 @@ import numpy as np
 
 import math
 import pymunk
-from segments import CellSegment
+import typing
+if typing.TYPE_CHECKING:
+    from symbac.simulation.segments import CellSegment
 
-def calculate_overlap_fraction(segment_a: CellSegment, segment_b: CellSegment) -> float:
+def calculate_overlap_fraction(segment_a: 'CellSegment', segment_b: 'CellSegment') -> float:
     """
     Calculates the overlapping area of two circles as a fraction of one circle's area.
 

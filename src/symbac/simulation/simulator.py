@@ -22,6 +22,7 @@ class Simulator:
             self,
             physics_config: PhysicsConfig,
             initial_cell_config: CellConfig,
+            post_init_hooks: Optional[List[Callable[['Simulator'], None]]] = None,
             pre_cell_grow_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
             post_cell_grow_hooks: Optional[List[Callable[['SimCell'], None]]] = None,
             post_division_hooks: Optional[List[Callable[['SimCell', 'SimCell'], None]]] = None,
@@ -41,12 +42,8 @@ class Simulator:
             self.space.collision_slop = physics_config.COLLISION_SLOP
 
         self.next_group_id = 1
-        initial_cell = SimCell(
-            self.space,
-            config=initial_cell_config,
-            start_pos=initial_cell_config.START_POS,
-            group_id=self.next_group_id,
-        )
+        initial_cell = SimCell(self.space, config=initial_cell_config, start_pos=initial_cell_config.START_POS,
+                               group_id=self.next_group_id)
         self.colony = Colony(self.space, [initial_cell])
         self.next_group_id += 1
         self.growth_manager = GrowthManager()
@@ -83,6 +80,10 @@ class Simulator:
             for hook in post_step_hooks:
                 self.add_post_step_hook(hook) # Use the registration method to validate
 
+        self.post_init_hooks: List[Callable[['Simulator'], None]] = []
+        if post_init_hooks:
+            for hook in post_init_hooks:
+                self.add_and_run_post_init_hook(hook) #This also runs the hook
 
 
     @staticmethod
@@ -115,6 +116,15 @@ class Simulator:
         self._validate_hook_signature(hook, expected_params=2)
         self.post_division_hooks.append(hook)
 
+    def add_and_run_post_init_hook(self, hook: Callable[['Simulator'], None]) -> None:
+        """Registers a hook to be called after the simulator is initialized."""
+        self._validate_hook_signature(hook, expected_params=1)
+        self.post_init_hooks.append(hook)
+
+        #Call the hook immediately after adding it in case it's added after instantiation
+        hook(self)
+
+
     def step(self):
 
         newly_born_cells_map = {}
@@ -131,9 +141,6 @@ class Simulator:
             new_cell: Optional['SimCell'] = self.division_manager.handle_division(cell, self.next_group_id,
                                                                              self.dt)  # Handle the cell division
             if new_cell is not None:  # If a new cell was created
-                #new_cell.base_color = ColonyVisualiser.get_daughter_colour(cell,
-                #                                                           self.next_group_id)  # and set the daughter's base colour for the visualisation
-                #ColonyVisualiser.update_colors(new_cell)  # update the colours of the cell according to rules
                 newly_born_cells_map[new_cell] = cell  # Add the new cell to the map
                 self.next_group_id += 1  # and increment the group ID
                 # --- Post division hooks ---

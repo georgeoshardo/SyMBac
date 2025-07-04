@@ -1,12 +1,9 @@
 import typing
 from pymunk.vec2d import Vec2d
 import numpy as np
-from typing import Optional
-from symbac.misc import generate_color
 from symbac.simulation.config import CellConfig
 from symbac.simulation.physics_representation import PhysicsRepresentation
 if typing.TYPE_CHECKING:
-    import pymunk
     from pymunk.space import Space
 
 
@@ -16,7 +13,6 @@ class SimCell:
     __slots__ = (
         "config",
         "_group_id",
-        "base_color",
         "PhysicsRepresentation",
         "is_dividing",
         "_septum_progress",
@@ -35,7 +31,6 @@ class SimCell:
             start_pos: Vec2d,
             group_id: int = 0,
             _from_division: bool = False,
-            base_color: Optional[tuple[int, int, int]] = None
     ) -> None:
 
         if isinstance(start_pos, tuple):
@@ -43,10 +38,6 @@ class SimCell:
 
         self.config = config
         self._group_id = group_id
-        if not base_color:
-            self.base_color = generate_color(group_id)
-        else:
-            self.base_color = base_color
 
         self.PhysicsRepresentation = PhysicsRepresentation(
             space=space,
