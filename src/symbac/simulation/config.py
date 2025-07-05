@@ -37,6 +37,8 @@ class CellConfig:
     MIN_SEPTUM_RADIUS: float = field(init=False)
     NUM_SEPTUM_SEGMENTS: int = field(init=False)
 
+    SIMPLE_LENGTH: bool = True
+
     def __post_init__(self):
 
         if isinstance(self.START_POS, tuple):

@@ -25,12 +25,12 @@ class DivisionManager:
         if cell.is_dividing:
             return False
 
-        if len(cell.physics_representation.segments) < cell.max_length:
+        if len(cell.physics_representation.segments) < cell.max_length: #LENGTH_FIX
             return False
 
         split_index = self.get_split_index(cell)
         if split_index < self.config.MIN_LENGTH_AFTER_DIVISION or \
-                (len(cell.physics_representation.segments) - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
+                (cell.physics_representation.num_segments - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
 
             return False
 
@@ -41,21 +41,20 @@ class DivisionManager:
         Returns the index at which the cell should be split for division.
         This is typically the middle of the segments.
         """
-        return len(cell.physics_representation.segments) // 2
+        return cell.physics_representation.num_segments // 2
 
     def set_division_readiness(self, cell: 'SimCell', division_model = "sizer") -> None:
         if division_model == "sizer":
             cell.is_dividing = True
             cell.septum_progress = 0.0
             cell.division_site = self.get_split_index(cell)
-            cell.length_at_division_start = len(cell.physics_representation.segments)
+            cell.length_at_division_start = len(cell.physics_representation.segments) #LENGTH_FIX
             return None
 
     def reset_division_readiness(self, cell: 'SimCell') -> None:
         cell.is_dividing = False
         cell.septum_progress = 0.0
         cell.division_site = None
-        cell.length_at_division_start = 0
         return None
 
     def update_septum_progress(self, cell: 'SimCell', dt: float) -> None:
@@ -74,7 +73,7 @@ class DivisionManager:
         for i in range(self.config.NUM_SEPTUM_SEGMENTS):
             mother_idx = cell.division_site - 1 - i
             daughter_idx = cell.division_site + i
-            if mother_idx >= 0 and daughter_idx < len(cell.physics_representation.segments):
+            if mother_idx >= 0 and daughter_idx < cell.physics_representation.num_segments:
                 # Recreate shape and update the segment's shape reference
                 cell.physics_representation._mother_septum_segments.append(cell.physics_representation.segments[mother_idx])
                 cell.physics_representation._daughter_septum_segments.append(cell.physics_representation.segments[daughter_idx])
@@ -109,7 +108,7 @@ class DivisionManager:
     def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 
 
-        current_length = len(cell.physics_representation.segments)
+        current_length = len(cell.physics_representation.segments) #LENGTH_FIX
         growth_during_division = current_length - cell.length_at_division_start
         original_half_length = cell.length_at_division_start // 2
         growth_to_redistribute_to_mother = growth_during_division // 2

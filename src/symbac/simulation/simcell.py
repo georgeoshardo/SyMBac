@@ -52,8 +52,8 @@ class SimCell:
         self.is_dividing = False
         self._septum_progress = 0.0
         self.division_site: int | None = None
-        self.length_at_division_start = 0
-        self.division_bias = 0 #self.config.GRANULARITY # not needed when bidirectional growth I think
+        self.length_at_division_start = 0 # NOTE:This is NOT the birth length, this is a variable to keep track of how much growth has occurred during septum formation and division
+        self.division_bias = 0
 
         variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
         random_max_len = np.random.uniform(
@@ -68,7 +68,10 @@ class SimCell:
 
     @property
     def length(self):
-        return self.physics_representation.get_continuous_length()
+        if self.config.SIMPLE_LENGTH:
+            return self.physics_representation.num_segments
+        else:
+            return self.physics_representation.get_continuous_length()
 
     @property
     def group_id(self) -> int:

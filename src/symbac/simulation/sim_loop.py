@@ -39,7 +39,8 @@ initial_cell_config = CellConfig(
     #DAMPED_ROTARY_SPRING=True,  # Enable damped rotary springs, makes cells quite rigid
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
-    PIVOT_JOINT_STIFFNESS=50000 # This can be lowered from the default np.inf, and the cell will be able to compress
+    PIVOT_JOINT_STIFFNESS=50000, # This can be lowered from the default np.inf, and the cell will be able to compress
+    SIMPLE_LENGTH=True # If true, cell length is calculated continuously each time the length attribute is requested (slow, but higher precision because allows for cell compression) If false it is simply the segment distance * number of segments in a cell
 )
 
 simulator = Simulator(physics_config, initial_cell_config)
@@ -78,7 +79,7 @@ def cell_growth_rate_updater(cell: SimCell) -> None:
         cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
     ) * np.sqrt(compression_ratio)
 
-    cell.max_length = max(len(cell.physics_representation.segments), int(random_max_len))
+    cell.max_length = max(len(cell.physics_representation.segments), int(random_max_len)) #LENGTH_FIX
 
 simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
 

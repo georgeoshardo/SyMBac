@@ -45,6 +45,9 @@ class PhysicsRepresentation:
             for i in range(self.config.SEED_CELL_SEGMENTS):
                 self.add_seed_cell_segments(i == 0) # True for the first segment, False for the rest
 
+    @property
+    def num_segments(self):
+        return len(self.segments)
 
     def add_seed_cell_segments(self, is_first: bool) -> None:
         """Adds a single new segment during the initial construction of the very first cell.
@@ -67,7 +70,7 @@ class PhysicsRepresentation:
             prev_segment = self.segments[-1]
             offset = Vec2d(self.config.JOINT_DISTANCE, 0).rotated(prev_segment.angle)
 
-            noise_x = np.random.uniform(-0.1, 0.1)
+            noise_x = np.random.uniform(-0.1, 0.1) # TODO: Do we really need to inject noise here?
             noise_y = np.random.uniform(-0.1, 0.1)
             noise = Vec2d(noise_x, noise_y)
             segment_position = prev_segment.position + cast(tuple[float,float], offset) + cast(tuple[float,float], noise)
