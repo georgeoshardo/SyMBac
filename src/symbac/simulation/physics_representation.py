@@ -308,7 +308,7 @@ class PhysicsRepresentation:
                                    length that triggers a warning (e.g., 0.10 for 10%).
         """
         if len(self.segments) < 2:
-            return
+            raise Exception("Cell is fewer than 2 segments!")
 
         # Calculate the total expected length between the centers of the first and last segments
         num_joints = len(self.pivot_joints)

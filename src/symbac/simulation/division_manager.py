@@ -25,7 +25,7 @@ class DivisionManager:
         if cell.is_dividing:
             return False
 
-        if len(cell.physics_representation.segments) < cell._max_length:
+        if len(cell.physics_representation.segments) < cell.max_length:
             return False
 
         split_index = self.get_split_index(cell)

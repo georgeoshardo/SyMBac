@@ -10,7 +10,7 @@ class GrowthManager:
         Handles the growth of the cell by elongating the joints at the head and tail.
         When a joint is stretched beyond a threshold, it triggers the insertion of a new segment.
         """
-        if not cell.is_dividing and len(cell.physics_representation.segments) >= cell._max_length:
+        if not cell.is_dividing and len(cell.physics_representation.segments) >= cell.max_length:
             return
 
         if len(cell.physics_representation.segments) < 2:

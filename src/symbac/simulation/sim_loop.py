@@ -78,7 +78,7 @@ def cell_growth_rate_updater(cell: SimCell) -> None:
         cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
     ) * np.sqrt(compression_ratio)
 
-    cell._max_length = max(len(cell.physics_representation.segments), int(random_max_len))
+    cell.max_length = max(len(cell.physics_representation.segments), int(random_max_len))
 
 simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
 

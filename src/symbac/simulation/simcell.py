@@ -19,7 +19,7 @@ class SimCell:
         "_division_site",
         "length_at_division_start",
         "division_bias",
-        "_max_length",
+        "max_length",
         "adjusted_growth_rate",
         "num_divisions",
         "birth_length"
@@ -60,7 +60,7 @@ class SimCell:
             self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation
         )
 
-        self._max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
+        self.max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
 
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
@@ -68,7 +68,7 @@ class SimCell:
 
     @property
     def length(self):
-        return len(self.physics_representation.segments)
+        return self.physics_representation.get_continuous_length()
 
     @property
     def group_id(self) -> int:
