@@ -18,7 +18,7 @@ class PhysicsRepresentation:
 
     def __init__(self, space: pymunk.Space, config: CellConfig, group_id: int, start_pos: Vec2d, _from_division: bool = False) -> None:
         """
-        Initialize the PhysicsRepresentation with a Cell object.
+        Initialize the physics_representation with a Cell object.
 
         Parameters
         ----------

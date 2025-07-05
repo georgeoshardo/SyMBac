@@ -7,6 +7,7 @@ from pymunk.vec2d import Vec2d
 
 @dataclass(slots=True, frozen=True)
 class CellConfig:
+    """Parameters to configure a cell."""
     GRANULARITY: int = 8  # Number of segments per cell radius
     SEGMENT_RADIUS: float = 15.0
     SEGMENT_MASS: float = 1.0
@@ -90,6 +91,7 @@ class SimViewerConfig:
 
 @dataclass(slots=True, frozen=True)
 class PhysicsConfig:
+    """ Physics-specific settings. """
     ITERATIONS: int = 120 # Number of iterations for the physics simulation, long floppy cells might need to go higher than 60
     DAMPING: float = 0.5
     GRAVITY: tuple[float, float] = (0.0, 0.0)

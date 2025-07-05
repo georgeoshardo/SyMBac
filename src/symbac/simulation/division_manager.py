@@ -7,6 +7,16 @@ from symbac.simulation.config import CellConfig
 class DivisionManager:
 
     def __init__(self, space: pymunk.Space, config: CellConfig) -> None:
+
+        """
+        Handles the division of a cell.
+        Note that `symbac.simulation.SimCell` objects control the division manager.
+
+        Args:
+            space: The simulation space
+            config: The cell's configuration
+        """
+
         self.space = space
         self.config = config
 
@@ -15,12 +25,12 @@ class DivisionManager:
         if cell.is_dividing:
             return False
 
-        if len(cell.PhysicsRepresentation.segments) < cell._max_length:
+        if len(cell.physics_representation.segments) < cell._max_length:
             return False
 
         split_index = self.get_split_index(cell)
         if split_index < self.config.MIN_LENGTH_AFTER_DIVISION or \
-                (len(cell.PhysicsRepresentation.segments) - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
+                (len(cell.physics_representation.segments) - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
 
             return False
 
@@ -31,14 +41,15 @@ class DivisionManager:
         Returns the index at which the cell should be split for division.
         This is typically the middle of the segments.
         """
-        return len(cell.PhysicsRepresentation.segments) // 2
+        return len(cell.physics_representation.segments) // 2
 
-    def set_division_readiness(self, cell: 'SimCell') -> None:
-        cell.is_dividing = True
-        cell.septum_progress = 0.0
-        cell.division_site = self.get_split_index(cell)
-        cell.length_at_division_start = len(cell.PhysicsRepresentation.segments)
-        return None
+    def set_division_readiness(self, cell: 'SimCell', division_model = "sizer") -> None:
+        if division_model == "sizer":
+            cell.is_dividing = True
+            cell.septum_progress = 0.0
+            cell.division_site = self.get_split_index(cell)
+            cell.length_at_division_start = len(cell.physics_representation.segments)
+            return None
 
     def reset_division_readiness(self, cell: 'SimCell') -> None:
         cell.is_dividing = False
@@ -57,31 +68,31 @@ class DivisionManager:
 
     def initialise_mother_daughter_septum_segments(self, cell: 'SimCell') -> None:
         """Initialises the septum segments for mother and daughter cells."""
-        assert cell.PhysicsRepresentation._mother_septum_segments is None and cell.PhysicsRepresentation._daughter_septum_segments is None
-        cell.PhysicsRepresentation._mother_septum_segments = []
-        cell.PhysicsRepresentation._daughter_septum_segments = []
+        assert cell.physics_representation._mother_septum_segments is None and cell.physics_representation._daughter_septum_segments is None
+        cell.physics_representation._mother_septum_segments = []
+        cell.physics_representation._daughter_septum_segments = []
         for i in range(self.config.NUM_SEPTUM_SEGMENTS):
             mother_idx = cell.division_site - 1 - i
             daughter_idx = cell.division_site + i
-            if mother_idx >= 0 and daughter_idx < len(cell.PhysicsRepresentation.segments):
+            if mother_idx >= 0 and daughter_idx < len(cell.physics_representation.segments):
                 # Recreate shape and update the segment's shape reference
-                cell.PhysicsRepresentation._mother_septum_segments.append(cell.PhysicsRepresentation.segments[mother_idx])
-                cell.PhysicsRepresentation._daughter_septum_segments.append(cell.PhysicsRepresentation.segments[daughter_idx])
+                cell.physics_representation._mother_septum_segments.append(cell.physics_representation.segments[mother_idx])
+                cell.physics_representation._daughter_septum_segments.append(cell.physics_representation.segments[daughter_idx])
 
     def update_septum_segment_radii(self, cell: 'SimCell') -> None:
         """
         Updates the radii of the septum segments based on the septum progress.
         This is a placeholder for actual septum formation logic.
         """
-        assert cell.PhysicsRepresentation._mother_septum_segments is not None and cell.PhysicsRepresentation._daughter_septum_segments is not None
+        assert cell.physics_representation._mother_septum_segments is not None and cell.physics_representation._daughter_septum_segments is not None
         for i in range(self.config.NUM_SEPTUM_SEGMENTS):
             falloff = (self.config.NUM_SEPTUM_SEGMENTS - i) / self.config.NUM_SEPTUM_SEGMENTS
             shrinkage = (self.config.SEGMENT_RADIUS - self.config.MIN_SEPTUM_RADIUS) * cell.septum_progress * falloff
             new_radius = self.config.SEGMENT_RADIUS - shrinkage
 
             # Recreate shape and update the segment's shape reference
-            cell.PhysicsRepresentation._mother_septum_segments[i].radius = new_radius
-            cell.PhysicsRepresentation._daughter_septum_segments[i].radius = new_radius
+            cell.physics_representation._mother_septum_segments[i].radius = new_radius
+            cell.physics_representation._daughter_septum_segments[i].radius = new_radius
 
     def restore_segment_radii(self, cell: 'SimCell') -> None:
         """
@@ -89,16 +100,16 @@ class DivisionManager:
         This is called after division is complete.
         """
         # Restore original radius after split
-        assert cell.PhysicsRepresentation._mother_septum_segments is not None
-        assert cell.PhysicsRepresentation._daughter_septum_segments is not None
+        assert cell.physics_representation._mother_septum_segments is not None
+        assert cell.physics_representation._daughter_septum_segments is not None
         for i in range(self.config.NUM_SEPTUM_SEGMENTS):
-            cell.PhysicsRepresentation._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
-            cell.PhysicsRepresentation._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
+            cell.physics_representation._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
+            cell.physics_representation._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
 
     def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 
 
-        current_length = len(cell.PhysicsRepresentation.segments)
+        current_length = len(cell.physics_representation.segments)
         growth_during_division = current_length - cell.length_at_division_start
         original_half_length = cell.length_at_division_start // 2
         growth_to_redistribute_to_mother = growth_during_division // 2
@@ -113,44 +124,44 @@ class DivisionManager:
         elif mother_final_len >= current_length:
             mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
 
-        cell.PhysicsRepresentation._mother_septum_segments = None
-        cell.PhysicsRepresentation._daughter_septum_segments = None
+        cell.physics_representation._mother_septum_segments = None
+        cell.physics_representation._daughter_septum_segments = None
         # --- START of MODIFIED SECTION for color inheritance ---
 
 
         daughter_cell = SimCell(space=self.space, config=self.config,
-                                start_pos=cell.PhysicsRepresentation.segments[mother_final_len].position,
+                                start_pos=cell.physics_representation.segments[mother_final_len].position,
                                 group_id=next_group_id, _from_division=True)
 
-        daughter_cell.PhysicsRepresentation.segments = cell.PhysicsRepresentation.segments[mother_final_len:]
-        for segment in daughter_cell.PhysicsRepresentation.segments:
+        daughter_cell.physics_representation.segments = cell.physics_representation.segments[mother_final_len:]
+        for segment in daughter_cell.physics_representation.segments:
             segment.shape.filter = pymunk.ShapeFilter(group=next_group_id)
 
         connecting_joint_idx = mother_final_len - 1
 
         # 1. Assign the daughter's joints
-        daughter_cell.PhysicsRepresentation.pivot_joints = cell.PhysicsRepresentation.pivot_joints[mother_final_len:]
+        daughter_cell.physics_representation.pivot_joints = cell.physics_representation.pivot_joints[mother_final_len:]
         if self.config.ROTARY_LIMIT_JOINT:
-            daughter_cell.PhysicsRepresentation.limit_joints = cell.PhysicsRepresentation.limit_joints[mother_final_len:]
+            daughter_cell.physics_representation.limit_joints = cell.physics_representation.limit_joints[mother_final_len:]
         if self.config.DAMPED_ROTARY_SPRING:
-            daughter_cell.PhysicsRepresentation.spring_joints = cell.PhysicsRepresentation.spring_joints[mother_final_len:]
+            daughter_cell.physics_representation.spring_joints = cell.physics_representation.spring_joints[mother_final_len:]
 
         # 2. Remove the connecting joints from the physics space
-        self.space.remove(cell.PhysicsRepresentation.pivot_joints[connecting_joint_idx])
+        self.space.remove(cell.physics_representation.pivot_joints[connecting_joint_idx])
         if self.config.ROTARY_LIMIT_JOINT:
-            self.space.remove(cell.PhysicsRepresentation.limit_joints[connecting_joint_idx])
+            self.space.remove(cell.physics_representation.limit_joints[connecting_joint_idx])
         if self.config.DAMPED_ROTARY_SPRING:
-            self.space.remove(cell.PhysicsRepresentation.spring_joints[connecting_joint_idx])
+            self.space.remove(cell.physics_representation.spring_joints[connecting_joint_idx])
 
         # 3. Trim the mother's components
-        cell.PhysicsRepresentation.segments = cell.PhysicsRepresentation.segments[:mother_final_len]
-        cell.PhysicsRepresentation.pivot_joints = cell.PhysicsRepresentation.pivot_joints[:connecting_joint_idx]
+        cell.physics_representation.segments = cell.physics_representation.segments[:mother_final_len]
+        cell.physics_representation.pivot_joints = cell.physics_representation.pivot_joints[:connecting_joint_idx]
         if self.config.ROTARY_LIMIT_JOINT:
-            cell.PhysicsRepresentation.limit_joints = cell.PhysicsRepresentation.limit_joints[:connecting_joint_idx]
+            cell.physics_representation.limit_joints = cell.physics_representation.limit_joints[:connecting_joint_idx]
         if self.config.DAMPED_ROTARY_SPRING:
-            cell.PhysicsRepresentation.spring_joints = cell.PhysicsRepresentation.spring_joints[:connecting_joint_idx]
+            cell.physics_representation.spring_joints = cell.physics_representation.spring_joints[:connecting_joint_idx]
 
-        cell.PhysicsRepresentation.growth_accumulator_tail = 0.0
+        cell.physics_representation.growth_accumulator_tail = 0.0
         cell.num_divisions += 1
 
         return daughter_cell

@@ -1,0 +1,12 @@
+site_name: SyMBac
+nav:
+  - Home: index.md
+  - About: about.md
+  - Simulation: simulation.md
+site_url: https://symbac.readthedocs.com
+theme:
+  name: material
+
+plugins:
+- search
+- mkdocstrings

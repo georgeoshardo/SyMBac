@@ -63,14 +63,14 @@ simulator.add_and_run_post_init_hook(box_adder)
 
 def cell_remover(simulator: 'Simulator') -> None:
     for cell in simulator.cells:
-        if cell.PhysicsRepresentation.segments[0].body.position.y > 1000:
+        if cell.physics_representation.segments[0].body.position.y > 1000:
             simulator.colony.delete_cell(cell)
 
 simulator.add_post_step_hook(cell_remover)
 
 
 def cell_growth_rate_updater(cell: SimCell) -> None:
-    compression_ratio = cell.PhysicsRepresentation.get_compression_ratio()
+    compression_ratio = cell.physics_representation.get_compression_ratio()
     cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio**4
 
     variation = cell.config.BASE_MAX_LENGTH * cell.config.MAX_LENGTH_VARIATION
@@ -78,7 +78,7 @@ def cell_growth_rate_updater(cell: SimCell) -> None:
         cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
     ) * np.sqrt(compression_ratio)
 
-    cell._max_length = max(len(cell.PhysicsRepresentation.segments), int(random_max_len))
+    cell._max_length = max(len(cell.physics_representation.segments), int(random_max_len))
 
 simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
 
@@ -133,10 +133,10 @@ class CellColor:
         body_color = (r,g,b,a)
         head_color = (min(255, int(r * 1.3)), min(255, int(g * 1.3)), min(255, int(b * 1.3)), a)
         tail_color = (int(r * 0.7), int(g * 0.7), int(b * 0.7), a)
-        for segment in cell.PhysicsRepresentation.segments: # You have to set a color attribute for pygame
+        for segment in cell.physics_representation.segments: # You have to set a color attribute for pygame
             segment.shape.color = body_color
-        cell.PhysicsRepresentation.segments[0].shape.color = head_color
-        cell.PhysicsRepresentation.segments[-1].shape.color = tail_color
+        cell.physics_representation.segments[0].shape.color = head_color
+        cell.physics_representation.segments[-1].shape.color = tail_color
 
     def update_daughter_colour(self, mother_cell: SimCell, daughter_cell: SimCell):
         """
@@ -200,7 +200,7 @@ class SimulationLogger:
                     'id': cell.group_id,
                     'color': generate_color(cell.group_id),
                 }
-                for cell in simulator.cells for seg in cell.PhysicsRepresentation.segments
+                for cell in simulator.cells for seg in cell.physics_representation.segments
             ] # TODO This uses a lot of CPU time, maybe use batched pymunk queries?
             self.frames_to_draw_mpl.append((simulator.frame_count, current_frame_data))
 

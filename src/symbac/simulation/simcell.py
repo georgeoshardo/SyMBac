@@ -13,7 +13,7 @@ class SimCell:
     __slots__ = (
         "config",
         "_group_id",
-        "PhysicsRepresentation",
+        "physics_representation",
         "is_dividing",
         "_septum_progress",
         "_division_site",
@@ -22,6 +22,8 @@ class SimCell:
         "_max_length",
         "adjusted_growth_rate",
         "num_divisions",
+        "birth_length"
+        "length"
     )
 
     def __init__(
@@ -39,7 +41,7 @@ class SimCell:
         self.config = config
         self._group_id = group_id
 
-        self.PhysicsRepresentation = PhysicsRepresentation(
+        self.physics_representation = PhysicsRepresentation(
             space=space,
             config=self.config,
             group_id=self._group_id,
@@ -63,6 +65,10 @@ class SimCell:
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
         self.num_divisions = 0
+
+    @property
+    def length(self):
+        return len(self.physics_representation.segments)
 
     @property
     def group_id(self) -> int:
@@ -91,7 +97,7 @@ class SimCell:
 
     @property
     def division_site(self) -> int:
-        return len(self.PhysicsRepresentation.segments) // 2 # Dynamically determine the division site but
+        return len(self.physics_representation.segments) // 2 # Dynamically determine the division site but
 
     @division_site.setter
     def division_site(self, value: int) -> None:
