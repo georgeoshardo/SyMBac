@@ -6,7 +6,7 @@ from pymunk import Vec2d
 from symbac.utils import generate_color
 from symbac.simulation import Simulator
 from symbac.simulation.visualisation.live.live_visualisation import LiveVisualisation
-from symbac.trench_geometry import trench_creator, box_creator
+from symbac.simulation.microfluidic_geometry import trench_creator, box_creator
 
 np.random.seed(42)
 from simcell import SimCell
