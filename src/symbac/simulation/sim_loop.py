@@ -21,13 +21,14 @@ physics_config = PhysicsConfig(
     ITERATIONS=100,
 )
 
+#TODO: higher granularity require higher stiffness
 initial_cell_config = CellConfig(
     GRANULARITY=4, # 16 is good for precise division with no gaps, 8 is a good compromise between performance and precision, 3 is for speed
     SEGMENT_RADIUS=10,
     SEGMENT_MASS=1.0,
     GROWTH_RATE=5, # Turning up the growth rate is a good way to speed up the simulation while keeping ITERATIONS high,
-    BASE_MAX_LENGTH=40, # This should be stable now!
-    MAX_LENGTH_VARIATION=0.24,
+    BASE_MAX_LENGTH=100, # This should be stable now!
+    MAX_LENGTH_VARIATION=0,
     MIN_LENGTH_AFTER_DIVISION=4,
     NOISE_STRENGTH=0.05,
     SEED_CELL_SEGMENTS=30,
@@ -40,7 +41,7 @@ initial_cell_config = CellConfig(
     #ROTARY_SPRING_STIFFNESS=2000_000, # A good starting point
     #ROTARY_SPRING_DAMPING=200_000, # A good starting point
     PIVOT_JOINT_STIFFNESS=50000, # This can be lowered from the default np.inf, and the cell will be able to compress
-    SIMPLE_LENGTH=True # If true, cell length is calculated continuously each time the length attribute is requested (slow, but higher precision because allows for cell compression) If false it is simply the segment distance * number of segments in a cell
+    SIMPLE_LENGTH=False # If true, cell length is calculated continuously each time the length attribute is requested (QUITE!! slow, but higher precision because allows for cell compression) If false it is simply the segment distance * number of segments in a cell
 )
 
 simulator = Simulator(physics_config, initial_cell_config)
@@ -55,6 +56,10 @@ def segment_creator(local_xy1, local_xy2, global_xy, thickness):
     return segment_body, segment_shape
 
 #trench_creator(50, 1000, (-0, -0), simulator.space)
+
+#Use a closure to create a post-init hook that adds a box
+def trench_adder(simulator: 'Simulator') -> None:
+    trench_creator(30, 1000, (-0, -0), simulator.space)
 
 #Use a closure to create a post-init hook that adds a box
 def box_adder(simulator: 'Simulator') -> None:
@@ -79,7 +84,7 @@ def cell_growth_rate_updater(cell: SimCell) -> None:
         cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
     ) * np.sqrt(compression_ratio)
 
-    cell.max_length = max(len(cell.physics_representation.segments), int(random_max_len)) #LENGTH_FIX
+    cell.max_length = max(cell.length, int(random_max_len)) #LENGTH_FIX
 
 simulator.add_pre_cell_grow_hook(cell_growth_rate_updater)
 
@@ -212,7 +217,7 @@ simulator.add_post_step_hook(my_logger.get_step_comp_time)
 simulator.add_post_step_hook(my_logger.log_cell_positions)
 
 
-sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=100)
+sim_viewer_config = SimViewerConfig(SIM_STEPS_PER_DRAW=10)
 live_visualisation = LiveVisualisation(sim_viewer_config)
 
 simulator.add_post_step_hook(live_visualisation.draw)

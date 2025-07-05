@@ -17,7 +17,7 @@ class SimCell:
         "is_dividing",
         "_septum_progress",
         "_division_site",
-        "length_at_division_start",
+        "num_segments_at_division_start",
         "division_bias",
         "max_length",
         "adjusted_growth_rate",
@@ -52,13 +52,13 @@ class SimCell:
         self.is_dividing = False
         self._septum_progress = 0.0
         self.division_site: int | None = None
-        self.length_at_division_start = 0 # NOTE:This is NOT the birth length, this is a variable to keep track of how much growth has occurred during septum formation and division
+        self.num_segments_at_division_start = 0 # NOTE:This is NOT the birth length, this is a variable to keep track of how much growth has occurred during septum formation and division
         self.division_bias = 0
 
         variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
         random_max_len = np.random.uniform(
             self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation
-        )
+        ) # TODO: look at how to accurately model this distribution
 
         self.max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
 
@@ -69,7 +69,7 @@ class SimCell:
     @property
     def length(self):
         if self.config.SIMPLE_LENGTH:
-            return self.physics_representation.num_segments
+            return self.physics_representation.num_segments * self.config.JOINT_DISTANCE
         else:
             return self.physics_representation.get_continuous_length()
 

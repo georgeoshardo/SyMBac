@@ -25,15 +25,16 @@ class DivisionManager:
         if cell.is_dividing:
             return False
 
-        if len(cell.physics_representation.segments) < cell.max_length: #LENGTH_FIX
+        if cell.length < cell.max_length: #LENGTH_FIX
             return False
 
         split_index = self.get_split_index(cell)
-        if split_index < self.config.MIN_LENGTH_AFTER_DIVISION or \
+        current_length = cell.length
+        if current_length/2 < self.config.MIN_LENGTH_AFTER_DIVISION or \
                 (cell.physics_representation.num_segments - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
 
             return False
-
+        print(cell.length)
         return True
 
     def get_split_index(self, cell: 'SimCell') -> int:
@@ -48,7 +49,7 @@ class DivisionManager:
             cell.is_dividing = True
             cell.septum_progress = 0.0
             cell.division_site = self.get_split_index(cell)
-            cell.length_at_division_start = len(cell.physics_representation.segments) #LENGTH_FIX
+            cell.num_segments_at_division_start = cell.num_segments_at_division_start #LENGTH_FIX
             return None
 
     def reset_division_readiness(self, cell: 'SimCell') -> None:
@@ -108,20 +109,20 @@ class DivisionManager:
     def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 
 
-        current_length = len(cell.physics_representation.segments) #LENGTH_FIX
-        growth_during_division = current_length - cell.length_at_division_start
-        original_half_length = cell.length_at_division_start // 2
+        current_n_segments = cell.physics_representation.num_segments
+        growth_during_division = current_n_segments - cell.num_segments_at_division_start
+        original_half_length = cell.num_segments_at_division_start // 2
         growth_to_redistribute_to_mother = growth_during_division // 2
         mother_final_len = original_half_length + growth_to_redistribute_to_mother
         mother_final_len += cell.division_bias
-        daughter_length = current_length - mother_final_len
+        daughter_length = current_n_segments - mother_final_len
 
         if mother_final_len < self.config.MIN_LENGTH_AFTER_DIVISION:
             mother_final_len = self.config.MIN_LENGTH_AFTER_DIVISION
         elif daughter_length < self.config.MIN_LENGTH_AFTER_DIVISION:
-            mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
-        elif mother_final_len >= current_length:
-            mother_final_len = current_length - self.config.MIN_LENGTH_AFTER_DIVISION
+            mother_final_len = current_n_segments - self.config.MIN_LENGTH_AFTER_DIVISION
+        elif mother_final_len >= current_n_segments:
+            mother_final_len = current_n_segments - self.config.MIN_LENGTH_AFTER_DIVISION
 
         cell.physics_representation._mother_septum_segments = None
         cell.physics_representation._daughter_septum_segments = None
