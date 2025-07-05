@@ -3,7 +3,7 @@ import colorsys
 import numpy as np
 from pymunk import Vec2d
 
-from symbac.misc import generate_color
+from symbac.utils import generate_color
 from symbac.simulation import Simulator
 from symbac.simulation.visualisation.live.live_visualisation import LiveVisualisation
 from symbac.trench_geometry import trench_creator, box_creator
