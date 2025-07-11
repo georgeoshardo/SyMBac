@@ -2,11 +2,50 @@ site_name: SyMBac
 nav:
   - Home: index.md
   - About: about.md
-  - Simulation: simulation.md
+  - Simulation API reference:
+      - physics_simulation/simulator.md
+      - physics_simulation/simcell.md
+      - physics_simulation/colony.md
+  - Simulation configuration parameters: physics_simulation/sim_config.md
 site_url: https://symbac.readthedocs.com
 theme:
   name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+watch:
+  - src
 
 plugins:
 - search
-- mkdocstrings
+- autorefs:
+    resolve_closest: true
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: google
+          signature_crossrefs: true
+          heading_level: 2
+          merge_init_into_class: false
+          parameter_headings: true
+          separate_signature: true
+          show_root_heading: true
+          show_signature_annotations: true
+          show_symbol_type_heading: true
+          show_symbol_type_toc: true
+
+        paths: ['src/symbac/']
+        inventories:
+          - https://numpy.org/doc/stable/objects.inv
+          - https://docs.python.org/3/objects.inv
+          - https://www.pymunk.org/en/latest/objects.inv

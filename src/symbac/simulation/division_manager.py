@@ -51,6 +51,7 @@ class DivisionManager:
             cell.division_site = self.get_split_index(cell)
             cell.num_segments_at_division_start = cell.num_segments_at_division_start #LENGTH_FIX
             return None
+        else: raise NotImplementedError
 
     def reset_division_readiness(self, cell: 'SimCell') -> None:
         cell.is_dividing = False

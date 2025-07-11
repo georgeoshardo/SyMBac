@@ -4,11 +4,22 @@ from symbac.simulation.simcell import SimCell
 # Follow the ECS paradigm and have a separate growth manager class that handles the growth of cells and is stateless
 # Can consider making this manager take a nutrient profile to adjust per cell growth rate. For now constant
 class GrowthManager:
+    """Manages the growth of cells by elongating them and triggering new segment insertion.
 
-    def grow(self, cell: SimCell, dt: float):
-        """
-        Handles the growth of the cell by elongating the joints at the head and tail.
-        When a joint is stretched beyond a threshold, it triggers the insertion of a new segment.
+    This manager follows the Entity-Component-System (ECS) paradigm and is stateless,
+    focusing solely on the growth logic.
+    """
+    @staticmethod
+    def grow(cell: SimCell, dt: float):
+        """Handles the growth of the cell by elongating the joints at the head and tail.
+
+        When a joint is stretched beyond a configurable threshold, it triggers
+        the insertion of a new segment at that end of the cell. Growth is
+        distributed evenly to both ends.
+
+        Args:
+            cell: The `SimCell` object to be grown.
+            dt: The time step for the current simulation frame.
         """
         if not cell.is_dividing and cell.length >= cell.max_length: #LENGTH_FIX # TODO: is this actually necessary?
             return

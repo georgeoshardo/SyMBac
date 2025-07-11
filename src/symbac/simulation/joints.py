@@ -3,11 +3,32 @@ from symbac.simulation.config import CellConfig
 from symbac.simulation.segments import CellSegment
 
 class CellJoint(pymunk.PivotJoint):
-    """
-    A custom PivotJoint that uses the configuration from CellConfig.
+    """Represents a custom PivotJoint connecting two CellSegments.
+
+    This joint uses parameters from a CellConfig object to define its
+    physical properties, such as the distance between connected segments
+    and its stiffness.
+
+    Attributes:
+        joint_distance: The calculated distance between the anchor
+            points on the connected segments. This is derived from
+            `config.SEGMENT_RADIUS` and `config.GRANULARITY`.
+        max_force: The maximum force this pivot joint can exert,
+            derived from `config.PIVOT_JOINT_STIFFNESS`.
     """
     def __init__(self, segment_a: CellSegment, segment_b: CellSegment, config: CellConfig) -> None:
-        self.joint_distance = config.SEGMENT_RADIUS / config.GRANULARITY
+        """Initializes a CellJoint instance.
+
+        This constructor sets up a `pymunk.PivotJoint` between two
+        `CellSegment` objects. It calculates the necessary `joint_distance`
+        and sets the `max_force` based on the provided `CellConfig`.
+
+        Args:
+            segment_a: The first CellSegment to connect.
+            segment_b: The second CellSegment to connect.
+            config: The CellConfig object providing joint parameters.
+        """
+        self.joint_distance: float = config.SEGMENT_RADIUS / config.GRANULARITY
         anchor_on_prev = (self.joint_distance / 2, 0)  # Local coordinates relative to the body for the pivot joint
         anchor_on_curr = (-self.joint_distance / 2, 0)
 
@@ -15,7 +36,7 @@ class CellJoint(pymunk.PivotJoint):
         body_b = segment_b.body
 
         super().__init__(body_a, body_b, anchor_on_prev, anchor_on_curr)
-        self.max_force = config.PIVOT_JOINT_STIFFNESS
+        self.max_force: float = config.PIVOT_JOINT_STIFFNESS
 
 
 class CellRotaryLimitJoint(pymunk.RotaryLimitJoint):

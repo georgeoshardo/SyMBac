@@ -7,14 +7,68 @@ from pymunk.vec2d import Vec2d
 
 @dataclass(slots=True, frozen=True)
 class CellConfig:
-    """Parameters to configure a cell."""
+    """Stores configuration parameters for cell properties and behavior.
+
+    This is a frozen dataclass, meaning its instances are immutable. Parameters
+    control everything from the physical construction of a cell (granularity,
+    radius, mass) to its biological behavior (growth rate, division length)
+    and physical properties (joint stiffness, noise).
+
+    Attributes:
+        GRANULARITY: The number of segments that fit within a cell's radius.
+            Higher values result in a smoother, more detailed cell model but
+            require more computational resources.
+        SEGMENT_RADIUS: The radius of each spherical segment composing the cell.
+        SEGMENT_MASS: The mass of a single cell segment.
+        GROWTH_RATE: The rate at which the cell elongates per unit of time.
+        MIN_LENGTH_AFTER_DIVISION: The minimum number of segments a cell
+            must have after division. Prevents cells from becoming too small.
+        MAX_LENGTH_VARIATION: The relative variation in the maximum length a
+            cell can reach before division.
+        BASE_MAX_LENGTH: The target length (continuous length, NOT number of segments) a cell
+            reaches before it is considered ready for division.
+        SEED_CELL_SEGMENTS: The initial number of segments for the first cell
+            created in the simulation.
+        PIVOT_JOINT_STIFFNESS: The maximum force the pivot joints connecting
+            segments can exert to maintain their distance. Use [`np.inf`][numpy.inf] for a
+            completely rigid connection.
+        NOISE_STRENGTH: The magnitude of random force applied to each segment
+            at each time step to simulate environmental perturbations.
+        START_POS: The initial (x, y) coordinate for the first cell.
+        START_ANGLE: The initial orientation of the first cell in radians.
+        SEPTUM_DURATION: The time it takes for the division septum to fully
+            constrict, in simulation time units.
+        DAMPED_ROTARY_SPRING: If True, adds a DampedRotarySpring joint between
+            segments to resist bending, making the cell more rigid.
+        ROTARY_SPRING_STIFFNESS: The stiffness of the damped rotary spring.
+            Required if `DAMPED_ROTARY_SPRING` is True.
+        ROTARY_SPRING_DAMPING: The damping of the damped rotary spring.
+            Required if `DAMPED_ROTARY_SPRING` is True.
+        ROTARY_LIMIT_JOINT: If True, adds a RotaryLimitJoint between segments
+            to constrain their maximum bending angle.
+        MAX_BEND_ANGLE: The maximum angle in radians that a joint can bend.
+            Required if `ROTARY_LIMIT_JOINT` is True.
+        STIFFNESS: The stiffness of the rotary limit joint. Use [`np.inf`][numpy.inf] for a
+            hard limit. Required if `ROTARY_LIMIT_JOINT` is True.
+        JOINT_DISTANCE: (Calculated) The resting distance between the centers
+            of two adjacent segments.
+        GROWTH_THRESHOLD: (Calculated) The amount of accumulated growth at
+            a cell pole required to trigger the insertion of a new segment.
+        MIN_SEPTUM_RADIUS: (Calculated) The radius of a septum segment when
+            it is fully constricted.
+        NUM_SEPTUM_SEGMENTS: (Calculated) The number of segments on each side
+            of the division site that will participate in septum formation.
+        SIMPLE_LENGTH: If True, cell length is approximated as the number of
+            segments times the joint distance. If False, it's calculated
+            continuously, which is more accurate but slower.
+    """
     GRANULARITY: int = 8  # Number of segments per cell radius
     SEGMENT_RADIUS: float = 15.0
     SEGMENT_MASS: float = 1.0
     GROWTH_RATE: float = 5.0
     MIN_LENGTH_AFTER_DIVISION: int = 10
     MAX_LENGTH_VARIATION: float = 0.2
-    BASE_MAX_LENGTH: int = 40
+    BASE_MAX_LENGTH: float = 40
     SEED_CELL_SEGMENTS: int = 15
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
     NOISE_STRENGTH: float = 0.05

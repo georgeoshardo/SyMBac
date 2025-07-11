@@ -6,9 +6,19 @@ from pymunk.space import Space
 import pymunk
 
 class Colony:
+    """
+    Attributes:
+
+    """
     def __init__(self, space: Space, cells: list[SimCell]) -> None:
         """
         Create a colony object
+
+        Note:
+            It looks like a section, but it will be rendered as an admonition.
+
+        Tip: You can even choose a title.
+            This admonition has a custom title!
 
         Args:
             space: The simulation space
