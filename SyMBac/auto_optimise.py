@@ -261,6 +261,9 @@ class AutoOptimiser:
         except Exception:
             return float("inf")
 
+        if not np.isfinite(loss):
+            return float("inf")
+
         return loss
 
     def _estimate_synth_regions(self, synth_image):

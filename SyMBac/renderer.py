@@ -360,17 +360,32 @@ class Renderer:
             )
             self.PSF.calculate_PSF()
 
-        # Convolution
+        # Convolution — use rescale_int=False to avoid NaN from
+        # rescale_intensity on uniform images; we normalise at the end.
         kernel = self.PSF.kernel
         if defocus > 0:
             kernel = gaussian_filter(kernel, defocus, mode="reflect")
         convolved = convolve_rescale(
             expanded_scene, kernel,
-            1 / self.simulation.resize_amount, rescale_int=True
+            1 / self.simulation.resize_amount, rescale_int=False
         )
 
         real_resize, expanded_resized = make_images_same_shape(
-            self.real_image, convolved, rescale_int=True
+            self.real_image, convolved, rescale_int=False
+        )
+
+        # Guard: if convolved image is constant, it's a degenerate
+        # parameter combo — return NaN so the caller can detect it.
+        img_range = np.nanmax(expanded_resized) - np.nanmin(expanded_resized)
+        if img_range < 1e-10 or not np.isfinite(img_range):
+            raise ValueError("Degenerate rendering: uniform/NaN image")
+
+        # Normalise to [0, 1] now that we know the range is non-degenerate
+        expanded_resized = rescale_intensity(
+            expanded_resized.astype(np.float32), out_range=(0, 1)
+        )
+        real_resize = rescale_intensity(
+            real_resize.astype(np.float32), out_range=(0, 1)
         )
 
         # Fourier / histogram matching
@@ -396,14 +411,22 @@ class Renderer:
             sensitivity = self.camera.sensitivity
             dark_noise = self.camera.dark_noise
             rng = np.random.default_rng()
-            matched = matched / (matched.max() / self.real_image.max()) / sensitivity
+            max_val = matched.max()
+            if max_val < 1e-10:
+                raise ValueError("Degenerate rendering: uniform/NaN image")
+            matched = matched / (max_val / self.real_image.max()) / sensitivity
             if match_fourier:
                 matched += abs(matched.min())
+            matched = np.clip(matched, 0, None)  # Poisson needs non-negative
             matched = rng.poisson(matched)
             noisy_img = matched + rng.normal(
                 loc=baseline, scale=dark_noise, size=matched.shape
             )
         else:
+            # Guard against constant image before rescale_intensity
+            m_range = matched.max() - matched.min()
+            if m_range < 1e-10:
+                raise ValueError("Degenerate rendering: uniform/NaN image")
             noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
             noisy_img = random_noise(
                 rescale_intensity(noisy_img), mode="gaussian",
@@ -413,7 +436,11 @@ class Renderer:
         if match_noise:
             noisy_img = match_histograms(noisy_img, real_resize)
 
-        noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
+        noisy_img = noisy_img.astype(np.float32)
+        n_range = np.nanmax(noisy_img) - np.nanmin(noisy_img)
+        if n_range < 1e-10 or not np.isfinite(n_range):
+            raise ValueError("Degenerate rendering: uniform/NaN image")
+        noisy_img = rescale_intensity(noisy_img, out_range=(0, 1))
 
         # Mask processing
         expanded_mask_resized = rescale(
