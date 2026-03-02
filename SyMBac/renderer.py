@@ -50,6 +50,11 @@ if _CONV_BACKEND != "cupy" and importlib.util.find_spec("torch") is not None:
 
 if _CONV_BACKEND == "fftconvolve":
     from scipy.signal import fftconvolve as _fftconvolve
+    warnings.warn(
+        "No GPU backend (CuPy or PyTorch) found. "
+        "Install CuPy (NVIDIA) or PyTorch (`pip install SyMBac[gpu]`) "
+        "to use GPU-accelerated convolution. Falling back to CPU FFT convolution."
+    )
 
 
 def _torch_convolve(image, kernel):
