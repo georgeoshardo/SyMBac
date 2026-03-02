@@ -95,10 +95,20 @@ class AutoOptimiser:
 
     def _precompute_real_stats(self):
         """Extract region statistics from real images using auto-segmentation."""
+        from skimage.exposure import rescale_intensity
+
         region_masks = self.renderer.auto_segment_regions(
             image=self.real_images[0], cells=self.cells
         )
-        real = self.real_images[0]
+        # Normalise the real image to [0, 1] for consistent metric computation
+        real = rescale_intensity(
+            self.real_images[0].astype(np.float32), out_range=(0, 1)
+        )
+        self._real_images_norm = [
+            rescale_intensity(img.astype(np.float32), out_range=(0, 1))
+            for img in self.real_images
+        ]
+
         media_pixels = real[region_masks["media"]]
         cell_pixels = real[region_masks["cell"]]
         device_pixels = real[region_masks["device"]]
@@ -109,66 +119,115 @@ class AutoOptimiser:
             "device": float(device_pixels.mean()) if device_pixels.size > 0 else 0.0,
         }
 
+        # Compute real image PSD and EMD baselines for metric normalisation
+        from SyMBac.metrics import (
+            intensity_histogram_emd,
+            power_spectral_density_error,
+            glcm_feature_error,
+            higher_order_moments_error,
+        )
+        # Use a uniform image as the "worst case" to estimate metric scales
+        uniform = np.full_like(real, real.mean())
+        self._metric_scales = {
+            "emd": max(intensity_histogram_emd(real, uniform), 1e-6),
+            "psd": max(power_spectral_density_error(real, uniform), 1e-6),
+            "glcm": max(glcm_feature_error(real, uniform), 1e-6),
+            "moments": max(higher_order_moments_error(real, uniform), 1e-6),
+            "contrast": 1.0,  # Already relative
+        }
+
     def _smart_init(self):
         """
-        Extract initial parameter estimates from real images to narrow
-        the search space.
+        Extract initial parameter estimates from real images to constrain
+        the search space around physically plausible values.
 
         Returns
         -------
         dict
-            Initial parameter estimates with narrowed bounds.
+            Estimated centre point and bounds for each parameter.
         """
-        real = self.real_images[0]
         stats = self._real_region_stats
 
-        # Estimate multiplier ratios from real image region means
-        # Media is typically brightest in phase contrast
-        media_est = stats["media"] * 300  # Scale to multiplier range
-        device_est = stats["device"] * 300
-        cell_contrast = stats["cell"] / max(stats["media"], 1e-10)
+        # In phase contrast, media is typically brightest, device darkest
+        # The multipliers set absolute OPL values before convolution.
+        # Typical good values: media ~30-150, device ~10-80, cell ~0.5-5
+        # Use real image contrast ratios to estimate relative values
+        media_brightness = stats["media"]
+        device_brightness = stats["device"]
+        cell_brightness = stats["cell"]
 
-        return {
-            "media_multiplier_init": np.clip(media_est, -300, 300),
-            "device_multiplier_init": np.clip(device_est, -300, 300),
-            "cell_multiplier_init": np.clip(cell_contrast * 5, -30, 30),
+        # Estimate: if media is brightest, media_mult > device_mult
+        if media_brightness > device_brightness:
+            media_est = 75.0
+            device_est = 75.0 * (device_brightness / max(media_brightness, 1e-10))
+        else:
+            device_est = 75.0
+            media_est = 75.0 * (media_brightness / max(device_brightness, 1e-10))
+
+        cell_contrast = cell_brightness / max(media_brightness, 1e-10)
+        cell_est = np.clip(cell_contrast * 3, 0.1, 10)
+
+        self._init_estimates = {
+            "media_multiplier": media_est,
+            "device_multiplier": device_est,
+            "cell_multiplier": cell_est,
         }
+        return self._init_estimates
 
     def _define_search_space(self, trial):
         """
         Define the Optuna search space for a trial.
 
-        Parameters
-        ----------
-        trial : optuna.Trial
-
-        Returns
-        -------
-        dict
-            Parameter dictionary to pass to render_synthetic.
+        The search space is centred around smart-init estimates with
+        physically plausible bounds. match_fourier, match_histogram, and
+        match_noise are fixed to False during optimisation so the metrics
+        evaluate the raw physics, not post-processing cheats.
         """
         psf = self.renderer.PSF
         min_sigma = psf.min_sigma
+        init = self._init_estimates
+
+        # Constrained search ranges centred on smart-init estimates
+        media_lo = max(-300, init["media_multiplier"] - 150)
+        media_hi = min(300, init["media_multiplier"] + 150)
+        device_lo = max(-300, init["device_multiplier"] - 150)
+        device_hi = min(300, init["device_multiplier"] + 150)
 
         params = {
-            "media_multiplier": trial.suggest_float("media_multiplier", -300, 300),
-            "cell_multiplier": trial.suggest_float("cell_multiplier", -30, 30),
-            "device_multiplier": trial.suggest_float("device_multiplier", -300, 300),
-            "sigma": trial.suggest_float("sigma", min_sigma, min_sigma * 20),
-            "noise_var": trial.suggest_float("noise_var", 0, 0.01),
-            "defocus": trial.suggest_float("defocus", 0, 20),
-            "halo_top_intensity": trial.suggest_float("halo_top_intensity", 0, 1),
-            "halo_bottom_intensity": trial.suggest_float("halo_bottom_intensity", 0, 1),
-            "halo_start": trial.suggest_float("halo_start", 0, 1),
-            "halo_end": trial.suggest_float("halo_end", 0, 1),
-            "match_fourier": trial.suggest_categorical("match_fourier", [True, False]),
-            "match_histogram": trial.suggest_categorical("match_histogram", [True, False]),
-            "match_noise": trial.suggest_categorical("match_noise", [True, False]),
+            "media_multiplier": trial.suggest_float(
+                "media_multiplier", media_lo, media_hi
+            ),
+            "cell_multiplier": trial.suggest_float(
+                "cell_multiplier", -10, 10
+            ),
+            "device_multiplier": trial.suggest_float(
+                "device_multiplier", device_lo, device_hi
+            ),
+            "sigma": trial.suggest_float(
+                "sigma", min_sigma, min_sigma * 10
+            ),
+            "noise_var": trial.suggest_float("noise_var", 0, 0.005),
+            "defocus": trial.suggest_float("defocus", 0, 10),
+            "halo_top_intensity": trial.suggest_float(
+                "halo_top_intensity", 0.5, 1
+            ),
+            "halo_bottom_intensity": trial.suggest_float(
+                "halo_bottom_intensity", 0.5, 1
+            ),
+            "halo_start": trial.suggest_float("halo_start", 0, 0.5),
+            "halo_end": trial.suggest_float("halo_end", 0.5, 1),
+            # Fixed during optimisation — these are post-processing steps
+            # that mask the quality of physical parameters
+            "match_fourier": False,
+            "match_histogram": False,
+            "match_noise": False,
         }
 
         if self.optimise_psf:
             params["_psf_NA"] = trial.suggest_float("NA", 0.3, 1.5)
-            params["_psf_wavelength"] = trial.suggest_float("wavelength", 0.4, 0.8)
+            params["_psf_wavelength"] = trial.suggest_float(
+                "wavelength", 0.4, 0.8
+            )
             if self.renderer.PSF.mode == "phase contrast":
                 params["_psf_condenser"] = trial.suggest_categorical(
                     "condenser", ["Ph1", "Ph2", "Ph3", "Ph4", "PhF"]
@@ -240,21 +299,30 @@ class AutoOptimiser:
         if not synth_images:
             return float("inf")
 
-        # Pick real images to compare against (cycle if fewer than synth)
+        # Pick normalised real images to compare against
         real_for_comparison = []
         for i in range(len(synth_images)):
-            real_for_comparison.append(self.real_images[i % len(self.real_images)])
+            real_for_comparison.append(
+                self._real_images_norm[i % len(self._real_images_norm)]
+            )
 
         # Compute synth region stats for contrast ratio metric
         synth_regions = None
         if "contrast" in self.metrics:
             synth_regions = self._estimate_synth_regions(synth_images[0])
 
+        # Compute normalised weights: divide each metric by its scale so
+        # all metrics contribute roughly equally regardless of raw magnitude
+        normalised_weights = {}
+        for m, w in self.weights.items():
+            scale = self._metric_scales.get(m, 1.0)
+            normalised_weights[m] = w / scale
+
         try:
             loss = composite_loss(
                 real_images=real_for_comparison,
                 synth_images=synth_images,
-                weights=self.weights,
+                weights=normalised_weights,
                 real_regions=self._real_region_stats,
                 synth_regions=synth_regions,
             )
@@ -312,19 +380,16 @@ class AutoOptimiser:
         init_params = self._smart_init()
         min_sigma = self.renderer.PSF.min_sigma
         seed_params = {
-            "media_multiplier": init_params["media_multiplier_init"],
-            "cell_multiplier": init_params["cell_multiplier_init"],
-            "device_multiplier": init_params["device_multiplier_init"],
-            "sigma": min_sigma * 5,
+            "media_multiplier": init_params["media_multiplier"],
+            "cell_multiplier": init_params["cell_multiplier"],
+            "device_multiplier": init_params["device_multiplier"],
+            "sigma": min_sigma * 3,
             "noise_var": 0.001,
             "defocus": 3.0,
             "halo_top_intensity": 1.0,
             "halo_bottom_intensity": 1.0,
             "halo_start": 0.0,
             "halo_end": 1.0,
-            "match_fourier": False,
-            "match_histogram": True,
-            "match_noise": False,
         }
         if self.optimise_psf:
             seed_params["NA"] = self.renderer.PSF.NA
@@ -464,6 +529,10 @@ class AutoOptimiser:
         if self.best_params is not None:
             render_params = {k: v for k, v in self.best_params.items()
                             if k not in ("NA", "wavelength", "condenser")}
+            # Add the matching flags (fixed during optimisation)
+            render_params.setdefault("match_fourier", False)
+            render_params.setdefault("match_histogram", False)
+            render_params.setdefault("match_noise", False)
             # Apply PSF params if they were optimised
             if self.optimise_psf:
                 psf_params = {f"_psf_{k}": v for k, v in self.best_params.items()
@@ -473,11 +542,11 @@ class AutoOptimiser:
 
             try:
                 synth, _ = self.renderer.render_synthetic(**render_params)
-                # Side-by-side
-                combined = np.hstack([
-                    self.real_images[0][:synth.shape[0], :synth.shape[1]],
-                    synth
-                ])
+                # Side-by-side — use normalised real image for comparison
+                real_crop = self._real_images_norm[0][
+                    :synth.shape[0], :synth.shape[1]
+                ]
+                combined = np.hstack([real_crop, synth])
                 ax.imshow(combined, cmap="Greys_r")
                 mid = synth.shape[1]
                 ax.axvline(mid, color="red", linewidth=1, linestyle="--")
@@ -547,11 +616,15 @@ class AutoOptimiser:
 
         render_keys = [
             "media_multiplier", "cell_multiplier", "device_multiplier",
-            "sigma", "noise_var", "defocus", "match_fourier",
-            "match_histogram", "match_noise", "halo_top_intensity",
+            "sigma", "noise_var", "defocus", "halo_top_intensity",
             "halo_bottom_intensity", "halo_start", "halo_end",
         ]
         kwargs = {k: self.best_params[k] for k in render_keys if k in self.best_params}
+        # Enable histogram matching for training data generation —
+        # this was disabled during optimisation to evaluate raw physics
+        kwargs["match_fourier"] = False
+        kwargs["match_histogram"] = True
+        kwargs["match_noise"] = False
         self.renderer.params = _ParamsProxy(kwargs)
 
     def get_best_params_summary(self):
