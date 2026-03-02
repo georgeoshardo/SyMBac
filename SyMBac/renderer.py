@@ -900,27 +900,31 @@ class Renderer:
                                                                                    defocus)
         return expanded_scene, expanded_scene_no_cells, expanded_mask
 
-    def optimise_synth_image(self, manual_update):
+    def optimise_synth_image(self, manual_update, initial_values=None):
 
         """
 
         :param bool manual_update: Whether to turn on manual updating. This is recommended if you have no/a slow GPU. Will display a button to allow manual updating of the image optimiser
+        :param dict initial_values: Optional dictionary of parameter names to initial slider values. Can be obtained from ``AutoOptimiser.best_params`` to use auto-optimised values as a starting point for manual fine-tuning.
         :return: ipywidget object for optimisation of synthetic data
         """
 
-        self.real_media_mean = self.real_resize[np.where(self.media_label.data)].mean()
-        self.real_cell_mean = self.real_resize[np.where(self.cell_label.data)].mean()
-        self.real_device_mean = self.real_resize[np.where(self.device_label.data)].mean()
-        self.real_means = np.array((self.real_media_mean, self.real_cell_mean, self.real_device_mean))
+        # If image_params was already set (e.g. by AutoOptimiser.apply_to_renderer),
+        # skip the napari label computation which requires select_intensity_napari().
+        if not hasattr(self, 'image_params') or self.image_params is None:
+            self.real_media_mean = self.real_resize[np.where(self.media_label.data)].mean()
+            self.real_cell_mean = self.real_resize[np.where(self.cell_label.data)].mean()
+            self.real_device_mean = self.real_resize[np.where(self.device_label.data)].mean()
+            self.real_means = np.array((self.real_media_mean, self.real_cell_mean, self.real_device_mean))
 
-        self.real_media_var = self.real_resize[np.where(self.media_label.data)].var()
-        self.real_cell_var = self.real_resize[np.where(self.cell_label.data)].var()
-        self.real_device_var = self.real_resize[np.where(self.device_label.data)].var()
-        self.real_vars = np.array((self.real_media_var, self.real_cell_var, self.real_device_var))
+            self.real_media_var = self.real_resize[np.where(self.media_label.data)].var()
+            self.real_cell_var = self.real_resize[np.where(self.cell_label.data)].var()
+            self.real_device_var = self.real_resize[np.where(self.device_label.data)].var()
+            self.real_vars = np.array((self.real_media_var, self.real_cell_var, self.real_device_var))
 
-        self.image_params = (
-        self.real_media_mean, self.real_cell_mean, self.real_device_mean, self.real_means, self.real_media_var,
-        self.real_cell_var, self.real_device_var, self.real_vars)
+            self.image_params = (
+            self.real_media_mean, self.real_cell_mean, self.real_device_mean, self.real_means, self.real_media_var,
+            self.real_cell_var, self.real_device_var, self.real_vars)
 
         self.params = interactive(
             self.generate_test_comparison,
@@ -936,7 +940,7 @@ class Renderer:
             match_noise=[True, False],
             debug_plot=fixed(True),
             defocus=(0, 20, 0.1),
-            halo_top_intensity = (0,1,0.1), 
+            halo_top_intensity = (0,1,0.1),
             halo_bottom_intensity = (0,1,0.1),
             halo_start = (0,1,0.11),
             halo_end = (0,1,0.1),
@@ -944,6 +948,16 @@ class Renderer:
             cell_texture_strength=(0.0, 1.0, 0.05),
             cell_texture_scale=(10, 200, 1),
         )
+
+        # Apply initial values to sliders (e.g. from auto-optimisation)
+        if initial_values is not None:
+            for child in self.params.children:
+                name = getattr(child, 'description', None)
+                if name and name in initial_values:
+                    try:
+                        child.value = type(child.value)(initial_values[name])
+                    except (ValueError, TypeError):
+                        pass
 
         return self.params
 

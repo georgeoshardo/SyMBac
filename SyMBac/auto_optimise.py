@@ -41,7 +41,7 @@ class AutoOptimiser:
 
     def __init__(self, renderer, real_images, n_trials=300, timeout=600,
                  metrics=None, weights=None, n_scenes_per_eval=3,
-                 optimise_psf=False, cells="dark"):
+                 optimise_psf=False, cells="dark", intensity_order=None):
         """
         Parameters
         ----------
@@ -67,6 +67,11 @@ class AutoOptimiser:
         cells : str
             "dark" if cells are darker than media in phase contrast,
             "light" otherwise. Used for auto-segmentation.
+        intensity_order : list of str, optional
+            Expected ordering of region intensities from brightest to
+            darkest. E.g., ["media", "cell", "device"] means media is
+            brightest and device (trench) is darkest. Trials that violate
+            this ordering are heavily penalised.
         """
         self.renderer = renderer
         self.real_images = real_images if isinstance(real_images, list) else [real_images]
@@ -75,6 +80,7 @@ class AutoOptimiser:
         self.n_scenes_per_eval = n_scenes_per_eval
         self.optimise_psf = optimise_psf
         self.cells = cells
+        self.intensity_order = intensity_order
 
         if metrics is None:
             self.metrics = ["emd", "psd", "glcm", "contrast", "moments"]
@@ -306,10 +312,13 @@ class AutoOptimiser:
                 self._real_images_norm[i % len(self._real_images_norm)]
             )
 
-        # Compute synth region stats for contrast ratio metric
+        # Compute synth region stats for contrast ratio metric or ordering constraint
         synth_regions = None
-        if "contrast" in self.metrics:
+        if "contrast" in self.metrics or self.intensity_order is not None:
             synth_regions = self._estimate_synth_regions(synth_images[0])
+
+        # Check intensity ordering constraint early
+        ordering_penalty = self._ordering_penalty(synth_regions)
 
         # Compute normalised weights: divide each metric by its scale so
         # all metrics contribute roughly equally regardless of raw magnitude
@@ -332,7 +341,7 @@ class AutoOptimiser:
         if not np.isfinite(loss):
             return float("inf")
 
-        return loss
+        return loss + ordering_penalty
 
     def _estimate_synth_regions(self, synth_image):
         """Estimate region mean intensities from a synthetic image."""
@@ -350,6 +359,33 @@ class AutoOptimiser:
             }
         except Exception:
             return {"media": 0.5, "cell": 0.3, "device": 0.1}
+
+    def _ordering_penalty(self, synth_regions):
+        """
+        Compute a penalty for violating the expected intensity ordering.
+
+        For each adjacent pair in ``self.intensity_order``, the first region
+        should be brighter than the second. When this is violated, a penalty
+        proportional to the magnitude of the violation is added. The penalty
+        is large enough (~100x) to dominate the composite loss and steer the
+        optimiser away from these parameter combos.
+
+        Returns 0.0 if the ordering is satisfied or ``intensity_order`` is
+        not set.
+        """
+        if self.intensity_order is None or synth_regions is None:
+            return 0.0
+
+        penalty = 0.0
+        for i in range(len(self.intensity_order) - 1):
+            brighter = self.intensity_order[i]
+            darker = self.intensity_order[i + 1]
+            diff = synth_regions[brighter] - synth_regions[darker]
+            if diff <= 0:
+                # Violated: the region that should be brighter is darker
+                # (or they are equal). Penalty scales with violation size.
+                penalty += 100.0 * (abs(diff) + 0.01)
+        return penalty
 
     def optimise(self, show_progress=True):
         """
