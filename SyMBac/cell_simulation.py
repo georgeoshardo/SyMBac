@@ -4,9 +4,7 @@ import numpy as np
 from scipy.stats import norm
 from SyMBac.cell import Cell
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
-from pymunk.pyglet_util import DrawOptions
 import pymunk
-import pyglet
 from tqdm.auto import tqdm
 
 #TODO work these functions into a class, possibly in simulation.py
@@ -95,6 +93,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     )
 
     if show_window:
+        import pyglet
+        from pymunk.pyglet_util import DrawOptions
 
         window = pyglet.window.Window(700, 700, "SyMBac", resizable=True)
         options = DrawOptions()
@@ -203,7 +203,7 @@ def wipe_space(space):
 
     :param pymunk.Space space:
     """
-    for body, poly in zip(space.bodies, space.shapes):
+    for body, poly in zip(list(space.bodies), list(space.shapes)):
         if body.body_type == 0:
             space.remove(body)
             space.remove(poly)
@@ -228,12 +228,12 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries, x, sim_
     cells : list(SyMBac.cell.Cell)
 
     """
-    for shape in space.shapes:
+    for shape in list(space.shapes):
         if shape.body.position.y < 0 or shape.body.position.y > ylim:
             space.remove(shape.body, shape)
             space.step(dt)
 
-    for cell in cells:
+    for cell in list(cells):
         historic_cells.append(cell)
         if cell.shape.body.position.y < 0 or cell.shape.body.position.y > ylim:
             cell.dead = True
@@ -261,7 +261,9 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries, x, sim_
             pickle.dump(cell_timeseries, f)
         with open(save_dir+"/space_timeseries.p", "wb") as f:
             pickle.dump(space, f)
-        pyglet.app.exit()
+        import sys
+        if 'pyglet' in sys.modules:
+            sys.modules['pyglet'].app.exit()
         return cells
     x[0] += 1
     return (cells)

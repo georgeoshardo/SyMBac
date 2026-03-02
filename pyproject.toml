@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SyMBac"
+version = "0.4.7"
+description = "A package for generating synthetic images of bacteria in phase contrast or fluorescence. Used for creating training data for machine learning segmentation and tracking algorithms."
+readme = "README.md"
+license = "GPL-2.0-only"
+authors = [
+    { name = "Georgeos Hardo", email = "gh464@cam.ac.uk" },
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "tifffile",
+    "scikit-image",
+    "matplotlib",
+    "tqdm",
+    "pandas",
+    "natsort",
+    "ipython",
+    "ipywidgets",
+    "joblib",
+    "scipy",
+    "napari[all]",
+    "pymunk",
+    "pyglet",
+    "matplotlib-scalebar",
+    "psfmodels",
+    "zarr",
+]
+
+[project.optional-dependencies]
+docs = [
+    "sphinx_automodapi",
+    "sphinx-autobuild",
+    "nbsphinx",
+    "sphinx_copybutton",
+    "sphinx_rtd_theme",
+    "pandoc",
+]
+
+[project.urls]
+Homepage = "https://github.com/georgeoshardo/SyMBac"
+
+[tool.setuptools.packages.find]
+include = ["SyMBac*"]
+
+[tool.setuptools.package-data]
+SyMBac = ["sample_images/*.tiff"]

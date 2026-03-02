@@ -179,6 +179,7 @@ class Simulation:
         :return:
         """
         
-        viewer = napari.view_image(np.array(self.OPL_scenes), name='OPL scenes')
+        viewer = napari.Viewer()
+        viewer.add_image(np.array(self.OPL_scenes), name='OPL scenes')
         viewer.add_labels(np.array(self.masks), name='Synthetic masks')
         napari.run()
