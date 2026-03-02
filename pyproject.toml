@@ -46,6 +46,7 @@ dependencies = [
     "torch>=2.10.0",
     "optuna>=4.0.0",
     "cmaes>=0.10.0",
+    "noise>=1.2.2",
 ]
 
 [project.optional-dependencies]

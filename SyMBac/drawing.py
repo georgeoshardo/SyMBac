@@ -2,6 +2,7 @@ import itertools
 import random
 
 import numpy as np
+import noise
 from matplotlib import pyplot as plt
 from numba import njit
 from skimage.measure import label
@@ -13,6 +14,53 @@ from PIL import Image
 
 div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
+
+
+def apply_cell_texture(OPL_cell, cell_id, scale=70.0, octaves=3, persistence=0.5, lacunarity=1.0, strength=0.5):
+    """
+    Apply temporally coherent Perlin noise texture to a rasterized OPL cell.
+
+    The noise is anchored to the cell center using coordinates relative to
+    (length/2, width/2), so as a cell grows the existing texture remains
+    stable and new texture is revealed at the poles.
+
+    Parameters
+    ----------
+    OPL_cell : np.ndarray
+        2D array of optical path length values for one cell.
+    cell_id : int
+        Unique cell ID, used to seed the Perlin noise base for per-cell consistency.
+    scale : float
+        Spatial scale of the noise pattern.
+    octaves : int
+        Number of Perlin noise octaves.
+    persistence : float
+        Amplitude scaling per octave.
+    lacunarity : float
+        Frequency scaling per octave.
+    strength : float
+        Modulation strength (0 = no texture, 1 = full modulation).
+
+    Returns
+    -------
+    np.ndarray
+        The textured OPL cell array.
+    """
+    length, width = OPL_cell.shape
+    i_idx = np.arange(length) - length / 2
+    j_idx = np.arange(width) - width / 2
+    world_i, world_j = np.meshgrid(i_idx, j_idx, indexing="ij")
+
+    texture = np.vectorize(noise.pnoise2)(
+        world_i / 2 / scale,
+        world_j / 2 / scale,
+        octaves=octaves,
+        persistence=persistence,
+        lacunarity=lacunarity,
+        base=int(cell_id) % 1024,
+    )
+    return OPL_cell * (1 + texture * strength)
+
 
 def generate_curve_props(cell_timeseries):
     """
@@ -84,7 +132,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
         ID, freq_modif, amp_modif, phase_modif = ID_props[ID_props[:, 0] == cell.ID][0]
         phase_mult = 20
         cell_properties.append([length, width, angle, centroid, freq_modif, amp_modif, phase_modif, phase_mult,
-                                separation, cell.mask_label])
+                                separation, cell.mask_label, cell.ID])
     return cell_properties
 
 def get_crop_bounds_2D(img, tol=0):
@@ -214,7 +262,7 @@ def convert_to_3D(cell):
     cells_3D[cells_3D.shape[0]//2:,:, :] = cells_3D[:cells_3D.shape[0]//2,:, :][::-1]
     return cells_3D
 
-def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True):
+def draw_scene(cell_properties, do_transformation, space_size, offset, label_masks, pinching=True, cell_texture=False):
     """
     Draws a raw scene (no trench) of cells, and returns accompanying masks for training data.
 
@@ -254,11 +302,15 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
         space_masks = space_masks.astype(bool)
 
     for properties in cell_properties:
-        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label = properties
+        length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label, cell_id = properties
         position = np.array(position)
         x = np.array(position).astype(int)[0] + offset
         y = np.array(position).astype(int)[1] + offset
         OPL_cell = raster_cell(length=length, width=width, separation=separation, pinching=pinching)
+
+        if cell_texture:
+            texture_params = cell_texture if isinstance(cell_texture, dict) else {}
+            OPL_cell = apply_cell_texture(OPL_cell, cell_id, **texture_params)
 
         if do_transformation:
             OPL_cell_2 = np.zeros((OPL_cell.shape[0], int(OPL_cell.shape[1] * 2)))

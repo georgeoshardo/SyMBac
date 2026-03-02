@@ -3,7 +3,7 @@ from glob import glob
 import numpy as np
 import psfmodels as psfm
 
-from SyMBac.drawing import make_images_same_shape, perc_diff
+from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene
 import warnings
 import napari
 import os
@@ -460,7 +460,7 @@ class Renderer:
 
     def generate_test_comparison(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
-                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_top_intensity = 1, halo_bottom_intensity = 1, halo_start = 0, halo_end = 1, random_real_image = None):
+                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_top_intensity = 1, halo_bottom_intensity = 1, halo_start = 0, halo_end = 1, random_real_image = None, cell_texture_strength=0.0, cell_texture_scale=70.0):
         """
         Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image.
 
@@ -521,9 +521,23 @@ class Renderer:
             The final image's accompanying masks
         """
 
+        if cell_texture_strength > 0:
+            texture_params = {"strength": cell_texture_strength, "scale": cell_texture_scale}
+            scene, mask = draw_scene(
+                self.simulation.cell_timeseries_properties[scene_no],
+                self.simulation._do_transformation,
+                self.simulation._space_size,
+                self.simulation.offset,
+                self.simulation._label_masks,
+                cell_texture=texture_params,
+            )
+        else:
+            scene = self.simulation.OPL_scenes[scene_no]
+            mask = self.simulation.masks[scene_no]
+
         expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
-            scene=self.simulation.OPL_scenes[scene_no],
-            mask=self.simulation.masks[scene_no],
+            scene=scene,
+            mask=mask,
             media_multiplier=media_multiplier,
             cell_multiplier=cell_multiplier,
             device_multiplier=device_multiplier,
@@ -927,6 +941,8 @@ class Renderer:
             halo_start = (0,1,0.11),
             halo_end = (0,1,0.1),
             random_real_image=fixed(None),
+            cell_texture_strength=(0.0, 1.0, 0.05),
+            cell_texture_scale=(10, 200, 1),
         )
 
         return self.params
@@ -987,7 +1003,9 @@ class Renderer:
                 halo_bottom_intensity = self.params.kwargs["halo_bottom_intensity"],
                 halo_start = self.params.kwargs["halo_start"],
                 halo_end = self.params.kwargs["halo_end"],
-                random_real_image = random_real_image
+                random_real_image = random_real_image,
+                cell_texture_strength=self.params.kwargs["cell_texture_strength"],
+                cell_texture_scale=self.params.kwargs["cell_texture_scale"],
             )
 
             syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
