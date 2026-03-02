@@ -55,6 +55,62 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         Contains the rigid body physics objects which are the cells.
     """
 
+    if show_window:
+        return _run_simulation_in_subprocess(
+            trench_length=trench_length, trench_width=trench_width,
+            cell_max_length=cell_max_length, cell_width=cell_width,
+            sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
+            phys_iters=phys_iters, max_length_var=max_length_var,
+            width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+            lysis_p=lysis_p,
+        )
+
+    return _run_simulation_impl(
+        trench_length=trench_length, trench_width=trench_width,
+        cell_max_length=cell_max_length, cell_width=cell_width,
+        sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
+        phys_iters=phys_iters, max_length_var=max_length_var,
+        width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+        lysis_p=lysis_p, show_window=False,
+    )
+
+
+def _run_simulation_in_subprocess(**kwargs):
+    """Run the simulation with show_window=True in a subprocess.
+
+    Pyglet initialises macOS Cocoa/OpenGL state that is incompatible with Qt
+    (used by napari). Running in a subprocess keeps the main process clean.
+    """
+    import subprocess, sys, tempfile, os
+
+    result_file = os.path.join(kwargs['save_dir'], '_sim_result.pkl')
+    # Build a self-contained script for the subprocess
+    script = (
+        "import pickle, sys\n"
+        "params = pickle.loads({params!r})\n"
+        "from SyMBac.cell_simulation import _run_simulation_impl\n"
+        "result = _run_simulation_impl(**params, show_window=True)\n"
+        "with open({result_file!r}, 'wb') as f:\n"
+        "    pickle.dump(result, f)\n"
+    ).format(params=pickle.dumps(kwargs), result_file=result_file)
+
+    proc = subprocess.run(
+        [sys.executable, '-c', script],
+        capture_output=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"Simulation subprocess failed with exit code {proc.returncode}")
+
+    with open(result_file, 'rb') as f:
+        result = pickle.load(f)
+    os.remove(result_file)
+    return result
+
+
+def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
+                         phys_iters, max_length_var, width_var, save_dir, resize_amount, lysis_p=0, show_window=False):
+    """Core simulation logic."""
+
     space = create_space()
     space.gravity = 0, gravity  # arbitrary units, negative is toward trench pole
     #space.iterations = 1000
