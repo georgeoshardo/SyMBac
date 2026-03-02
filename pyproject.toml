@@ -43,10 +43,11 @@ dependencies = [
     "matplotlib-scalebar",
     "psfmodels",
     "zarr",
+    "torch",
 ]
 
 [project.optional-dependencies]
-gpu = ["torch"]
+cupy = ["cupy-cuda12x"]
 docs = [
     "sphinx_automodapi",
     "sphinx-autobuild",

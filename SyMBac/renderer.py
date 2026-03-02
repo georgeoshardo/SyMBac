@@ -650,7 +650,7 @@ class Renderer:
                                                                                y_border_expansion_coefficient,
                                                                                x_border_expansion_coefficient,
                                                                                defocus)
-        if expanded_scene is None:
+        if expanded_scene is None or expanded_scene.size == 0:
             self.simulation.main_segments = self.simulation.main_segments.reindex(
                 index=self.simulation.main_segments.index[::-1])
             expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(scene, mask,
