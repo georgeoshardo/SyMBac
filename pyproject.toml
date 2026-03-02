@@ -43,6 +43,7 @@ dependencies = [
     "matplotlib-scalebar",
     "psfmodels",
     "zarr",
+    "noise",
 ]
 
 [project.optional-dependencies]

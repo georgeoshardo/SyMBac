@@ -164,6 +164,11 @@ class Simulation:
 
         space_size = get_space_size(self.cell_timeseries_properties)
 
+        # Store draw params so renderer can re-call draw_scene() with texture
+        self._space_size = space_size
+        self._do_transformation = do_transformation
+        self._label_masks = label_masks
+
         scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
         cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
             self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
