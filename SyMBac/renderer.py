@@ -26,76 +26,84 @@ from SyMBac.pySHINE import cart2pol, sfMatch, lumMatch
 from skimage.filters import threshold_multiotsu
 import random
 
-if importlib.util.find_spec("cupy") is None:
-    from scipy.signal import convolve2d as cuconvolve
+_CONV_BACKEND = "fftconvolve"  # default (always available)
 
-    njobs = -1
-    warnings.warn("Could not load CuPy for SyMBac, are you using a GPU? Defaulting to CPU convolution.")
+# Try CuPy first (NVIDIA)
+if importlib.util.find_spec("cupy") is not None:
+    try:
+        import cupy as cp
+        from cupyx.scipy.ndimage import convolve as _cupy_convolve
+        _CONV_BACKEND = "cupy"
+    except ImportError:
+        pass
 
+# Try PyTorch (Apple Silicon MPS or NVIDIA CUDA)
+if _CONV_BACKEND != "cupy" and importlib.util.find_spec("torch") is not None:
+    try:
+        import torch as _torch
+        if hasattr(_torch.backends, "mps") and _torch.backends.mps.is_available():
+            _CONV_BACKEND = "torch_mps"
+        elif _torch.cuda.is_available():
+            _CONV_BACKEND = "torch_cuda"
+    except (ImportError, AttributeError):
+        pass
 
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size.
-
-        Parameters
-        ----------
-        image : numpy.ndarray
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typically 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
-
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
-
-        output = cuconvolve(image, kernel, mode="same")
-        # output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
-
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
-else:
-    import cupy as cp
-    from cupyx.scipy.ndimage import convolve as cuconvolve
-
-    njobs = 1
+if _CONV_BACKEND == "fftconvolve":
+    from scipy.signal import fftconvolve as _fftconvolve
 
 
-    def convolve_rescale(image, kernel, rescale_factor, rescale_int):
-        """
-        Convolves an image with a kernel, and rescales it to the correct size.
+def _torch_convolve(image, kernel):
+    """Convolve *image* with *kernel* using PyTorch (MPS or CUDA)."""
+    device = "mps" if _CONV_BACKEND == "torch_mps" else "cuda"
+    img_t = _torch.from_numpy(image.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
+    # Flip kernel for true convolution (conv2d does cross-correlation)
+    kern_t = _torch.from_numpy(kernel.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
+    kern_t = _torch.flip(kern_t, [2, 3])
+    pad_h, pad_w = kernel.shape[0] // 2, kernel.shape[1] // 2
+    img_t = _torch.nn.functional.pad(img_t, (pad_w, pad_w, pad_h, pad_h), mode="constant", value=0)
+    out = _torch.nn.functional.conv2d(img_t, kern_t)
+    return out.squeeze().cpu().numpy()
 
-        Parameters
-        ----------
-        image : 2D numpy array
-            The image
-        kernel : 2D numpy array
-            The kernel
-        rescale_factor : int
-            Typicall 1/resize_amount. So 1/3 will scale the image down by a factor of 3. We do this because we render the image and kernel at high resolution, so that we can do the convolution at high resolution.
-        rescale_int : bool
-            If True, rescale the intensities between 0 and 1 and return a float32 numpy array of the convolved downscaled image.
 
-        Returns
-        -------
-        outupt : 2D numpy array
-            The output of the convolution rescale operation
-        """
+def _convolve_2d(image, kernel):
+    """Backend-agnostic 2D convolution (no rescale)."""
+    if _CONV_BACKEND == "cupy":
+        return _cupy_convolve(cp.array(image), cp.array(kernel), mode="constant").get()
+    elif _CONV_BACKEND.startswith("torch"):
+        return _torch_convolve(image, kernel)
+    else:
+        return _fftconvolve(image, kernel, mode="same")
 
-        output = cuconvolve(cp.array(image), cp.array(kernel), mode="constant")
-        output = output.get()
-        output = rescale(output, rescale_factor, anti_aliasing=False)
 
-        if rescale_int:
-            output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
-        return output
+def convolve_rescale(image, kernel, rescale_factor, rescale_int):
+    """
+    Convolves an image with a kernel, and rescales it to the correct size.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        The image
+    kernel : 2D numpy array
+        The kernel
+    rescale_factor : int
+        Typically 1/resize_amount. So 1/3 will scale the image down by a
+        factor of 3. We do this because we render the image and kernel at
+        high resolution, so that we can do the convolution at high resolution.
+    rescale_int : bool
+        If True, rescale the intensities between 0 and 1 and return a
+        float32 numpy array of the convolved downscaled image.
+
+    Returns
+    -------
+    output : 2D numpy array
+        The output of the convolution rescale operation
+    """
+    output = _convolve_2d(image, kernel)
+    output = rescale(output, rescale_factor, anti_aliasing=False)
+
+    if rescale_int:
+        output = rescale_intensity(output.astype(np.float32), out_range=(0, 1))
+    return output
 
 
 class Renderer:
@@ -345,7 +353,7 @@ class Renderer:
             psf = psfm.make_psf(volume_shape[2], radius * 2, dxy=scale, dz=scale, pz=0, ni=n, wvl=λ, NA=NA)
             convolved = np.zeros(cells_3D.shape)
             for x in range(len(cells_3D)):
-                temp_conv = cuconvolve(cp.array(cells_3D[x]), cp.array(psf[x])).get()
+                temp_conv = _convolve_2d(cells_3D[x], psf[x])
                 convolved[x] = temp_conv
             convolved = convolved.sum(axis=0)
             convolved = rescale(convolved, 1 / self.simulation.resize_amount, anti_aliasing=False)

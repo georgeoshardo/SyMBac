@@ -46,6 +46,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = ["torch"]
 docs = [
     "sphinx_automodapi",
     "sphinx-autobuild",
