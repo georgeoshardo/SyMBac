@@ -91,6 +91,8 @@ class Cell:
         self.max_length = max_length
         self.max_length_mean = max_length_mean
         self.max_length_var = max_length_var
+        self.N_divisions = N_divisions
+        self.just_divided = just_divided
         self.body, self.shape = self.create_pm_cell()
         self.angle = self.body.angle
         self.ID = np.random.randint(0,100_000_000) #TODO delete this (so bad)
@@ -100,8 +102,6 @@ class Cell:
         self.pinching_sep = pinching_sep
         self.mask_label = mask_label
         self.generation = generation
-        self.N_divisions = N_divisions
-        self.just_divided = just_divided
         self.mother_mask_label = mother_mask_label
         self.dead = dead
 
@@ -152,14 +152,14 @@ class Cell:
             #self.space.add(cell_body, cell_shape)
             daughter_details = {
                 "length": daughter_length,
-                "width": np.random.normal(self.width_mean,self.width_var),
+                "width": max(0.1, np.random.normal(self.width_mean,self.width_var)),
                 "resolution": self.resolution,
                 "position": [self.position[0] + self.length/2 *  np.cos(self.angle), self.position[1] + self.length/2 *  np.sin(self.angle)],
                 "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
                 "growth_rate_constant": self.growth_rate_constant,
-                "max_length": np.random.normal(self.max_length_mean,self.max_length_var),
+                "max_length": max(daughter_length + 0.1, np.random.normal(self.max_length_mean,self.max_length_var)),
                 "max_length_mean": self.max_length_mean,
                 "max_length_var": self.max_length_var,
                 "width_var": self.width_var,
