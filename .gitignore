@@ -149,6 +149,9 @@ docs/source/examples/training_data/
 # vscode stuff
 .vscode
 
+# worktrees
+.worktrees/
+
 #
 for_reviewers/
 
