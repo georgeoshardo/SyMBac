@@ -45,6 +45,7 @@ dependencies = [
     "zarr>=3.1.5",
     "torch>=2.10.0",
     "optuna>=4.0.0",
+    "cmaes>=0.10.0",
 ]
 
 [project.optional-dependencies]

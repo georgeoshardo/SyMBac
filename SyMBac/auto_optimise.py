@@ -354,15 +354,32 @@ class AutoOptimiser:
             pbar.close()
 
         # Phase 2: CMA-ES refinement (continuous params only)
-        if cma_trials > 0 and len(self.study.trials) > 0:
+        # CMA-ES handles continuous params; categorical params fall back to
+        # independent (random) sampling. We fix categoricals at their best
+        # values from Phase 1 by using a partial fixed search space.
+        completed_trials = [
+            t for t in self.study.trials
+            if t.state == optuna.trial.TrialState.COMPLETE
+        ]
+        if cma_trials > 0 and len(completed_trials) >= 2:
             best_trial = self.study.best_trial
+
+            # Fix categorical params at best values, refine only continuous
+            best_categoricals = {
+                k: v for k, v in best_trial.params.items()
+                if k in ("match_fourier", "match_histogram", "match_noise")
+                or (self.optimise_psf and k == "condenser")
+            }
+
             cma_sampler = optuna.samplers.CmaEsSampler(
-                seed=42,
-                source_trials=self.study.trials,
+                seed=42, warn_independent_sampling=False
             )
             cma_study = optuna.create_study(
                 direction="minimize", sampler=cma_sampler
             )
+
+            # Seed CMA-ES with the best params from TPE
+            cma_study.enqueue_trial(best_trial.params)
 
             if show_progress:
                 pbar2 = tqdm(total=cma_trials, desc="Phase 2: CMA-ES refinement")
