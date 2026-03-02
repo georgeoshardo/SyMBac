@@ -231,7 +231,205 @@ class Renderer:
         self.cell_label = viewer.add_labels(thresh_cells, name="Cell")
         self.device_label = viewer.add_labels(thresh_device, name="Device")
 
+    def auto_segment_regions(self, image=None, classes=3, cells="dark"):
+        """
+        Automatically segment an image into media, cell, and device regions
+        using multi-Otsu thresholding. Returns region masks without requiring
+        napari.
 
+        Parameters
+        ----------
+        image : 2D numpy array, optional
+            Image to segment. Defaults to self.real_resize.
+        classes : int
+            Number of Otsu classes.
+        cells : str
+            "dark" if cells are darker than media, "light" otherwise.
+
+        Returns
+        -------
+        dict
+            {"media": mask, "cell": mask, "device": mask} — boolean masks.
+        """
+        if image is None:
+            image = self.real_resize
+        thresholds = threshold_multiotsu(image, classes=classes)
+        regions = np.digitize(image, bins=thresholds)
+        if cells == "dark":
+            return {
+                "media": regions == 2,
+                "cell": regions == 1,
+                "device": regions == 0,
+            }
+        else:
+            return {
+                "media": regions == 0,
+                "cell": regions == 1,
+                "device": regions == 2,
+            }
+
+    def render_synthetic(self, media_multiplier=75, cell_multiplier=1.7,
+                         device_multiplier=29, sigma=8.85, scene_no=-1,
+                         match_fourier=False, match_histogram=True,
+                         match_noise=False, noise_var=0.001, defocus=3.0,
+                         halo_top_intensity=1, halo_bottom_intensity=1,
+                         halo_start=0, halo_end=1, random_real_image=None):
+        """
+        Render a single synthetic image with the given parameters.
+
+        This is a clean rendering path without side effects — no error list
+        appending, no debug plots, no matplotlib. Suitable for automated
+        optimization loops.
+
+        Parameters
+        ----------
+        media_multiplier : float
+            Intensity multiplier for media region.
+        cell_multiplier : float
+            Intensity multiplier for cell OPL.
+        device_multiplier : float
+            Intensity multiplier for device walls.
+        sigma : float
+            PSF apodisation sigma.
+        scene_no : int
+            Which simulation frame to render.
+        match_fourier : bool
+            Match rotational Fourier spectrum to real image.
+        match_histogram : bool
+            Match intensity histogram to real image.
+        match_noise : bool
+            Apply histogram match after noise addition.
+        noise_var : float
+            Gaussian noise variance (ad-hoc mode).
+        defocus : float
+            Defocus blur sigma applied to PSF kernel.
+        halo_top_intensity : float
+            Halo gradient top intensity.
+        halo_bottom_intensity : float
+            Halo gradient bottom intensity.
+        halo_start : float
+            Fractional position where halo ramp begins.
+        halo_end : float
+            Fractional position where halo ramp ends.
+        random_real_image : 2D numpy array, optional
+            Alternative real image for Fourier matching.
+
+        Returns
+        -------
+        noisy_img : 2D numpy array
+            The rendered synthetic image (float32, 0-1).
+        mask : 2D numpy array
+            Corresponding segmentation mask.
+        """
+        expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
+            scene=self.simulation.OPL_scenes[scene_no],
+            mask=self.simulation.masks[scene_no],
+            media_multiplier=media_multiplier,
+            cell_multiplier=cell_multiplier,
+            device_multiplier=device_multiplier,
+            x_border_expansion_coefficient=self.x_border_expansion_coefficient,
+            y_border_expansion_coefficient=self.y_border_expansion_coefficient,
+            defocus=defocus
+        )
+
+        # Halo simulation
+        def halo_line_profile(length, halo_top, halo_bottom, h_start, h_end):
+            h_start = int(h_start * length)
+            h_end = int(h_end * length)
+            part_1 = np.linspace(halo_bottom, halo_bottom, h_start)
+            part_2 = np.linspace(halo_bottom, halo_top, h_end - h_start)
+            part_3 = np.linspace(halo_top, halo_top, length - h_end)
+            return np.concatenate([part_1, part_2, part_3])[:, None]
+
+        halo_array = halo_line_profile(
+            self.real_image.shape[0] * self.simulation.resize_amount,
+            halo_top_intensity, halo_bottom_intensity, halo_start, halo_end
+        )
+        expanded_scene[expanded_scene.shape[0] - len(halo_array):, :] *= halo_array
+        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - len(halo_array):, :] *= halo_array
+
+        # PSF regeneration if phase contrast
+        if self.PSF.mode == "phase contrast":
+            self.PSF = PSF_generator(
+                radius=self.PSF.radius, wavelength=self.PSF.wavelength,
+                NA=self.PSF.NA, n=self.PSF.n,
+                resize_amount=self.simulation.resize_amount,
+                pix_mic_conv=self.simulation.pix_mic_conv,
+                apo_sigma=sigma, mode="phase contrast",
+                condenser=self.PSF.condenser
+            )
+            self.PSF.calculate_PSF()
+
+        # Convolution
+        kernel = self.PSF.kernel
+        if defocus > 0:
+            kernel = gaussian_filter(kernel, defocus, mode="reflect")
+        convolved = convolve_rescale(
+            expanded_scene, kernel,
+            1 / self.simulation.resize_amount, rescale_int=True
+        )
+
+        real_resize, expanded_resized = make_images_same_shape(
+            self.real_image, convolved, rescale_int=True
+        )
+
+        # Fourier / histogram matching
+        if random_real_image is not None:
+            fftim1 = fft.fftshift(fft.fft2(random_real_image))
+        else:
+            fftim1 = fft.fftshift(fft.fft2(real_resize))
+        angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
+
+        matched = expanded_resized
+        if match_fourier:
+            matched = sfMatch([real_resize, matched], tarmag=mags)[1]
+            matched = lumMatch(
+                [real_resize, matched], None,
+                [np.mean(real_resize), np.std(real_resize)]
+            )[1]
+        if match_histogram:
+            matched = match_histograms(matched, real_resize)
+
+        # Camera noise
+        if self.camera:
+            baseline = self.camera.baseline
+            sensitivity = self.camera.sensitivity
+            dark_noise = self.camera.dark_noise
+            rng = np.random.default_rng()
+            matched = matched / (matched.max() / self.real_image.max()) / sensitivity
+            if match_fourier:
+                matched += abs(matched.min())
+            matched = rng.poisson(matched)
+            noisy_img = matched + rng.normal(
+                loc=baseline, scale=dark_noise, size=matched.shape
+            )
+        else:
+            noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
+            noisy_img = random_noise(
+                rescale_intensity(noisy_img), mode="gaussian",
+                mean=0, var=noise_var, clip=False
+            )
+
+        if match_noise:
+            noisy_img = match_histograms(noisy_img, real_resize)
+
+        noisy_img = rescale_intensity(noisy_img.astype(np.float32), out_range=(0, 1))
+
+        # Mask processing
+        expanded_mask_resized = rescale(
+            expanded_mask, 1 / self.simulation.resize_amount,
+            anti_aliasing=False, preserve_range=True, order=0
+        )
+        if len(np.unique(expanded_mask_resized)) > 2:
+            _, mask = make_images_same_shape(
+                self.real_image, expanded_mask_resized, rescale_int=False
+            )
+        else:
+            _, mask = make_images_same_shape(
+                self.real_image, expanded_mask_resized, rescale_int=True
+            )
+
+        return noisy_img, mask.astype(int)
 
     def generate_test_comparison(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
