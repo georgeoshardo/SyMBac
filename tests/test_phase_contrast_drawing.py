@@ -43,7 +43,7 @@ class TestExample(unittest.TestCase):
             pix_mic_conv=pix_mic_conv,
             gravity=0,
             phys_iters=20,
-            max_length_var=3,
+            max_length_std=3,
             width_var=0.3,
             save_dir="/tmp/"
         )  # growth phase

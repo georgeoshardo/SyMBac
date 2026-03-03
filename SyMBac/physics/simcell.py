@@ -54,16 +54,20 @@ class SimCell:
         self.num_segments_at_division_start = 0 # NOTE:This is NOT the birth length, this is a variable to keep track of how much growth has occurred during septum formation and division
         self.division_bias = 0
 
-        variation = self.config.BASE_MAX_LENGTH * self.config.MAX_LENGTH_VARIATION
-        random_max_len = np.random.uniform(
-            self.config.BASE_MAX_LENGTH - variation, self.config.BASE_MAX_LENGTH + variation
-        ) # TODO: look at how to accurately model this distribution
-
-        self.max_length = max(self.config.MIN_LENGTH_AFTER_DIVISION * 2, int(random_max_len))
+        self.max_length = self.sample_max_length()
 
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
         self.num_divisions = 0
+
+    def sample_max_length(self) -> float:
+        sampled_max_length = np.random.normal(
+            self.config.BASE_MAX_LENGTH, self.config.MAX_LENGTH_STD
+        )
+        min_length = max(
+            1.0, self.config.MIN_LENGTH_AFTER_DIVISION * self.config.JOINT_DISTANCE * 2
+        )
+        return max(min_length, float(sampled_max_length))
 
     @property
     def length(self):
@@ -107,6 +111,5 @@ class SimCell:
         Setter for division site, ensures it is within the valid range.
         """
         self._division_site = value
-
 
 

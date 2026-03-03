@@ -26,7 +26,7 @@ class Simulation:
             pix_mic_conv = 0.065,
             gravity=0,
             phys_iters=15,
-            max_length_var = 0.,
+            max_length_std = 0.,
             width_var = 0.,
             lysis_p = 0.,
             save_dir="/tmp/",
@@ -38,7 +38,7 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_std, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
         """
         Initialising a Simulation object
 
@@ -61,8 +61,8 @@ class Simulation:
             Number of physics iterations per simulation frame. Increase to resolve collisions if cells are falling into one
             another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off
             each other very hard). 20 is a good starting point
-        max_length_var : float
-            Variance of the maximum cell length
+        max_length_std : float
+            Standard deviation of the maximum cell length.
         width_var : float
             Variance of the maximum cell width
         save_dir : str
@@ -80,7 +80,7 @@ class Simulation:
         self.trench_length = trench_length
         self.trench_width = trench_width
         self.cell_max_length = cell_max_length
-        self.max_length_var = max_length_var
+        self.max_length_std = max_length_std
         self.cell_width = cell_width
         self.width_var = width_var
         self.lysis_p = lysis_p
@@ -130,11 +130,7 @@ class Simulation:
         JOINT_DISTANCE = SEGMENT_RADIUS / GRANULARITY
         SEED_CELL_SEGMENTS = max(3, int(self.cell_max_length * 0.5 * scale_factor / JOINT_DISTANCE))
 
-        # Convert absolute variance to fractional
-        if self.cell_max_length > 0 and self.max_length_var > 0:
-            MAX_LENGTH_VARIATION = self.max_length_var / self.cell_max_length
-        else:
-            MAX_LENGTH_VARIATION = 0.0
+        MAX_LENGTH_STD = max(0.0, self.max_length_std * scale_factor)
 
         GROWTH_RATE = 0.5 * SEGMENT_RADIUS
 
@@ -148,7 +144,7 @@ class Simulation:
             SEGMENT_MASS=1.0,
             GROWTH_RATE=GROWTH_RATE,
             MIN_LENGTH_AFTER_DIVISION=max(3, GRANULARITY),
-            MAX_LENGTH_VARIATION=MAX_LENGTH_VARIATION,
+            MAX_LENGTH_STD=MAX_LENGTH_STD,
             BASE_MAX_LENGTH=BASE_MAX_LENGTH,
             SEED_CELL_SEGMENTS=SEED_CELL_SEGMENTS,
             PIVOT_JOINT_STIFFNESS=5_000 * radius_scale,
@@ -214,6 +210,11 @@ class Simulation:
             just_divided_this_frame.add(daughter.group_id)
             just_divided_this_frame.add(mother.group_id)
 
+        def resample_max_lengths_after_division(mother, daughter):
+            # Keep each generation centered on BASE_MAX_LENGTH rather than inheriting drift.
+            mother.max_length = mother.sample_max_length()
+            daughter.max_length = daughter.sample_max_length()
+
         post_step_hooks = [remove_out_of_bounds]
         # Lysis is handled once per output frame (not per sub-step) to keep
         # the effective probability independent of the substeps setting.
@@ -221,12 +222,6 @@ class Simulation:
         def cell_growth_rate_updater(cell):
             compression_ratio = cell.physics_representation.get_compression_ratio()
             cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio ** 4
-            variation = cell.config.BASE_MAX_LENGTH * cell.config.MAX_LENGTH_VARIATION
-            random_max_len = np.random.uniform(
-                cell.config.BASE_MAX_LENGTH - variation,
-                cell.config.BASE_MAX_LENGTH + variation
-            ) * np.sqrt(compression_ratio)
-            cell.max_length = max(cell.length, int(random_max_len))
 
         sim = Simulator(
             physics_config=physics_config,
@@ -234,7 +229,7 @@ class Simulation:
             post_init_hooks=[create_trench],
             pre_cell_grow_hooks=[cell_growth_rate_updater],
             post_step_hooks=post_step_hooks,
-            post_division_hooks=[track_lineage, mark_just_divided],
+            post_division_hooks=[resample_max_lengths_after_division, track_lineage, mark_just_divided],
         )
 
         # Initialize lineage for seed cell(s)

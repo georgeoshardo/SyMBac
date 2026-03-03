@@ -22,7 +22,7 @@ class Cell:
         growth_rate_constant,
         max_length,
         max_length_mean,
-        max_length_var,
+        max_length_std,
         width_var,
         width_mean,
         mother = None,
@@ -64,8 +64,8 @@ class Cell:
             The maximum length a cell reaches before dividing
         max_length_mean : float
             should be the same as max_length for reasons unless doing advanced simulations
-        max_length_var : float
-            The variance defining a normal distribution around max_length
+        max_length_std : float
+            The standard deviation defining a normal distribution around max_length
         width_var : float
             The variance defining a normal distribution around width
         width_mean : float
@@ -90,7 +90,7 @@ class Cell:
         self.space = space
         self.max_length = max_length
         self.max_length_mean = max_length_mean
-        self.max_length_var = max_length_var
+        self.max_length_std = max_length_std
         self.N_divisions = N_divisions
         self.just_divided = just_divided
         self.body, self.shape = self.create_pm_cell()
@@ -159,9 +159,9 @@ class Cell:
                 "space": self.space,
                 "dt": self.dt,
                 "growth_rate_constant": self.growth_rate_constant,
-                "max_length": max(daughter_length + 0.1, np.random.normal(self.max_length_mean,self.max_length_var)),
+                "max_length": max(daughter_length + 0.1, np.random.normal(self.max_length_mean,self.max_length_std)),
                 "max_length_mean": self.max_length_mean,
-                "max_length_var": self.max_length_var,
+                "max_length_std": self.max_length_std,
                 "width_var": self.width_var,
                 "width_mean": self.width_mean,
                 "lysis_p": self.lysis_p,

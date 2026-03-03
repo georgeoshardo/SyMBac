@@ -224,13 +224,6 @@ class Simulator:
             >>> def cell_growth_rate_updater(cell: SimCell) -> None:
             ...     compression_ratio = cell.physics_representation.get_compression_ratio()
             ...     cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio**4
-            ...
-            ...     variation = cell.config.BASE_MAX_LENGTH * cell.config.MAX_LENGTH_VARIATION
-            ...     random_max_len = np.random.uniform(
-            ...     cell.config.BASE_MAX_LENGTH - variation, cell.config.BASE_MAX_LENGTH + variation
-            ...     ) * np.sqrt(compression_ratio)
-            ...
-            ...     cell.max_length = max(cell.length, int(random_max_len))
         """
         self._validate_hook_signature(hook, expected_params=1)
         self.pre_cell_grow_hooks.append(hook)

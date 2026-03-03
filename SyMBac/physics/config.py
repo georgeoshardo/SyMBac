@@ -23,8 +23,8 @@ class CellConfig:
         GROWTH_RATE: The rate at which the cell elongates per unit of time.
         MIN_LENGTH_AFTER_DIVISION: The minimum number of segments a cell
             must have after division. Prevents cells from becoming too small.
-        MAX_LENGTH_VARIATION: The relative variation in the maximum length a
-            cell can reach before division.
+        MAX_LENGTH_STD: The standard deviation used when sampling the
+            maximum length a cell can reach before division.
         BASE_MAX_LENGTH: The target length (continuous length, NOT number of segments) a cell
             reaches before it is considered ready for division.
         SEED_CELL_SEGMENTS: The initial number of segments for the first cell
@@ -67,7 +67,7 @@ class CellConfig:
     SEGMENT_MASS: float = 1.0
     GROWTH_RATE: float = 5.0
     MIN_LENGTH_AFTER_DIVISION: int = 10
-    MAX_LENGTH_VARIATION: float = 0.2
+    MAX_LENGTH_STD: float = 0.0
     BASE_MAX_LENGTH: float = 40
     SEED_CELL_SEGMENTS: int = 15
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
