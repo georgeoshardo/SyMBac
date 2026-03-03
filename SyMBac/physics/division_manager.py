@@ -29,9 +29,10 @@ class DivisionManager:
             return False
 
         split_index = self.get_split_index(cell)
-        current_length = cell.length
-        if current_length/2 < self.config.MIN_LENGTH_AFTER_DIVISION or \
-                (cell.physics_representation.num_segments - split_index) < self.config.MIN_LENGTH_AFTER_DIVISION:
+        mother_segments = split_index
+        daughter_segments = cell.physics_representation.num_segments - split_index
+        if mother_segments < self.config.MIN_LENGTH_AFTER_DIVISION or \
+                daughter_segments < self.config.MIN_LENGTH_AFTER_DIVISION:
 
             return False
         return True
@@ -85,8 +86,16 @@ class DivisionManager:
         This is a placeholder for actual septum formation logic.
         """
         assert cell.physics_representation._mother_septum_segments is not None and cell.physics_representation._daughter_septum_segments is not None
-        for i in range(self.config.NUM_SEPTUM_SEGMENTS):
-            falloff = (self.config.NUM_SEPTUM_SEGMENTS - i) / self.config.NUM_SEPTUM_SEGMENTS
+        septum_segment_count = min(
+            self.config.NUM_SEPTUM_SEGMENTS,
+            len(cell.physics_representation._mother_septum_segments),
+            len(cell.physics_representation._daughter_septum_segments),
+        )
+        if septum_segment_count == 0:
+            return
+
+        for i in range(septum_segment_count):
+            falloff = (septum_segment_count - i) / septum_segment_count
             shrinkage = (self.config.SEGMENT_RADIUS - self.config.MIN_SEPTUM_RADIUS) * cell.septum_progress * falloff
             new_radius = self.config.SEGMENT_RADIUS - shrinkage
 
@@ -102,7 +111,12 @@ class DivisionManager:
         # Restore original radius after split
         assert cell.physics_representation._mother_septum_segments is not None
         assert cell.physics_representation._daughter_septum_segments is not None
-        for i in range(self.config.NUM_SEPTUM_SEGMENTS):
+        septum_segment_count = min(
+            self.config.NUM_SEPTUM_SEGMENTS,
+            len(cell.physics_representation._mother_septum_segments),
+            len(cell.physics_representation._daughter_septum_segments),
+        )
+        for i in range(septum_segment_count):
             cell.physics_representation._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
             cell.physics_representation._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
 

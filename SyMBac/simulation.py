@@ -293,19 +293,24 @@ class Simulation:
                 "progress_idx": 0,
                 "stopped": False,
                 "done": False,
+                "worker_error": None,
             }
             sim_lock = threading.Lock()
             stop_event = threading.Event()
 
             def simulation_worker():
-                for frame_idx in range(total_frames):
-                    if stop_event.is_set():
-                        break
-                    with sim_lock:
-                        step_and_capture_frame(frame_idx)
-                    state["frame_idx"] = frame_idx + 1
-                    time.sleep(0)
-                state["done"] = True
+                try:
+                    for frame_idx in range(total_frames):
+                        if stop_event.is_set():
+                            break
+                        with sim_lock:
+                            step_and_capture_frame(frame_idx)
+                        state["frame_idx"] = frame_idx + 1
+                        time.sleep(0)
+                except Exception as e:
+                    state["worker_error"] = e
+                finally:
+                    state["done"] = True
 
             worker_thread = threading.Thread(target=simulation_worker, daemon=True)
             worker_thread.start()
@@ -350,6 +355,8 @@ class Simulation:
 
             pyglet.clock.schedule_interval(update_ui, 1 / 60.0)
             pyglet.app.run()
+            if state["worker_error"] is not None:
+                raise RuntimeError("Simulation worker failed during show_window=True execution.") from state["worker_error"]
         else:
             for frame_idx in tqdm(range(total_frames), desc='Running simulation'):
                 step_and_capture_frame(frame_idx)
