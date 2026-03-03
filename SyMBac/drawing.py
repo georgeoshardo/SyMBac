@@ -292,14 +292,12 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
     """
     space_size = np.array(space_size)  # 1000, 200 a good value
-    space = np.zeros(space_size)
-    space_masks_label = np.zeros(space_size)
-    space_masks_nolabel = np.zeros(space_size)
-    #colour_label = [1]
-
-    space_masks = np.zeros(space_size)
-    if label_masks == False:
-        space_masks = space_masks.astype(bool)
+    # Overlap ownership buffers:
+    # - owner_opl stores the winning per-pixel OPL value
+    # - owner_label stores the label of the winning cell
+    # This avoids zeroing overlap pixels (which creates artificial cracks).
+    owner_opl = np.zeros(space_size, dtype=np.float64)
+    owner_label = np.zeros(space_size, dtype=np.int32)
 
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label, cell_id = properties
@@ -328,37 +326,29 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
         rotated_OPL_cell = rotate(OPL_cell, -angle, resize=True, clip=False, preserve_range=True, center=(x, y))
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
-        offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
-        offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
+        offset_y = rotated_OPL_cell.shape[0] - owner_opl[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
+        offset_x = rotated_OPL_cell.shape[1] - owner_opl[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
         assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
         assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
-        space[
-        y - cell_y:y + cell_y + offset_y,
-        x - cell_x:x + cell_x + offset_x
-        ] += rotated_OPL_cell
+        y0 = y - cell_y
+        y1 = y + cell_y + offset_y
+        x0 = x - cell_x
+        x1 = x + cell_x + offset_x
 
-        def get_mask(label_masks):
+        owner_patch = owner_opl[y0:y1, x0:x1]
+        label_patch = owner_label[y0:y1, x0:x1]
+        claim = rotated_OPL_cell > owner_patch
+        owner_patch[claim] = rotated_OPL_cell[claim]
+        label_patch[claim] = sim_mask_label
 
-            if label_masks:
-                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * sim_mask_label
-                #colour_label[0] += 1
-                return space_masks_label
-            else:
-                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                   rotated_OPL_cell > 0) * 1
-                return space_masks_nolabel
-                # space_masks = opening(space_masks,np.ones((2,11)))
-
-        label_mask = get_mask(True).astype(int)
-        nolabel_mask = get_mask(False).astype(int)
-        label_mask_fixed = np.where(nolabel_mask > 1, 0, label_mask)
-        if label_masks:
-            space_masks = label_mask_fixed
-        else:
-            mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
-            space_masks = np.where(mask_borders, 0, label_mask_fixed)
-            space_masks = opening(space_masks)
-            space_masks = space_masks.astype(bool)
+    space = owner_opl
+    if label_masks:
+        space_masks = owner_label
+    else:
+        mask_borders = find_boundaries(owner_label, mode="thick", connectivity=2)
+        space_masks = np.where(mask_borders, 0, owner_label)
+        space_masks = opening(space_masks)
+        space_masks = space_masks.astype(bool)
         space = space * space_masks.astype(bool)
     return space, space_masks
 
@@ -398,9 +388,12 @@ def draw_scene_from_segments(cells_segment_data, space_size, offset, label_masks
         2D labelled or boolean mask.
     """
     space_size = np.array(space_size)
-    scene = np.zeros(space_size, dtype=np.float64)
-    mask_label = np.zeros(space_size, dtype=np.int32)
-    mask_nolabel = np.zeros(space_size, dtype=np.int32)
+    # Overlap ownership buffers:
+    # - owner_opl stores the winning per-pixel OPL value
+    # - owner_label stores the label of the winning cell
+    # This avoids zeroing overlap pixels (which creates artificial cracks).
+    owner_opl = np.zeros(space_size, dtype=np.float64)
+    owner_label = np.zeros(space_size, dtype=np.int32)
 
     for cell_data in cells_segment_data:
         positions = cell_data['positions']  # (N, 2)
@@ -460,27 +453,27 @@ def draw_scene_from_segments(cells_segment_data, space_size, offset, label_masks
                 crop = apply_cell_texture(crop, cell_id, **texture_params)
                 cell_opl[tr0:tr1, tc0:tc1] = crop
 
-        # Paste into full scene
-        scene[y_start:y_end, x_start:x_end] += cell_opl
+        owner_patch = owner_opl[y_start:y_end, x_start:x_end]
+        label_patch = owner_label[y_start:y_end, x_start:x_end]
 
-        # Mask — label version
-        cell_mask_region = (cell_opl > 0).astype(np.int32)
-        mask_label[y_start:y_end, x_start:x_end] += cell_mask_region * sim_mask_label
-        mask_nolabel[y_start:y_end, x_start:x_end] += cell_mask_region
+        # Winner-takes-all ownership in contested pixels.
+        claim = cell_opl > owner_patch
+        owner_patch[claim] = cell_opl[claim]
+        label_patch[claim] = sim_mask_label
 
-    # Fix overlapping mask regions (same logic as draw_scene)
-    label_mask_fixed = np.where(mask_nolabel > 1, 0, mask_label)
+    scene = owner_opl
 
     if label_masks:
-        mask = label_mask_fixed
+        mask = owner_label
     else:
-        mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
-        mask = np.where(mask_borders, 0, label_mask_fixed)
+        mask_borders = find_boundaries(owner_label, mode="thick", connectivity=2)
+        mask = np.where(mask_borders, 0, owner_label)
         mask = opening(mask)
         mask = mask.astype(bool)
 
-    # Mask the scene using the final mask (matches draw_scene behavior)
-    scene = scene * mask.astype(bool)
+    # For binary masks only, keep scene limited to final mask area.
+    if not label_masks:
+        scene = scene * mask.astype(bool)
     return scene, mask
 
 

@@ -49,7 +49,7 @@ class DivisionManager:
             cell.is_dividing = True
             cell.septum_progress = 0.0
             cell.division_site = self.get_split_index(cell)
-            cell.num_segments_at_division_start = cell.num_segments_at_division_start #LENGTH_FIX
+            cell.num_segments_at_division_start = cell.physics_representation.num_segments
             return None
         else: raise NotImplementedError
 
