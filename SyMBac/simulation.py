@@ -281,25 +281,55 @@ class Simulation:
                     "show_window=True requires pyglet. Install it or rerun with show_window=False."
                 ) from e
 
+            import threading
+            import time
+
             window = pyglet.window.Window(900, 900, "SyMBac", resizable=True)
             draw_options = DrawOptions()
-            draw_options.shape_outline_color = (10, 20, 30, 40)
+            draw_options.shape_outline_color = (235, 235, 235, 255)
             progress_bar = tqdm(total=total_frames, desc='Running simulation')
-            state = {"frame_idx": 0, "stopped": False}
-            frames_per_tick = 8
+            state = {
+                "frame_idx": 0,
+                "progress_idx": 0,
+                "stopped": False,
+                "done": False,
+            }
+            sim_lock = threading.Lock()
+            stop_event = threading.Event()
+
+            def simulation_worker():
+                for frame_idx in range(total_frames):
+                    if stop_event.is_set():
+                        break
+                    with sim_lock:
+                        step_and_capture_frame(frame_idx)
+                    state["frame_idx"] = frame_idx + 1
+                    time.sleep(0)
+                state["done"] = True
+
+            worker_thread = threading.Thread(target=simulation_worker, daemon=True)
+            worker_thread.start()
 
             @window.event
             def on_draw():
                 window.clear()
-                sim.space.debug_draw(draw_options)
+                with sim_lock:
+                    sim.space.debug_draw(draw_options)
 
             def stop_loop():
                 if state["stopped"]:
                     return
                 state["stopped"] = True
-                pyglet.clock.unschedule(run_frame)
+                stop_event.set()
+                pyglet.clock.unschedule(update_ui)
+                if state["frame_idx"] > state["progress_idx"]:
+                    progress_bar.update(state["frame_idx"] - state["progress_idx"])
+                    state["progress_idx"] = state["frame_idx"]
                 progress_bar.close()
-                window.close()
+                if worker_thread.is_alive():
+                    worker_thread.join(timeout=1.0)
+                if not window.has_exit:
+                    window.close()
                 pyglet.app.exit()
 
             @window.event
@@ -311,18 +341,14 @@ class Simulation:
             def on_close():
                 stop_loop()
 
-            def run_frame(_dt):
-                if state["frame_idx"] >= total_frames:
+            def update_ui(_dt):
+                if state["frame_idx"] > state["progress_idx"]:
+                    progress_bar.update(state["frame_idx"] - state["progress_idx"])
+                    state["progress_idx"] = state["frame_idx"]
+                if state["done"]:
                     stop_loop()
-                    return
 
-                steps_this_tick = min(frames_per_tick, total_frames - state["frame_idx"])
-                for _ in range(steps_this_tick):
-                    step_and_capture_frame(state["frame_idx"])
-                    state["frame_idx"] += 1
-                    progress_bar.update(1)
-
-            pyglet.clock.schedule_interval(run_frame, 1 / 60.0)
+            pyglet.clock.schedule_interval(update_ui, 1 / 60.0)
             pyglet.app.run()
         else:
             for frame_idx in tqdm(range(total_frames), desc='Running simulation'):
