@@ -6,7 +6,6 @@ from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, 
 from SyMBac.trench_geometry import  get_trench_segments
 import napari
 import os
-import warnings
 from tqdm.auto import tqdm
 from scipy.stats import norm
 class Simulation:
@@ -114,14 +113,8 @@ class Simulation:
         """
         Run the simulation using the segment-chain physics engine.
 
-        :param bool show_window: Deprecated. Kept for API compatibility but has no effect with the new engine.
+        :param bool show_window: If True, opens a live Pyglet window with physics debug drawing while simulating.
         """
-        if show_window:
-            warnings.warn(
-                "show_window=True is deprecated with the new segment-chain physics engine. "
-                "Running headless. Use napari via visualise_in_napari() to inspect results."
-            )
-
         from SyMBac.physics.config import CellConfig, PhysicsConfig
         from SyMBac.physics.simulator import Simulator
         from SyMBac.physics import microfluidic_geometry
@@ -253,7 +246,9 @@ class Simulation:
 
         # --- Run simulation loop ---
         cell_timeseries = []
-        for frame_idx in tqdm(range(self.sim_length + 2), desc='Running simulation'):
+        total_frames = self.sim_length + 2
+
+        def step_and_capture_frame(frame_idx):
             just_divided_this_frame.clear()
             for _ in range(SUB_STEPS):
                 sim.step()
@@ -276,6 +271,62 @@ class Simulation:
                     )
                     frame_snapshots.append(snap)
                 cell_timeseries.append(frame_snapshots)
+
+        if show_window:
+            try:
+                import pyglet
+                from pymunk.pyglet_util import DrawOptions
+            except ImportError as e:
+                raise ImportError(
+                    "show_window=True requires pyglet. Install it or rerun with show_window=False."
+                ) from e
+
+            window = pyglet.window.Window(900, 900, "SyMBac", resizable=True)
+            draw_options = DrawOptions()
+            draw_options.shape_outline_color = (10, 20, 30, 40)
+            progress_bar = tqdm(total=total_frames, desc='Running simulation')
+            state = {"frame_idx": 0, "stopped": False}
+            frames_per_tick = 8
+
+            @window.event
+            def on_draw():
+                window.clear()
+                sim.space.debug_draw(draw_options)
+
+            def stop_loop():
+                if state["stopped"]:
+                    return
+                state["stopped"] = True
+                pyglet.clock.unschedule(run_frame)
+                progress_bar.close()
+                window.close()
+                pyglet.app.exit()
+
+            @window.event
+            def on_key_press(symbol, modifier):
+                if symbol in (pyglet.window.key.E, pyglet.window.key.ESCAPE):
+                    stop_loop()
+
+            @window.event
+            def on_close():
+                stop_loop()
+
+            def run_frame(_dt):
+                if state["frame_idx"] >= total_frames:
+                    stop_loop()
+                    return
+
+                steps_this_tick = min(frames_per_tick, total_frames - state["frame_idx"])
+                for _ in range(steps_this_tick):
+                    step_and_capture_frame(state["frame_idx"])
+                    state["frame_idx"] += 1
+                    progress_bar.update(1)
+
+            pyglet.clock.schedule_interval(run_frame, 1 / 60.0)
+            pyglet.app.run()
+        else:
+            for frame_idx in tqdm(range(total_frames), desc='Running simulation'):
+                step_and_capture_frame(frame_idx)
 
         self.cell_timeseries = cell_timeseries
         self.space = sim.space
