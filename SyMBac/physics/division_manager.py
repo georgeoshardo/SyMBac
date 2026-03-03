@@ -96,8 +96,10 @@ class DivisionManager:
 
         for i in range(septum_segment_count):
             falloff = (septum_segment_count - i) / septum_segment_count
-            shrinkage = (self.config.SEGMENT_RADIUS - self.config.MIN_SEPTUM_RADIUS) * cell.septum_progress * falloff
-            new_radius = self.config.SEGMENT_RADIUS - shrinkage
+            base_radius = cell.current_segment_radius
+            min_septum_radius = max(0.1, base_radius * 0.1)
+            shrinkage = (base_radius - min_septum_radius) * cell.septum_progress * falloff
+            new_radius = base_radius - shrinkage
 
             # Recreate shape and update the segment's shape reference
             cell.physics_representation._mother_septum_segments[i].radius = new_radius
@@ -117,8 +119,8 @@ class DivisionManager:
             len(cell.physics_representation._daughter_septum_segments),
         )
         for i in range(septum_segment_count):
-            cell.physics_representation._mother_septum_segments[i].radius = self.config.SEGMENT_RADIUS
-            cell.physics_representation._daughter_septum_segments[i].radius = self.config.SEGMENT_RADIUS
+            cell.physics_representation._mother_septum_segments[i].radius = cell.current_segment_radius
+            cell.physics_representation._daughter_septum_segments[i].radius = cell.current_segment_radius
 
     def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 
@@ -177,6 +179,13 @@ class DivisionManager:
 
         cell.physics_representation.growth_accumulator_tail = 0.0
         cell.num_divisions += 1
+
+        # Sync width state from inherited segment geometry, then sample
+        # new per-generation width targets without an abrupt split-time jump.
+        cell.sync_width_from_segments()
+        daughter_cell.sync_width_from_segments()
+        cell.set_new_width_target()
+        daughter_cell.set_new_width_target()
 
         return daughter_cell
 

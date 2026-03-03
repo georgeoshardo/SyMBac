@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 #TODO work these functions into a class, possibly in simulation.py
 
 def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_std, width_var, save_dir, resize_amount, lysis_p=0, show_window = True):
+                   phys_iters, max_length_std, width_std, save_dir, resize_amount, lysis_p=0, show_window = True):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -39,8 +39,8 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         each other very hard). 20 is a good starting point
     max_length_std : float
         Standard deviation of the maximum cell length
-    width_var : float
-        Variance of the maximum cell width
+    width_std : float
+        Standard deviation of the cell width
     save_dir : str
         Location to save simulation output
     lysis_p : float
@@ -61,7 +61,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
             cell_max_length=cell_max_length, cell_width=cell_width,
             sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
             phys_iters=phys_iters, max_length_std=max_length_std,
-            width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+            width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
             lysis_p=lysis_p,
         )
 
@@ -70,7 +70,7 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         cell_max_length=cell_max_length, cell_width=cell_width,
         sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
         phys_iters=phys_iters, max_length_std=max_length_std,
-        width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+        width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
         lysis_p=lysis_p, show_window=False,
     )
 
@@ -108,7 +108,7 @@ def _run_simulation_in_subprocess(**kwargs):
 
 
 def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                         phys_iters, max_length_std, width_var, save_dir, resize_amount, lysis_p=0, show_window=False):
+                         phys_iters, max_length_std, width_std, save_dir, resize_amount, lysis_p=0, show_window=False):
     """Core simulation logic."""
 
     space = create_space()
@@ -139,7 +139,7 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
         max_length=cell_max_length * scale_factor,
         max_length_mean=cell_max_length * scale_factor,
         max_length_std=max_length_std * np.sqrt(scale_factor),
-        width_var=width_var * np.sqrt(scale_factor),
+        width_std=width_std * np.sqrt(scale_factor),
         width_mean=cell_width * scale_factor,
         mother=None,
         lysis_p=lysis_p,

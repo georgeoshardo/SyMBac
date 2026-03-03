@@ -22,7 +22,9 @@ class SimCell:
         "max_length",
         "adjusted_growth_rate",
         "num_divisions",
-        "birth_length"
+        "birth_length",
+        "current_segment_radius",
+        "target_segment_radius",
     )
 
     def __init__(
@@ -54,6 +56,10 @@ class SimCell:
         self.num_segments_at_division_start = 0 # NOTE:This is NOT the birth length, this is a variable to keep track of how much growth has occurred during septum formation and division
         self.division_bias = 0
 
+        self.current_segment_radius = self.sample_segment_radius()
+        self.target_segment_radius = self.current_segment_radius
+        self.apply_current_width_to_segments()
+
         self.max_length = self.sample_max_length()
 
         self.adjusted_growth_rate = self.config.GROWTH_RATE
@@ -68,6 +74,37 @@ class SimCell:
             1.0, self.config.MIN_LENGTH_AFTER_DIVISION * self.config.JOINT_DISTANCE * 2
         )
         return max(min_length, float(sampled_max_length))
+
+    def sample_segment_radius(self) -> float:
+        base_cell_width = 2.0 * self.config.SEGMENT_RADIUS
+        sampled_width = np.random.normal(base_cell_width, self.config.WIDTH_STD)
+        min_radius = max(0.1, self.config.SEGMENT_RADIUS * 0.3)
+        return max(min_radius, float(sampled_width) / 2.0)
+
+    def set_new_width_target(self) -> None:
+        self.target_segment_radius = self.sample_segment_radius()
+
+    def apply_current_width_to_segments(self) -> None:
+        if not self.physics_representation.segments:
+            return
+        for segment in self.physics_representation.segments:
+            segment.radius = self.current_segment_radius
+
+    def sync_width_from_segments(self) -> None:
+        if not self.physics_representation.segments:
+            return
+        avg_radius = float(np.mean([s.radius for s in self.physics_representation.segments]))
+        self.current_segment_radius = avg_radius
+
+    def update_width_transition(self, dt: float) -> None:
+        if self.config.WIDTH_RELAXATION_TIME <= 0:
+            self.current_segment_radius = self.target_segment_radius
+            self.apply_current_width_to_segments()
+            return
+
+        alpha = 1.0 - np.exp(-dt / self.config.WIDTH_RELAXATION_TIME)
+        self.current_segment_radius += (self.target_segment_radius - self.current_segment_radius) * alpha
+        self.apply_current_width_to_segments()
 
     @property
     def length(self):
@@ -111,5 +148,4 @@ class SimCell:
         Setter for division site, ensures it is within the valid range.
         """
         self._division_site = value
-
 

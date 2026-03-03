@@ -44,7 +44,7 @@ class TestExample(unittest.TestCase):
             gravity=0,
             phys_iters=20,
             max_length_std=3,
-            width_var=0.3,
+            width_std=0.3,
             save_dir="/tmp/"
         )  # growth phase
         main_segments = get_trench_segments(space)

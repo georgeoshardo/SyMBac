@@ -27,6 +27,11 @@ class CellConfig:
             maximum length a cell can reach before division.
         BASE_MAX_LENGTH: The target length (continuous length, NOT number of segments) a cell
             reaches before it is considered ready for division.
+        WIDTH_STD: The standard deviation used when sampling cell width.
+            Width samples are centered on the configured base cell width
+            (`2 * SEGMENT_RADIUS`).
+        WIDTH_RELAXATION_TIME: Time constant controlling how quickly a cell
+            relaxes from its current width to a newly sampled target width.
         SEED_CELL_SEGMENTS: The initial number of segments for the first cell
             created in the simulation.
         PIVOT_JOINT_STIFFNESS: The maximum force the pivot joints connecting
@@ -69,6 +74,8 @@ class CellConfig:
     MIN_LENGTH_AFTER_DIVISION: int = 10
     MAX_LENGTH_STD: float = 0.0
     BASE_MAX_LENGTH: float = 40
+    WIDTH_STD: float = 0.0
+    WIDTH_RELAXATION_TIME: float = 0.5
     SEED_CELL_SEGMENTS: int = 15
     PIVOT_JOINT_STIFFNESS: float = np.inf  # Stiffness for pivot joints
     NOISE_STRENGTH: float = 0.05
@@ -94,6 +101,13 @@ class CellConfig:
     SIMPLE_LENGTH: bool = True
 
     def __post_init__(self):
+
+        if self.MAX_LENGTH_STD < 0:
+            raise ValueError("MAX_LENGTH_STD must be non-negative.")
+        if self.WIDTH_STD < 0:
+            raise ValueError("WIDTH_STD must be non-negative.")
+        if self.WIDTH_RELAXATION_TIME < 0:
+            raise ValueError("WIDTH_RELAXATION_TIME must be non-negative.")
 
         if isinstance(self.START_POS, tuple):
             object.__setattr__(self, "START_POS", Vec2d(*self.START_POS))

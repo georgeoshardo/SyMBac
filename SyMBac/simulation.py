@@ -27,7 +27,7 @@ class Simulation:
             gravity=0,
             phys_iters=15,
             max_length_std = 0.,
-            width_var = 0.,
+            width_std = 0.,
             lysis_p = 0.,
             save_dir="/tmp/",
             resize_amount = 3
@@ -38,7 +38,7 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_std, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_std, cell_width, width_std, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
         """
         Initialising a Simulation object
 
@@ -63,8 +63,8 @@ class Simulation:
             each other very hard). 20 is a good starting point
         max_length_std : float
             Standard deviation of the maximum cell length.
-        width_var : float
-            Variance of the maximum cell width
+        width_std : float
+            Standard deviation of the cell width.
         save_dir : str
             Location to save simulation output
         lysis_p : float
@@ -82,7 +82,7 @@ class Simulation:
         self.cell_max_length = cell_max_length
         self.max_length_std = max_length_std
         self.cell_width = cell_width
-        self.width_var = width_var
+        self.width_std = width_std
         self.lysis_p = lysis_p
         self.sim_length = sim_length
         self.pix_mic_conv = pix_mic_conv
@@ -131,6 +131,7 @@ class Simulation:
         SEED_CELL_SEGMENTS = max(3, int(self.cell_max_length * 0.5 * scale_factor / JOINT_DISTANCE))
 
         MAX_LENGTH_STD = max(0.0, self.max_length_std * scale_factor)
+        WIDTH_STD = max(0.0, self.width_std * scale_factor)
 
         GROWTH_RATE = 0.5 * SEGMENT_RADIUS
 
@@ -146,6 +147,7 @@ class Simulation:
             MIN_LENGTH_AFTER_DIVISION=max(3, GRANULARITY),
             MAX_LENGTH_STD=MAX_LENGTH_STD,
             BASE_MAX_LENGTH=BASE_MAX_LENGTH,
+            WIDTH_STD=WIDTH_STD,
             SEED_CELL_SEGMENTS=SEED_CELL_SEGMENTS,
             PIVOT_JOINT_STIFFNESS=5_000 * radius_scale,
             NOISE_STRENGTH=0.05,
@@ -220,14 +222,19 @@ class Simulation:
         # the effective probability independent of the substeps setting.
 
         def cell_growth_rate_updater(cell):
+            cell.update_width_transition(physics_config.DT)
             compression_ratio = cell.physics_representation.get_compression_ratio()
             cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio ** 4
+
+        def post_growth_width_sync(cell):
+            cell.apply_current_width_to_segments()
 
         sim = Simulator(
             physics_config=physics_config,
             initial_cell_config=cell_config,
             post_init_hooks=[create_trench],
             pre_cell_grow_hooks=[cell_growth_rate_updater],
+            post_cell_grow_hooks=[post_growth_width_sync],
             post_step_hooks=post_step_hooks,
             post_division_hooks=[resample_max_lengths_after_division, track_lineage, mark_just_divided],
         )

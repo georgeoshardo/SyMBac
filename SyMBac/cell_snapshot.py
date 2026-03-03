@@ -86,7 +86,7 @@ class CellSnapshot:
 
         # --- B. Legacy scalar properties ---
         self.length = pr.get_continuous_length()
-        self.width = 2.0 * simcell.config.SEGMENT_RADIUS
+        self.width = 2.0 * float(np.mean(self.segment_radii)) if len(self.segment_radii) else 2.0 * simcell.config.SEGMENT_RADIUS
 
         # Angle: direction from first to last segment
         if len(pr.segments) >= 2:

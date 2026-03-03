@@ -118,6 +118,7 @@ class PhysicsRepresentation:
             config=self.config, group_id=self.group_id, position=new_segment_pos,
             angle=new_segment_angle, space=self.space
         )
+        new_segment.radius = post_head_segment.radius
         self.space.add(new_segment.body, new_segment.shape)
 
         # Insert the new segment into the list at the correct position.
@@ -178,6 +179,7 @@ class PhysicsRepresentation:
             config=self.config, group_id=self.group_id, position=new_segment_pos,
             angle=new_segment_angle, space=self.space
         )
+        new_segment.radius = pre_tail_segment.radius
         self.space.add(new_segment.body, new_segment.shape)
 
         # Insert the new segment into the list before the final tail segment.
