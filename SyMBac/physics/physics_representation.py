@@ -223,8 +223,11 @@ class PhysicsRepresentation:
         """Safely removes the last segment of the cell."""
         if len(self.segments) <= self.config.MIN_LENGTH_AFTER_DIVISION:
             return None
-        assert len(self.limit_joints) == len(self.pivot_joints)
-        assert len(self.limit_joints) == len(self.segments) - 1
+        assert len(self.pivot_joints) == len(self.segments) - 1
+        if self.config.ROTARY_LIMIT_JOINT:
+            assert len(self.limit_joints) == len(self.pivot_joints)
+        else:
+            assert len(self.limit_joints) == 0
         tail_segment = self.segments.pop()
 
         if self.pivot_joints:

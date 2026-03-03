@@ -1,6 +1,8 @@
 import pickle
 from copy import deepcopy
 import numpy as np
+import warnings
+import os
 from scipy.stats import norm
 from SyMBac.cell import Cell
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
@@ -9,8 +11,57 @@ from tqdm.auto import tqdm
 
 #TODO work these functions into a class, possibly in simulation.py
 
-def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_std, width_std, save_dir, resize_amount, lysis_p=0, show_window = True):
+_DEPRECATED_ALIAS_REMOVAL_DATE = "2026-09-01"
+_UNSET = object()
+
+
+def _resolve_deprecated_std_parameter(api_name, new_name, new_value, legacy_name, legacy_value):
+    new_provided = new_value is not _UNSET
+    legacy_provided = legacy_value is not _UNSET
+
+    if legacy_provided:
+        if new_provided and new_value != legacy_value:
+            raise ValueError(
+                f"{api_name}: `{new_name}` and deprecated `{legacy_name}` were both provided with different values."
+            )
+        warnings.warn(
+            (
+                f"`{legacy_name}` is deprecated and will be removed on {_DEPRECATED_ALIAS_REMOVAL_DATE}. "
+                f"Use `{new_name}` instead."
+            ),
+            FutureWarning,
+            stacklevel=3,
+        )
+        return legacy_value
+
+    if not new_provided:
+        raise TypeError(f"{api_name} missing required argument: '{new_name}'")
+    return new_value
+
+
+def _require_provided(api_name, arg_name, value):
+    if value is _UNSET:
+        raise TypeError(f"{api_name} missing required argument: '{arg_name}'")
+
+
+def run_simulation(
+    trench_length,
+    trench_width,
+    cell_max_length,
+    cell_width,
+    sim_length,
+    pix_mic_conv,
+    gravity,
+    phys_iters,
+    max_length_std=_UNSET,
+    width_std=_UNSET,
+    save_dir=_UNSET,
+    resize_amount=_UNSET,
+    lysis_p=0,
+    show_window=True,
+    max_length_var=_UNSET,
+    width_var=_UNSET,
+):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -54,6 +105,25 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
     space : a pymunk space object
         Contains the rigid body physics objects which are the cells.
     """
+
+    api_name = "run_simulation()"
+    _require_provided(api_name, "save_dir", save_dir)
+    _require_provided(api_name, "resize_amount", resize_amount)
+    os.makedirs(save_dir, exist_ok=True)
+    max_length_std = _resolve_deprecated_std_parameter(
+        api_name=api_name,
+        new_name="max_length_std",
+        new_value=max_length_std,
+        legacy_name="max_length_var",
+        legacy_value=max_length_var,
+    )
+    width_std = _resolve_deprecated_std_parameter(
+        api_name=api_name,
+        new_name="width_std",
+        new_value=width_std,
+        legacy_name="width_var",
+        legacy_value=width_var,
+    )
 
     if show_window:
         return _run_simulation_in_subprocess(
@@ -138,8 +208,8 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
         growth_rate_constant=1,
         max_length=cell_max_length * scale_factor,
         max_length_mean=cell_max_length * scale_factor,
-        max_length_std=max_length_std * np.sqrt(scale_factor),
-        width_std=width_std * np.sqrt(scale_factor),
+        max_length_std=max_length_std * scale_factor,
+        width_std=width_std * scale_factor,
         width_mean=cell_width * scale_factor,
         mother=None,
         lysis_p=lysis_p,
