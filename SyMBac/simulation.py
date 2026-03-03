@@ -8,6 +8,7 @@ import napari
 import os
 import warnings
 from tqdm.auto import tqdm
+from scipy.stats import norm
 class Simulation:
     
     """
@@ -38,7 +39,7 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, load_sim_dir = None):
+    def __init__(self, trench_length, trench_width, cell_max_length, max_length_var, cell_width, width_var, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
         """
         Initialising a Simulation object
 
@@ -92,6 +93,7 @@ class Simulation:
         self.save_dir = save_dir
         self.offset = 30
         self.load_sim_dir = load_sim_dir
+        self.substeps = substeps
 
         try:
             os.mkdir(save_dir)
@@ -108,72 +110,254 @@ class Simulation:
     
 
 
-    def run_simulation(self, show_window = True):
+    def run_simulation(self, show_window=True):
+        """
+        Run the simulation using the segment-chain physics engine.
+
+        :param bool show_window: Deprecated. Kept for API compatibility but has no effect with the new engine.
+        """
         if show_window:
-            warnings.warn("You are using show_window = True. If you re-run the simulation (even by re-creating the Simulation object), then for reasons which I do not understand, the state of the simulation is not reset. Restart your notebook or interpreter to re-run simulations.")
+            warnings.warn(
+                "show_window=True is deprecated with the new segment-chain physics engine. "
+                "Running headless. Use napari via visualise_in_napari() to inspect results."
+            )
+
+        from SyMBac.physics.config import CellConfig, PhysicsConfig
+        from SyMBac.physics.simulator import Simulator
+        from SyMBac.physics import microfluidic_geometry
+        from SyMBac.cell_snapshot import CellSnapshot
+
+        # --- Scale parameters from microns to pixels ---
+        scale_factor = (1 / self.pix_mic_conv) * self.resize_amount
+        radius_scale = self.cell_width * scale_factor / 2 / 10  # ratio vs SyMBac_2's SEGMENT_RADIUS=10
+
+        SEGMENT_RADIUS = self.cell_width * scale_factor / 2
+        GRANULARITY = 4
+        BASE_MAX_LENGTH = self.cell_max_length * scale_factor
+        JOINT_DISTANCE = SEGMENT_RADIUS / GRANULARITY
+        SEED_CELL_SEGMENTS = max(3, int(self.cell_max_length * 0.5 * scale_factor / JOINT_DISTANCE))
+
+        # Convert absolute variance to fractional
+        if self.cell_max_length > 0 and self.max_length_var > 0:
+            MAX_LENGTH_VARIATION = self.max_length_var / self.cell_max_length
+        else:
+            MAX_LENGTH_VARIATION = 0.0
+
+        GROWTH_RATE = 0.5 * SEGMENT_RADIUS
+
+        trench_length_px = self.trench_length * scale_factor
+        trench_width_px = self.trench_width * scale_factor
+        SUB_STEPS = self.substeps
+
+        cell_config = CellConfig(
+            GRANULARITY=GRANULARITY,
+            SEGMENT_RADIUS=SEGMENT_RADIUS,
+            SEGMENT_MASS=1.0,
+            GROWTH_RATE=GROWTH_RATE,
+            MIN_LENGTH_AFTER_DIVISION=max(3, GRANULARITY),
+            MAX_LENGTH_VARIATION=MAX_LENGTH_VARIATION,
+            BASE_MAX_LENGTH=BASE_MAX_LENGTH,
+            SEED_CELL_SEGMENTS=SEED_CELL_SEGMENTS,
+            PIVOT_JOINT_STIFFNESS=5_000 * radius_scale,
+            NOISE_STRENGTH=0.05,
+            START_POS=(35, trench_width_px / 2 + SEGMENT_RADIUS * 3),
+            START_ANGLE=np.pi / 2,
+            SEPTUM_DURATION=1.5,
+            ROTARY_LIMIT_JOINT=True,
+            MAX_BEND_ANGLE=0.005,
+            STIFFNESS=300_000 * radius_scale,
+            SIMPLE_LENGTH=False,
+        )
+
+        physics_config = PhysicsConfig(
+            ITERATIONS=self.phys_iters * 8,
+            DAMPING=0.5,
+            GRAVITY=(0, self.gravity),
+        )
+
+        # --- Lineage tracking ---
+        lineage_info = {}  # group_id -> {mother_mask_label, generation}
+        just_divided_this_frame = set()
+
+        def create_trench(sim):
+            microfluidic_geometry.trench_creator(
+                width=trench_width_px,
+                trench_length=trench_length_px,
+                global_xy=(35, 0),
+                space=sim.space,
+            )
+
+        def remove_out_of_bounds(sim):
+            trench_open_end = trench_width_px / 2 + trench_length_px
+            for cell in sim.colony.cells[:]:
+                if not cell.physics_representation.segments:
+                    continue
+                pos_y = cell.physics_representation.segments[0].position[1]
+                if pos_y < 0 or pos_y > trench_open_end:
+                    sim.colony.delete_cell(cell)
+
+        def handle_lysis(sim):
+            if self.lysis_p <= 0:
+                return
+            for cell in sim.colony.cells[:]:
+                if len(sim.colony.cells) <= 1:
+                    break
+                if norm.rvs() <= norm.ppf(self.lysis_p):
+                    sim.colony.delete_cell(cell)
+
+        def track_lineage(mother, daughter):
+            mother_gen = lineage_info.get(mother.group_id, {}).get('generation', 0)
+            lineage_info[daughter.group_id] = {
+                'mother_mask_label': mother.group_id,
+                'generation': mother_gen + 1,
+            }
+            if mother.group_id not in lineage_info:
+                lineage_info[mother.group_id] = {
+                    'mother_mask_label': None,
+                    'generation': 0,
+                }
+
+        def mark_just_divided(mother, daughter):
+            just_divided_this_frame.add(daughter.group_id)
+            just_divided_this_frame.add(mother.group_id)
+
+        post_step_hooks = [remove_out_of_bounds]
+        # Lysis is handled once per output frame (not per sub-step) to keep
+        # the effective probability independent of the substeps setting.
+
+        def cell_growth_rate_updater(cell):
+            compression_ratio = cell.physics_representation.get_compression_ratio()
+            cell.adjusted_growth_rate = cell.config.GROWTH_RATE * compression_ratio ** 4
+            variation = cell.config.BASE_MAX_LENGTH * cell.config.MAX_LENGTH_VARIATION
+            random_max_len = np.random.uniform(
+                cell.config.BASE_MAX_LENGTH - variation,
+                cell.config.BASE_MAX_LENGTH + variation
+            ) * np.sqrt(compression_ratio)
+            cell.max_length = max(cell.length, int(random_max_len))
+
+        sim = Simulator(
+            physics_config=physics_config,
+            initial_cell_config=cell_config,
+            post_init_hooks=[create_trench],
+            pre_cell_grow_hooks=[cell_growth_rate_updater],
+            post_step_hooks=post_step_hooks,
+            post_division_hooks=[track_lineage, mark_just_divided],
+        )
+
+        # Initialize lineage for seed cell(s)
+        for cell in sim.colony.cells:
+            lineage_info[cell.group_id] = {
+                'mother_mask_label': None,
+                'generation': 0,
+            }
+
+        # --- Run simulation loop ---
+        cell_timeseries = []
+        for frame_idx in tqdm(range(self.sim_length + 2), desc='Running simulation'):
+            just_divided_this_frame.clear()
+            for _ in range(SUB_STEPS):
+                sim.step()
+            # Lysis once per output frame so probability is independent of substeps
+            if self.lysis_p > 0:
+                handle_lysis(sim)
+
+            # Skip first 2 warmup frames (matching old engine)
+            if frame_idx >= 2:
+                frame_snapshots = []
+                for cell in sim.colony.cells:
+                    info = lineage_info.get(cell.group_id, {})
+                    snap = CellSnapshot(
+                        simcell=cell,
+                        t=frame_idx - 2,
+                        mother_mask_label=info.get('mother_mask_label'),
+                        generation=info.get('generation', 0),
+                        just_divided=cell.group_id in just_divided_this_frame,
+                        lysis_p=self.lysis_p,
+                    )
+                    frame_snapshots.append(snap)
+                cell_timeseries.append(frame_snapshots)
+
+        self.cell_timeseries = cell_timeseries
+        self.space = sim.space
+        self.historic_cells = []
+
+    def draw_simulation_OPL(self, do_transformation=True, label_masks=True, return_output=False):
         """
-        Run the simulation
+        Draw the optical path length images from the simulation.
 
-        :param bool show_window: Whether to show the pyglet window while running the simulation. Typically would be `false` if running SyMBac headless.
+        Uses segment-based drawing if the simulation was run with the new physics
+        engine, otherwise falls back to the old vertex-based pipeline.
 
+        :param bool do_transformation: Whether to bend cells (old pipeline only; new engine bends physically).
+        :param bool label_masks: If True, masks are labelled per-cell; if False, binary.
+        :param bool return_output: If True, return (OPL_scenes, masks).
         """
+        # Detect new-engine snapshots (CellSnapshot with segment data)
+        _has_segments = (
+            hasattr(self, 'cell_timeseries')
+            and len(self.cell_timeseries) > 0
+            and len(self.cell_timeseries[0]) > 0
+            and hasattr(self.cell_timeseries[0][0], 'segment_positions')
+        )
 
-        self.cell_timeseries, self.space, self.historic_cells = run_cell_simulation(
-            trench_length=self.trench_length,
-            trench_width=self.trench_width,
-            cell_max_length=self.cell_max_length,  # 6, long cells # 1.65 short cells
-            cell_width=self.cell_width,  # 1 long cells # 0.95 short cells
-            sim_length=self.sim_length,
-            pix_mic_conv=self.pix_mic_conv,
-            gravity=self.gravity,
-            phys_iters=self.phys_iters,
-            max_length_var=self.max_length_var,
-            width_var=self.width_var,
-            lysis_p=self.lysis_p,  # this should somehow depends on the time
-            save_dir=self.save_dir,
-            show_window = show_window,
-            resize_amount = self.resize_amount
-        )  # growth phase
+        if _has_segments:
+            from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 
-    def draw_simulation_OPL(self, do_transformation = True, label_masks = True, return_output = False):
+            # Trench geometry for the Renderer (same pymunk space, just parse it)
+            self.main_segments = get_trench_segments(self.space)
 
+            # Build per-frame segment data for drawing
+            self.cell_timeseries_segments = []
+            for frame_snapshots in self.cell_timeseries:
+                frame_segments = [snap.to_segment_dict() for snap in frame_snapshots]
+                self.cell_timeseries_segments.append(frame_segments)
 
-        """
-        Draw the optical path length images from the simulation. This involves drawing the 3D cells into a 2D numpy
-        array, and then the corresponding masks for each cell.
+            space_size = get_space_size_from_segments(self.cell_timeseries_segments, self.offset)
+            self._space_size = space_size
+            self._label_masks = label_masks
+            self._do_transformation = do_transformation
 
-        After running this function, the Simulation object will gain two new attributes: ``self.OPL_scenes`` and ``self.masks`` which can be accessed separately.
+            scenes = Parallel(n_jobs=-1)(delayed(draw_scene_from_segments)(
+                frame_segments, space_size, self.offset, label_masks
+            ) for frame_segments in tqdm(
+                self.cell_timeseries_segments, desc='Rendering cell optical path lengths'))
 
-        :param bool do_transformation: Sets whether to transform the cells by bending them. Bending the cells can add realism to a simulation, but risks clipping the cells into the mother machine trench walls.
+            self.OPL_scenes = [s[0] for s in scenes]
+            self.masks = [s[1] for s in scenes]
 
-        :param bool label_masks: Sets whether the masks should be binary, or labelled. Masks should be binary is training a standard U-net, such as with DeLTA, but if training Omnipose (recommended), then mask labelling should be set to True.
+            # Build old-format properties for backwards compatibility
+            self.cell_timeseries_properties = []
+            for frame_snapshots in self.cell_timeseries:
+                frame_props = []
+                for snap in frame_snapshots:
+                    angle_deg = np.rad2deg(snap.angle) + 90
+                    pos = np.array([snap.position[0], snap.position[1]])
+                    frame_props.append([
+                        snap.length, snap.width, angle_deg, pos,
+                        1.0, 1.0, 0.0, 20,
+                        snap.pinching_sep, snap.mask_label, snap.ID
+                    ])
+                self.cell_timeseries_properties.append(frame_props)
+        else:
+            # Old pipeline (loaded from pickle or old Cell objects)
+            self.main_segments = get_trench_segments(self.space)
+            ID_props = generate_curve_props(self.cell_timeseries)
 
-        :param bool return_output: Controls whether the function returns the OPL scenes and masks. Does not affect the assignment of these attributes to the instance.
+            self.cell_timeseries_properties = Parallel(n_jobs=-1)(
+                delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(
+                    self.cell_timeseries, desc='Extracting cell properties from the simulation'))
 
-        Returns
-        -------
-        output : tuple(list(numpy.ndarray), list(numpy.ndarray))
-           If ``return_output = True``, a tuple containing lists, each of which contains the entire simulation. The first element in the tuple contains the OPL images, the second element contains the masks
+            space_size = get_space_size(self.cell_timeseries_properties)
+            self._space_size = space_size
+            self._do_transformation = do_transformation
+            self._label_masks = label_masks
 
-        """
-        self.main_segments = get_trench_segments(self.space)
-        ID_props = generate_curve_props(self.cell_timeseries)
-
-        self.cell_timeseries_properties = Parallel(n_jobs=-1)(
-            delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(self.cell_timeseries, desc='Extracting cell properties from the simulation'))
-
-        space_size = get_space_size(self.cell_timeseries_properties)
-
-        # Store draw params so renderer can re-call draw_scene() with texture
-        self._space_size = space_size
-        self._do_transformation = do_transformation
-        self._label_masks = label_masks
-
-        scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
-        cell_properties, do_transformation, space_size, self.offset, label_masks) for cell_properties in tqdm(
-            self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
-        self.OPL_scenes = [_[0] for _ in scenes]
-        self.masks = [_[1] for _ in scenes]
+            scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
+                cell_properties, do_transformation, space_size, self.offset, label_masks
+            ) for cell_properties in tqdm(
+                self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
+            self.OPL_scenes = [_[0] for _ in scenes]
+            self.masks = [_[1] for _ in scenes]
 
         if return_output:
             return self.OPL_scenes, self.masks

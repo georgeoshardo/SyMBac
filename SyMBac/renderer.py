@@ -3,7 +3,7 @@ from glob import glob
 import numpy as np
 import psfmodels as psfm
 
-from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene
+from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene, draw_scene_from_segments
 import warnings
 import napari
 import os
@@ -523,14 +523,23 @@ class Renderer:
 
         if cell_texture_strength > 0:
             texture_params = {"strength": cell_texture_strength, "scale": cell_texture_scale}
-            scene, mask = draw_scene(
-                self.simulation.cell_timeseries_properties[scene_no],
-                self.simulation._do_transformation,
-                self.simulation._space_size,
-                self.simulation.offset,
-                self.simulation._label_masks,
-                cell_texture=texture_params,
-            )
+            if hasattr(self.simulation, 'cell_timeseries_segments'):
+                scene, mask = draw_scene_from_segments(
+                    self.simulation.cell_timeseries_segments[scene_no],
+                    self.simulation._space_size,
+                    self.simulation.offset,
+                    self.simulation._label_masks,
+                    cell_texture=texture_params,
+                )
+            else:
+                scene, mask = draw_scene(
+                    self.simulation.cell_timeseries_properties[scene_no],
+                    self.simulation._do_transformation,
+                    self.simulation._space_size,
+                    self.simulation.offset,
+                    self.simulation._label_masks,
+                    cell_texture=texture_params,
+                )
         else:
             scene = self.simulation.OPL_scenes[scene_no]
             mask = self.simulation.masks[scene_no]

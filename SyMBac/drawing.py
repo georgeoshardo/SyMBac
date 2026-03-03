@@ -363,6 +363,127 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     return space, space_masks
 
 
+def draw_scene_from_segments(cells_segment_data, space_size, offset, label_masks, cell_texture=False):
+    """
+    Draw an OPL scene and mask from segment chain data.
+
+    Each cell is a chain of overlapping spheres. The OPL at each pixel is
+    2 * max(sqrt(R_i^2 - d_i^2)) over all segments i of that cell, where
+    d_i is the distance from the pixel to segment centre i.
+
+    Parameters
+    ----------
+    cells_segment_data : list of dict
+        Per-cell dicts with keys:
+            'positions': np.array (N,2) — segment (x,y) centres
+            'radii': np.array (N,) — segment radii
+            'mask_label': int
+            'cell_id': int
+    space_size : tuple
+        (height, width) of output arrays.
+    offset : int
+        Pixel offset added to all positions.
+    label_masks : bool
+        If True, mask pixels get the cell's mask_label value.
+        If False, mask is boolean.
+    cell_texture : bool or dict
+        If truthy, apply Perlin noise texture. If dict, passed as
+        kwargs to apply_cell_texture().
+
+    Returns
+    -------
+    scene : np.ndarray
+        2D OPL image.
+    mask : np.ndarray
+        2D labelled or boolean mask.
+    """
+    space_size = np.array(space_size)
+    scene = np.zeros(space_size, dtype=np.float64)
+    mask_label = np.zeros(space_size, dtype=np.int32)
+    mask_nolabel = np.zeros(space_size, dtype=np.int32)
+
+    for cell_data in cells_segment_data:
+        positions = cell_data['positions']  # (N, 2)
+        radii = cell_data['radii']          # (N,)
+        sim_mask_label = cell_data['mask_label']
+        cell_id = cell_data['cell_id']
+
+        if len(positions) == 0:
+            continue
+
+        # Compute bounding box for this cell's segments
+        max_r = np.max(radii)
+        min_x = np.min(positions[:, 0]) - max_r + offset
+        max_x = np.max(positions[:, 0]) + max_r + offset
+        min_y = np.min(positions[:, 1]) - max_r + offset
+        max_y = np.max(positions[:, 1]) + max_r + offset
+
+        # Clip to image bounds
+        y_start = max(0, int(np.floor(min_y)))
+        y_end = min(space_size[0], int(np.ceil(max_y)) + 1)
+        x_start = max(0, int(np.floor(min_x)))
+        x_end = min(space_size[1], int(np.ceil(max_x)) + 1)
+
+        if y_start >= y_end or x_start >= x_end:
+            continue
+
+        # Pixel grid for this cell's bounding box
+        ys = np.arange(y_start, y_end, dtype=np.float64)
+        xs = np.arange(x_start, x_end, dtype=np.float64)
+        grid_y, grid_x = np.meshgrid(ys, xs, indexing='ij')
+
+        # For each segment, compute OPL contribution via vectorised operations
+        opl_patch = np.zeros_like(grid_y)
+        for seg_idx in range(len(positions)):
+            cx = positions[seg_idx, 0] + offset
+            cy = positions[seg_idx, 1] + offset
+            r = radii[seg_idx]
+            d_sq = (grid_x - cx) ** 2 + (grid_y - cy) ** 2
+            r_sq = r * r
+            inside = d_sq < r_sq
+            z = np.zeros_like(d_sq)
+            z[inside] = np.sqrt(r_sq - d_sq[inside])
+            np.maximum(opl_patch, z, out=opl_patch)
+
+        # OPL is 2 * max hemisphere height (full sphere projection)
+        cell_opl = 2.0 * opl_patch
+
+        # Apply texture if requested
+        if cell_texture and np.any(cell_opl > 0):
+            texture_params = cell_texture if isinstance(cell_texture, dict) else {}
+            # Create a tight crop for texture, then paste back
+            nz_rows, nz_cols = np.nonzero(cell_opl > 0)
+            if len(nz_rows) > 0:
+                tr0, tr1 = nz_rows.min(), nz_rows.max() + 1
+                tc0, tc1 = nz_cols.min(), nz_cols.max() + 1
+                crop = cell_opl[tr0:tr1, tc0:tc1]
+                crop = apply_cell_texture(crop, cell_id, **texture_params)
+                cell_opl[tr0:tr1, tc0:tc1] = crop
+
+        # Paste into full scene
+        scene[y_start:y_end, x_start:x_end] += cell_opl
+
+        # Mask — label version
+        cell_mask_region = (cell_opl > 0).astype(np.int32)
+        mask_label[y_start:y_end, x_start:x_end] += cell_mask_region * sim_mask_label
+        mask_nolabel[y_start:y_end, x_start:x_end] += cell_mask_region
+
+    # Fix overlapping mask regions (same logic as draw_scene)
+    label_mask_fixed = np.where(mask_nolabel > 1, 0, mask_label)
+
+    if label_masks:
+        mask = label_mask_fixed
+    else:
+        mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
+        mask = np.where(mask_borders, 0, label_mask_fixed)
+        mask = opening(mask)
+        mask = mask.astype(bool)
+
+    # Mask the scene using the final mask (matches draw_scene behavior)
+    scene = scene * mask.astype(bool)
+    return scene, mask
+
+
 def get_distance(vertex1, vertex2):
     """
     Get euclidian distance between two sets of vertices.
@@ -568,6 +689,39 @@ def get_space_size(cell_timeseries_properties):
                 max_x = max_x_
             if max_y_ > max_y:
                 max_y = max_y_
+    return (int(1.2 * max_y), int(1.5 * max_x))
+
+
+def get_space_size_from_segments(cell_timeseries_segments, offset=30):
+    """
+    Compute canvas size from segment-chain timeseries data.
+
+    Parameters
+    ----------
+    cell_timeseries_segments : list of list of dict
+        Per-frame, per-cell segment data dicts with 'positions' and 'radii'.
+    offset : int
+        Pixel offset applied to positions.
+
+    Returns
+    -------
+    tuple
+        (height, width) for the canvas.
+    """
+    max_y, max_x = 0, 0
+    for frame_data in cell_timeseries_segments:
+        for cell_data in frame_data:
+            positions = cell_data['positions']
+            radii = cell_data['radii']
+            if len(positions) == 0:
+                continue
+            max_r = np.max(radii)
+            frame_max_x = np.max(positions[:, 0]) + max_r + offset
+            frame_max_y = np.max(positions[:, 1]) + max_r + offset
+            if frame_max_x > max_x:
+                max_x = frame_max_x
+            if frame_max_y > max_y:
+                max_y = frame_max_y
     return (int(1.2 * max_y), int(1.5 * max_x))
 
 
