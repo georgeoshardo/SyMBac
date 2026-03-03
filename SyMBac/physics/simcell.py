@@ -61,6 +61,7 @@ class SimCell:
         self.apply_current_width_to_segments()
 
         self.max_length = self.sample_max_length()
+        self.birth_length = self.length
 
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
@@ -140,12 +141,13 @@ class SimCell:
 
     @property
     def division_site(self) -> int:
-        return len(self.physics_representation.segments) // 2 # Dynamically determine the division site but
+        if self._division_site is not None:
+            return self._division_site
+        return len(self.physics_representation.segments) // 2
 
     @division_site.setter
-    def division_site(self, value: int) -> None:
+    def division_site(self, value: int | None) -> None:
         """
         Setter for division site, ensures it is within the valid range.
         """
         self._division_site = value
-

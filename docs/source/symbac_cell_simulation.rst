@@ -11,3 +11,5 @@ Persistence Notes
 * ``SyMBac.simulation.Simulation(load_sim_dir=...)`` expects these artifacts in ``load_sim_dir``.
 * ``max_length_std`` and ``width_std`` are converted with the full resolution ``scale_factor``
   in the legacy rigid-body implementation.
+* Deprecated aliases ``max_length_var`` and ``width_var`` preserve historical
+  ``sqrt(scale_factor)`` conversion and emit a ``FutureWarning`` until removal on ``2026-09-01``.

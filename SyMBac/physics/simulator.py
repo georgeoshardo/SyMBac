@@ -111,7 +111,7 @@ class Simulator:
         self.space.gravity = physics_config.GRAVITY
         self.space.damping = physics_config.DAMPING
         self.dt: float = physics_config.DT
-        if physics_config.COLLISION_SLOP:
+        if physics_config.COLLISION_SLOP is not None:
             self.space.collision_slop = physics_config.COLLISION_SLOP
 
         self.next_group_id: int = 1
@@ -281,6 +281,9 @@ class Simulator:
 
         # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
         for cell in self.colony.cells[:]:
+            if cell.config.NOISE_STRENGTH > 0:
+                cell.physics_representation.apply_noise(self.dt)
+
             # --- Pre cell hook
             for hook in self.pre_cell_grow_hooks:
                 hook(cell)

@@ -89,8 +89,8 @@ class CellConfig:
     ROTARY_SPRING_DAMPING: float | None = None
 
     ROTARY_LIMIT_JOINT: bool = True  # Whether to use rotary limit joints
-    MAX_BEND_ANGLE: float | None = None  # 0.01 normally, 0.05 also good for E. coli in MM
-    STIFFNESS: float | None = None  # Stiffness for limit joints, can be np.inf for max stiffness
+    MAX_BEND_ANGLE: float | None = 0.01  # 0.01 normally, 0.05 also good for E. coli in MM
+    STIFFNESS: float | None = np.inf  # Stiffness for limit joints, can be np.inf for max stiffness
 
     #Parameters to be set post init
     JOINT_DISTANCE: float = field(init=False)
@@ -157,8 +157,8 @@ class PhysicsConfig:
     GRAVITY: tuple[float, float] = (0.0, 0.0)
     THREADED: bool = False # Use pymunk.Space(threaded=True) for multithreading but non-deterministic results, even with random seed set
     THREADS: int = 1
-    DT = 1.0 / 60.0  # Time step for the physics simulation
-    COLLISION_SLOP: Optional[float] = False # Amount of overlap between shapes that is allowed. To improve stability, set this as high as you can without noticeable overlapping. It defaults to 0.1.
+    DT: float = 1.0 / 60.0  # Time step for the physics simulation
+    COLLISION_SLOP: Optional[float] = None # Amount of overlap between shapes that is allowed. To improve stability, set this as high as you can without noticeable overlapping. It defaults to 0.1.
 
     def __post_init__(self):
         if self.THREADS > 2:
@@ -167,3 +167,7 @@ class PhysicsConfig:
             raise ValueError("If THREADED is False, THREADS must be 1.")
         if self.THREADED and self.THREADS != 2:
             raise ValueError("If THREADED is True, THREADS must be 2.")
+        if self.DT <= 0:
+            raise ValueError("DT must be greater than 0.")
+        if self.COLLISION_SLOP is not None and self.COLLISION_SLOP < 0:
+            raise ValueError("COLLISION_SLOP must be non-negative when provided.")

@@ -2,47 +2,13 @@ import numpy as np
 from joblib import Parallel, delayed
 import pickle
 import tempfile
-import warnings
-from SyMBac.cell_simulation import run_simulation as run_cell_simulation
+from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
 import napari
 import os
 from tqdm.auto import tqdm
 from scipy.stats import norm
-
-_DEPRECATED_ALIAS_REMOVAL_DATE = "2026-09-01"
-_UNSET = object()
-
-
-def _resolve_deprecated_std_parameter(api_name, new_name, new_value, legacy_name, legacy_value):
-    new_provided = new_value is not _UNSET
-    legacy_provided = legacy_value is not _UNSET
-
-    if legacy_provided:
-        if new_provided and new_value != legacy_value:
-            raise ValueError(
-                f"{api_name}: `{new_name}` and deprecated `{legacy_name}` were both provided with different values."
-            )
-        warnings.warn(
-            (
-                f"`{legacy_name}` is deprecated and will be removed on {_DEPRECATED_ALIAS_REMOVAL_DATE}. "
-                f"Use `{new_name}` instead."
-            ),
-            FutureWarning,
-            stacklevel=3,
-        )
-        return legacy_value
-
-    if not new_provided:
-        raise TypeError(f"{api_name} missing required argument: '{new_name}'")
-    return new_value
-
-
-def _require_provided(api_name, arg_name, value):
-    if value is _UNSET:
-        raise TypeError(f"{api_name} missing required argument: '{arg_name}'")
-
 
 def _atomic_pickle_dump(payload, output_path):
     output_dir = os.path.dirname(output_path) or "."
@@ -94,6 +60,7 @@ class Simulation:
         trench_length,
         trench_width,
         cell_max_length,
+        *,
         max_length_std=_UNSET,
         cell_width=_UNSET,
         width_std=_UNSET,
@@ -164,19 +131,21 @@ class Simulation:
         _require_provided(api_name, "resize_amount", resize_amount)
         _require_provided(api_name, "save_dir", save_dir)
 
-        max_length_std = _resolve_deprecated_std_parameter(
+        max_length_std, _ = _resolve_deprecated_parameter(
             api_name=api_name,
             new_name="max_length_std",
             new_value=max_length_std,
             legacy_name="max_length_var",
             legacy_value=max_length_var,
+            compatibility_note="`max_length_var` is interpreted as a standard deviation in this API.",
         )
-        width_std = _resolve_deprecated_std_parameter(
+        width_std, _ = _resolve_deprecated_parameter(
             api_name=api_name,
             new_name="width_std",
             new_value=width_std,
             legacy_name="width_var",
             legacy_value=width_var,
+            compatibility_note="`width_var` is interpreted as a standard deviation in this API.",
         )
 
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:

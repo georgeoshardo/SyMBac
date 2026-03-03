@@ -73,11 +73,14 @@ class Colony:
                         # If the daughter's head is overlapping with the mother
                         if info.shape in mother_shapes:
 
-                            mother.physics_representation.remove_tail_segment()
-                            daughter.physics_representation.remove_head_segment()
+                            mother_removed_segment = mother.physics_representation.remove_tail_segment()
+                            daughter_removed_segment = daughter.physics_representation.remove_head_segment()
+                            if mother_removed_segment is None or daughter_removed_segment is None:
+                                # Stop trying to trim when either cell has reached minimum size.
+                                break
 
-                            # We must update the mother_shapes list since a shape was removed
-                            mother_shapes.pop()  # TODO this could be an issue leading to an infinite loop if the mother has no segments left and the minimum length is too high
+                            if mother_removed_segment.shape in mother_shapes:
+                                mother_shapes.remove(mother_removed_segment.shape)
 
                             overlap_found = True
                             break  # Exit the inner query loop

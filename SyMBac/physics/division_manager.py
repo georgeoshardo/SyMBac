@@ -177,13 +177,18 @@ class DivisionManager:
         if self.config.DAMPED_ROTARY_SPRING:
             cell.physics_representation.spring_joints = cell.physics_representation.spring_joints[:connecting_joint_idx]
 
+        cell.physics_representation.growth_accumulator_head = 0.0
         cell.physics_representation.growth_accumulator_tail = 0.0
+        daughter_cell.physics_representation.growth_accumulator_head = 0.0
+        daughter_cell.physics_representation.growth_accumulator_tail = 0.0
         cell.num_divisions += 1
 
         # Sync width state from inherited segment geometry, then sample
         # new per-generation width targets without an abrupt split-time jump.
         cell.sync_width_from_segments()
         daughter_cell.sync_width_from_segments()
+        cell.birth_length = cell.length
+        daughter_cell.birth_length = daughter_cell.length
         cell.set_new_width_target()
         daughter_cell.set_new_width_target()
 

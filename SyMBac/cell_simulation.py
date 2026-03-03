@@ -1,47 +1,15 @@
 import pickle
 from copy import deepcopy
 import numpy as np
-import warnings
 import os
 from scipy.stats import norm
 from SyMBac.cell import Cell
+from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 import pymunk
 from tqdm.auto import tqdm
 
 #TODO work these functions into a class, possibly in simulation.py
-
-_DEPRECATED_ALIAS_REMOVAL_DATE = "2026-09-01"
-_UNSET = object()
-
-
-def _resolve_deprecated_std_parameter(api_name, new_name, new_value, legacy_name, legacy_value):
-    new_provided = new_value is not _UNSET
-    legacy_provided = legacy_value is not _UNSET
-
-    if legacy_provided:
-        if new_provided and new_value != legacy_value:
-            raise ValueError(
-                f"{api_name}: `{new_name}` and deprecated `{legacy_name}` were both provided with different values."
-            )
-        warnings.warn(
-            (
-                f"`{legacy_name}` is deprecated and will be removed on {_DEPRECATED_ALIAS_REMOVAL_DATE}. "
-                f"Use `{new_name}` instead."
-            ),
-            FutureWarning,
-            stacklevel=3,
-        )
-        return legacy_value
-
-    if not new_provided:
-        raise TypeError(f"{api_name} missing required argument: '{new_name}'")
-    return new_value
-
-
-def _require_provided(api_name, arg_name, value):
-    if value is _UNSET:
-        raise TypeError(f"{api_name} missing required argument: '{arg_name}'")
 
 
 def run_simulation(
@@ -110,19 +78,27 @@ def run_simulation(
     _require_provided(api_name, "save_dir", save_dir)
     _require_provided(api_name, "resize_amount", resize_amount)
     os.makedirs(save_dir, exist_ok=True)
-    max_length_std = _resolve_deprecated_std_parameter(
+    max_length_std, max_length_std_is_legacy = _resolve_deprecated_parameter(
         api_name=api_name,
         new_name="max_length_std",
         new_value=max_length_std,
         legacy_name="max_length_var",
         legacy_value=max_length_var,
+        compatibility_note=(
+            "Legacy `max_length_var` keeps the old scaling (`* sqrt(scale_factor)`) in this API. "
+            "Use `max_length_std` for the new linear scaling (`* scale_factor`)."
+        ),
     )
-    width_std = _resolve_deprecated_std_parameter(
+    width_std, width_std_is_legacy = _resolve_deprecated_parameter(
         api_name=api_name,
         new_name="width_std",
         new_value=width_std,
         legacy_name="width_var",
         legacy_value=width_var,
+        compatibility_note=(
+            "Legacy `width_var` keeps the old scaling (`* sqrt(scale_factor)`) in this API. "
+            "Use `width_std` for the new linear scaling (`* scale_factor`)."
+        ),
     )
 
     if show_window:
@@ -133,6 +109,8 @@ def run_simulation(
             phys_iters=phys_iters, max_length_std=max_length_std,
             width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
             lysis_p=lysis_p,
+            max_length_std_is_legacy=max_length_std_is_legacy,
+            width_std_is_legacy=width_std_is_legacy,
         )
 
     return _run_simulation_impl(
@@ -142,6 +120,8 @@ def run_simulation(
         phys_iters=phys_iters, max_length_std=max_length_std,
         width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
         lysis_p=lysis_p, show_window=False,
+        max_length_std_is_legacy=max_length_std_is_legacy,
+        width_std_is_legacy=width_std_is_legacy,
     )
 
 
@@ -177,8 +157,24 @@ def _run_simulation_in_subprocess(**kwargs):
     return result
 
 
-def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                         phys_iters, max_length_std, width_std, save_dir, resize_amount, lysis_p=0, show_window=False):
+def _run_simulation_impl(
+    trench_length,
+    trench_width,
+    cell_max_length,
+    cell_width,
+    sim_length,
+    pix_mic_conv,
+    gravity,
+    phys_iters,
+    max_length_std,
+    width_std,
+    save_dir,
+    resize_amount,
+    lysis_p=0,
+    show_window=False,
+    max_length_std_is_legacy=False,
+    width_std_is_legacy=False,
+):
     """Core simulation logic."""
 
     space = create_space()
@@ -190,6 +186,7 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
     dt = 1 / 20  # time-step per frame
     pix_mic_conv = 1 / pix_mic_conv  # micron per pixel
     scale_factor = pix_mic_conv * resize_amount  # resolution scaling factor
+    legacy_scale_factor = np.sqrt(scale_factor)
 
     trench_length = trench_length * scale_factor
     trench_width = trench_width * scale_factor
@@ -208,8 +205,12 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
         growth_rate_constant=1,
         max_length=cell_max_length * scale_factor,
         max_length_mean=cell_max_length * scale_factor,
-        max_length_std=max_length_std * scale_factor,
-        width_std=width_std * scale_factor,
+        max_length_std=max_length_std * (
+            legacy_scale_factor if max_length_std_is_legacy else scale_factor
+        ),
+        width_std=width_std * (
+            legacy_scale_factor if width_std_is_legacy else scale_factor
+        ),
         width_mean=cell_width * scale_factor,
         mother=None,
         lysis_p=lysis_p,

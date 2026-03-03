@@ -3,14 +3,11 @@ from pymunk import Vec2d
 import numpy as np
 from SyMBac.physics.segments import CellSegment
 from SyMBac.physics.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
-import pymunk
 from typing import cast, Optional
 from SyMBac.physics.config import CellConfig
 
 
 class PhysicsRepresentation:
-    _daughter_septum_segments: Optional[list[CellSegment]] = None
-    _mother_septum_segments: Optional[list[CellSegment]] = None
     """
     A class to hold all the cell's physics objects, such as segments, joints, and other physics-related attributes.
     Does not deal with division or growth directly, but provides methods to manipulate the segments and joints.
@@ -35,8 +32,8 @@ class PhysicsRepresentation:
         self.limit_joints: list[pymunk.RotaryLimitJoint] = []
         self.spring_joints: list[pymunk.DampedRotarySpring] = []
 
-        self.mother_septum_segments = None
-        self.daughter_septum_segments = None
+        self._mother_septum_segments: Optional[list[CellSegment]] = None
+        self._daughter_septum_segments: Optional[list[CellSegment]] = None
 
         self.growth_accumulator_head = 0
         self.growth_accumulator_tail = 0

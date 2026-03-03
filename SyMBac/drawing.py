@@ -290,6 +290,11 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     space_masks : 2D numy array
         The masks (labelled or bool) for that scene.
 
+    Notes
+    -----
+    Overlap handling uses winner-takes-all semantics: each pixel keeps the
+    maximum OPL contribution among cells instead of being zeroed at overlaps.
+
     """
     space_size = np.array(space_size)  # 1000, 200 a good value
     # Overlap ownership buffers:
