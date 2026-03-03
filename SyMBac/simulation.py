@@ -62,9 +62,13 @@ class Simulation:
             another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off
             each other very hard). 20 is a good starting point
         max_length_std : float
-            Standard deviation of the maximum cell length.
+            Standard deviation of the per-cell division length distribution.
+            New maximum lengths are sampled from a normal distribution
+            centered on ``cell_max_length`` at birth/division.
         width_std : float
-            Standard deviation of the cell width.
+            Standard deviation of the per-cell width distribution.
+            New width targets are sampled from a normal distribution centered
+            on ``cell_width`` at division, then relaxed smoothly over time.
         save_dir : str
             Location to save simulation output
         lysis_p : float
