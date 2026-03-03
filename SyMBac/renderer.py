@@ -268,12 +268,102 @@ class Renderer:
                 "device": regions == 2,
             }
 
+    @staticmethod
+    def _apply_edge_floor_opl(scene, edge_floor_opl):
+        """
+        Enforce a minimum non-zero OPL value for cell pixels.
+
+        Parameters
+        ----------
+        scene : 2D numpy array
+            Cell OPL scene where background is 0 and cells are >0.
+        edge_floor_opl : float
+            Minimum OPL for non-zero cell pixels. 0 disables this.
+
+        Returns
+        -------
+        2D numpy array
+            Scene with floor applied to non-zero cell pixels.
+        """
+        if edge_floor_opl is None or edge_floor_opl <= 0:
+            return scene
+        floored_scene = np.array(scene, copy=True)
+        nonzero = floored_scene > 0
+        floored_scene[nonzero] = np.maximum(floored_scene[nonzero], edge_floor_opl)
+        return floored_scene
+
+    def _estimate_edge_floor_slider_range(
+        self,
+        clamp_percentile=10.0,
+        max_median_fraction=0.25,
+        min_visible_fraction_of_max=0.8,
+        burn_in_fraction=0.25,
+        n_scenes=20,
+        sample_per_scene=20000,
+    ):
+        """
+        Estimate a safe interactive range for edge_floor_opl from simulation OPLs.
+
+        The upper bound is based on a low non-zero OPL percentile, with an
+        additional cap relative to median OPL to avoid over-flattening cells.
+        A minimum fraction of max OPL is also enforced so the top of the slider
+        produces a clearly visible effect.
+        """
+        default_range = (0.0, 20.0, 0.1)
+        scenes = getattr(self.simulation, "OPL_scenes", None)
+        if scenes is None or len(scenes) == 0:
+            return default_range
+
+        n_total = len(scenes)
+        burn_in = int(n_total * burn_in_fraction)
+        burn_in = max(0, min(burn_in, n_total - 1))
+        available = n_total - burn_in
+        if available <= 0:
+            return default_range
+
+        n_pick = min(n_scenes, available)
+        idxs = np.unique(np.linspace(burn_in, n_total - 1, n_pick, dtype=int))
+        rng = np.random.default_rng(0)
+        sampled_nonzero = []
+        for idx in idxs:
+            scene = scenes[int(idx)]
+            vals = scene[scene > 0]
+            if vals.size == 0:
+                continue
+            if vals.size > sample_per_scene:
+                vals = rng.choice(vals, size=sample_per_scene, replace=False)
+            sampled_nonzero.append(vals.astype(np.float32, copy=False))
+
+        if not sampled_nonzero:
+            return default_range
+
+        values = np.concatenate(sampled_nonzero)
+        q = float(np.quantile(values, clamp_percentile / 100.0))
+        med = float(np.median(values))
+        upper = min(q, max_median_fraction * med)
+
+        if not np.isfinite(upper) or upper <= 0:
+            upper = q if np.isfinite(q) and q > 0 else float(values.max())
+        if not np.isfinite(upper) or upper <= 0:
+            return default_range
+
+        max_val = float(values.max())
+        # Keep range impactful: ensure max slider value is not tiny.
+        visible_floor = float(min_visible_fraction_of_max * max_val)
+        upper = float(max(upper, visible_floor))
+        upper = float(min(upper, max_val))
+        step = max(upper / 200.0, 0.001)
+        upper = float(np.round(upper, 3))
+        step = float(np.round(step, 4))
+        return 0.0, upper, step
+
     def render_synthetic(self, media_multiplier=75, cell_multiplier=1.7,
                          device_multiplier=29, sigma=8.85, scene_no=-1,
                          match_fourier=False, match_histogram=True,
                          match_noise=False, noise_var=0.001, defocus=3.0,
                          halo_top_intensity=1, halo_bottom_intensity=1,
-                         halo_start=0, halo_end=1, random_real_image=None):
+                         halo_start=0, halo_end=1, random_real_image=None,
+                         edge_floor_opl=0.0):
         """
         Render a single synthetic image with the given parameters.
 
@@ -313,6 +403,9 @@ class Renderer:
             Fractional position where halo ramp ends.
         random_real_image : 2D numpy array, optional
             Alternative real image for Fourier matching.
+        edge_floor_opl : float
+            Minimum non-zero OPL floor applied to cell pixels before
+            multiplier scaling and convolution.
 
         Returns
         -------
@@ -321,8 +414,11 @@ class Renderer:
         mask : 2D numpy array
             Corresponding segmentation mask.
         """
+        floored_scene = self._apply_edge_floor_opl(
+            self.simulation.OPL_scenes[scene_no], edge_floor_opl
+        )
         expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
-            scene=self.simulation.OPL_scenes[scene_no],
+            scene=floored_scene,
             mask=self.simulation.masks[scene_no],
             media_multiplier=media_multiplier,
             cell_multiplier=cell_multiplier,
@@ -460,7 +556,7 @@ class Renderer:
 
     def generate_test_comparison(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                                  scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
-                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_top_intensity = 1, halo_bottom_intensity = 1, halo_start = 0, halo_end = 1, random_real_image = None, cell_texture_strength=0.0, cell_texture_scale=70.0):
+                                 debug_plot=False, noise_var=0.001, defocus=3.0, halo_top_intensity = 1, halo_bottom_intensity = 1, halo_start = 0, halo_end = 1, random_real_image = None, cell_texture_strength=0.0, cell_texture_scale=70.0, edge_floor_opl=0.0):
         """
         Takes all the parameters we've defined and calculated, and uses them to finally generate a synthetic image.
 
@@ -510,6 +606,9 @@ class Renderer:
             Simulated "halo" caused by the microfluidic device. This sets the starting muliplier of a linear ramp which is applied down the length of the image in the direction of the trench. , 
         halo_bottom_intensity : float
             Simulated "halo" caused by the microfluidic device. This sets the ending multiplier of a lienar ramp which is applied down the length of the image. E.g, if ``image`` has shape ``(y, x)``, then this results in ``image = image * np.linspace(halo_lower_int,halo_upper_int, image.shape[0])[:, None]``.
+        edge_floor_opl : float
+            Minimum non-zero OPL floor applied to cell pixels before
+            multiplier scaling and convolution.
 
 
 
@@ -521,10 +620,12 @@ class Renderer:
             The final image's accompanying masks
         """
 
+        base_scene = self.simulation.OPL_scenes[scene_no]
+
         if cell_texture_strength > 0:
             texture_params = {"strength": cell_texture_strength, "scale": cell_texture_scale}
             if hasattr(self.simulation, 'cell_timeseries_segments'):
-                scene, mask = draw_scene_from_segments(
+                textured_scene, mask = draw_scene_from_segments(
                     self.simulation.cell_timeseries_segments[scene_no],
                     self.simulation._space_size,
                     self.simulation.offset,
@@ -532,7 +633,7 @@ class Renderer:
                     cell_texture=texture_params,
                 )
             else:
-                scene, mask = draw_scene(
+                textured_scene, mask = draw_scene(
                     self.simulation.cell_timeseries_properties[scene_no],
                     self.simulation._do_transformation,
                     self.simulation._space_size,
@@ -540,8 +641,23 @@ class Renderer:
                     self.simulation._label_masks,
                     cell_texture=texture_params,
                 )
+            # Apply OPL floor on the untextured scene, then reapply texture
+            # modulation to preserve texture contrast at higher floor values.
+            if edge_floor_opl > 0 and base_scene.shape == textured_scene.shape:
+                floored_base_scene = self._apply_edge_floor_opl(base_scene, edge_floor_opl)
+                texture_factor = np.ones_like(base_scene, dtype=np.float32)
+                np.divide(
+                    textured_scene,
+                    base_scene,
+                    out=texture_factor,
+                    where=base_scene > 1e-6,
+                )
+                texture_factor = np.clip(texture_factor, 0.0, 2.5)
+                scene = floored_base_scene * texture_factor
+            else:
+                scene = self._apply_edge_floor_opl(textured_scene, edge_floor_opl)
         else:
-            scene = self.simulation.OPL_scenes[scene_no]
+            scene = self._apply_edge_floor_opl(base_scene, edge_floor_opl)
             mask = self.simulation.masks[scene_no]
 
         expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
@@ -935,6 +1051,8 @@ class Renderer:
             self.real_media_mean, self.real_cell_mean, self.real_device_mean, self.real_means, self.real_media_var,
             self.real_cell_var, self.real_device_var, self.real_vars)
 
+        edge_floor_range = self._estimate_edge_floor_slider_range()
+
         self.params = interactive(
             self.generate_test_comparison,
             {'manual': manual_update},
@@ -956,6 +1074,7 @@ class Renderer:
             random_real_image=fixed(None),
             cell_texture_strength=(0.0, 1.0, 0.05),
             cell_texture_scale=(10, 200, 1),
+            edge_floor_opl=edge_floor_range,
         )
 
         # Apply initial values to sliders (e.g. from auto-optimisation)
@@ -1029,6 +1148,7 @@ class Renderer:
                 random_real_image = random_real_image,
                 cell_texture_strength=self.params.kwargs["cell_texture_strength"],
                 cell_texture_scale=self.params.kwargs["cell_texture_scale"],
+                edge_floor_opl=self.params.kwargs.get("edge_floor_opl", 0.0),
             )
 
             syn_image = Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image)))
