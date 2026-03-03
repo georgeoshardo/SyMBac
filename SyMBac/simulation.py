@@ -1,6 +1,8 @@
 import numpy as np
 from joblib import Parallel, delayed
 import pickle
+import tempfile
+import warnings
 from SyMBac.cell_simulation import run_simulation as run_cell_simulation
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
@@ -8,6 +10,54 @@ import napari
 import os
 from tqdm.auto import tqdm
 from scipy.stats import norm
+
+_DEPRECATED_ALIAS_REMOVAL_DATE = "2026-09-01"
+_UNSET = object()
+
+
+def _resolve_deprecated_std_parameter(api_name, new_name, new_value, legacy_name, legacy_value):
+    new_provided = new_value is not _UNSET
+    legacy_provided = legacy_value is not _UNSET
+
+    if legacy_provided:
+        if new_provided and new_value != legacy_value:
+            raise ValueError(
+                f"{api_name}: `{new_name}` and deprecated `{legacy_name}` were both provided with different values."
+            )
+        warnings.warn(
+            (
+                f"`{legacy_name}` is deprecated and will be removed on {_DEPRECATED_ALIAS_REMOVAL_DATE}. "
+                f"Use `{new_name}` instead."
+            ),
+            FutureWarning,
+            stacklevel=3,
+        )
+        return legacy_value
+
+    if not new_provided:
+        raise TypeError(f"{api_name} missing required argument: '{new_name}'")
+    return new_value
+
+
+def _require_provided(api_name, arg_name, value):
+    if value is _UNSET:
+        raise TypeError(f"{api_name} missing required argument: '{arg_name}'")
+
+
+def _atomic_pickle_dump(payload, output_path):
+    output_dir = os.path.dirname(output_path) or "."
+    fd, temp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".p", dir=output_dir)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            pickle.dump(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, output_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 class Simulation:
     
     """
@@ -30,7 +80,8 @@ class Simulation:
             width_std = 0.,
             lysis_p = 0.,
             save_dir="/tmp/",
-            resize_amount = 3
+            resize_amount = 3,
+            substeps = 100
         )
     >>> my_simulation.run_simulation(show_window=False)
     >>> my_simulation.draw_simulation_OPL(do_transformation=True, label_masks=True)
@@ -38,7 +89,26 @@ class Simulation:
 
     """
 
-    def __init__(self, trench_length, trench_width, cell_max_length, max_length_std, cell_width, width_std, lysis_p, sim_length, pix_mic_conv, gravity, phys_iters, resize_amount, save_dir, substeps, load_sim_dir = None):
+    def __init__(
+        self,
+        trench_length,
+        trench_width,
+        cell_max_length,
+        max_length_std=_UNSET,
+        cell_width=_UNSET,
+        width_std=_UNSET,
+        lysis_p=_UNSET,
+        sim_length=_UNSET,
+        pix_mic_conv=_UNSET,
+        gravity=_UNSET,
+        phys_iters=_UNSET,
+        resize_amount=_UNSET,
+        save_dir=_UNSET,
+        substeps=100,
+        load_sim_dir=None,
+        max_length_var=_UNSET,
+        width_var=_UNSET,
+    ):
         """
         Initialising a Simulation object
 
@@ -78,15 +148,48 @@ class Simulation:
         resize_amount : int
             This is the "upscaling" factor for the simulation and the entire image generation process. Must be kept constant
             across the image generation pipeline. Starting value of 3 recommended.
+        substeps : int, optional
+            Number of physics sub-steps to execute per output frame.
+            Defaults to ``100`` when omitted for backward compatibility.
         load_sim_dir : str
             The directory if you wish to load a previously completed simulation
         """
+        api_name = f"{self.__class__.__name__}.__init__()"
+        _require_provided(api_name, "cell_width", cell_width)
+        _require_provided(api_name, "lysis_p", lysis_p)
+        _require_provided(api_name, "sim_length", sim_length)
+        _require_provided(api_name, "pix_mic_conv", pix_mic_conv)
+        _require_provided(api_name, "gravity", gravity)
+        _require_provided(api_name, "phys_iters", phys_iters)
+        _require_provided(api_name, "resize_amount", resize_amount)
+        _require_provided(api_name, "save_dir", save_dir)
+
+        max_length_std = _resolve_deprecated_std_parameter(
+            api_name=api_name,
+            new_name="max_length_std",
+            new_value=max_length_std,
+            legacy_name="max_length_var",
+            legacy_value=max_length_var,
+        )
+        width_std = _resolve_deprecated_std_parameter(
+            api_name=api_name,
+            new_name="width_std",
+            new_value=width_std,
+            legacy_name="width_var",
+            legacy_value=width_var,
+        )
+
+        if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
+            raise ValueError("substeps must be an integer greater than 0.")
+
         self.trench_length = trench_length
         self.trench_width = trench_width
         self.cell_max_length = cell_max_length
         self.max_length_std = max_length_std
+        self.max_length_var = max_length_std
         self.cell_width = cell_width
         self.width_std = width_std
+        self.width_var = width_std
         self.lysis_p = lysis_p
         self.sim_length = sim_length
         self.pix_mic_conv = pix_mic_conv
@@ -98,16 +201,27 @@ class Simulation:
         self.load_sim_dir = load_sim_dir
         self.substeps = substeps
 
-        try:
-            os.mkdir(save_dir)
-        except:
-            pass
+        os.makedirs(self.save_dir, exist_ok=True)
 
         if self.load_sim_dir:
             print("Loading previous simulation, no need to call run_simulation method, but you still need to run OPL drawing and correctly define the scale")
-            with open(f"{load_sim_dir}/cell_timeseries.p", 'rb') as f:
+            required_artifacts = ("cell_timeseries.p", "space_timeseries.p")
+            missing_artifacts = [
+                name
+                for name in required_artifacts
+                if not os.path.exists(os.path.join(self.load_sim_dir, name))
+            ]
+            if missing_artifacts:
+                raise FileNotFoundError(
+                    (
+                        f"Could not load simulation from '{self.load_sim_dir}'. "
+                        "Expected files: cell_timeseries.p, space_timeseries.p. "
+                        f"Missing: {', '.join(missing_artifacts)}."
+                    )
+                )
+            with open(os.path.join(self.load_sim_dir, "cell_timeseries.p"), 'rb') as f:
                 self.cell_timeseries = pickle.load(f)
-            with open(f"{load_sim_dir}/space_timeseries.p", 'rb') as f:
+            with open(os.path.join(self.load_sim_dir, "space_timeseries.p"), 'rb') as f:
                 self.space = pickle.load(f)
 
     
@@ -370,6 +484,8 @@ class Simulation:
         self.cell_timeseries = cell_timeseries
         self.space = sim.space
         self.historic_cells = []
+        _atomic_pickle_dump(self.cell_timeseries, os.path.join(self.save_dir, "cell_timeseries.p"))
+        _atomic_pickle_dump(self.space, os.path.join(self.save_dir, "space_timeseries.p"))
 
     def draw_simulation_OPL(self, do_transformation=True, label_masks=True, return_output=False):
         """
