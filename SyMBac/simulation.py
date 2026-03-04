@@ -398,6 +398,33 @@ class Simulation:
             rho = self.brownian_persistence
             noise_scale = np.sqrt(max(0.0, 1.0 - rho ** 2))
             live_ids = set()
+            trench_center_x = 35.0
+            trench_half_width = trench_width_px / 2.0
+            trench_y_min = 0.0
+            trench_y_max = trench_width_px / 2.0 + trench_length_px
+            # Hard caps against unrealistically large rigid-body jumps.
+            max_dx_abs = 0.20 * trench_width_px
+            max_dy_abs = max(1.0, 0.75 * SEGMENT_RADIUS)
+            max_dtheta_abs = 0.03  # ~1.7 degrees
+            max_backoff_attempts = 5
+
+            def _segments_inside_trench(candidate_segments):
+                for segment in candidate_segments:
+                    body = getattr(segment, "body", None)
+                    if body is None:
+                        return False
+                    radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
+                    x = float(body.position[0])
+                    y = float(body.position[1])
+                    if x < (trench_center_x - trench_half_width + radius):
+                        return False
+                    if x > (trench_center_x + trench_half_width - radius):
+                        return False
+                    if y < (trench_y_min + 0.25 * radius):
+                        return False
+                    if y > (trench_y_max - 0.25 * radius):
+                        return False
+                return True
 
             for cell in sim.colony.cells:
                 group_id = getattr(cell, "group_id", None)
@@ -414,7 +441,9 @@ class Simulation:
                 dy = rho * prev_state[0] + noise_scale * np.random.normal(0.0, brownian_longitudinal_std_px)
                 dx = rho * prev_state[1] + noise_scale * np.random.normal(0.0, brownian_transverse_std_px)
                 dtheta = rho * prev_state[2] + noise_scale * np.random.normal(0.0, self.brownian_rotation_std)
-                brownian_state[group_id] = np.array([dy, dx, dtheta], dtype=float)
+                dy = float(np.clip(dy, -max_dy_abs, max_dy_abs))
+                dx = float(np.clip(dx, -max_dx_abs, max_dx_abs))
+                dtheta = float(np.clip(dtheta, -max_dtheta_abs, max_dtheta_abs))
 
                 segment_bodies = [getattr(segment, "body", None) for segment in segments]
                 segment_bodies = [body for body in segment_bodies if body is not None]
@@ -426,13 +455,35 @@ class Simulation:
                     axis=0,
                 )
                 center_vec = physics_rep.segments[0].body.position.__class__(center[0], center[1])
-                translation = physics_rep.segments[0].body.position.__class__(dx, dy)
+                old_positions = [body.position for body in segment_bodies]
+                old_angles = [float(body.angle) for body in segment_bodies]
 
-                for body in segment_bodies:
-                    rel = body.position - center_vec
-                    rel_rot = rel.rotated(dtheta)
-                    body.position = center_vec + rel_rot + translation
-                    body.angle += dtheta
+                accepted_state = None
+                for attempt in range(max_backoff_attempts):
+                    scale = 0.5 ** attempt
+                    trial_dx = dx * scale
+                    trial_dy = dy * scale
+                    trial_dtheta = dtheta * scale
+                    translation = physics_rep.segments[0].body.position.__class__(trial_dx, trial_dy)
+
+                    for body, old_pos, old_angle in zip(segment_bodies, old_positions, old_angles):
+                        rel = old_pos - center_vec
+                        rel_rot = rel.rotated(trial_dtheta)
+                        body.position = center_vec + rel_rot + translation
+                        body.angle = old_angle + trial_dtheta
+
+                    if _segments_inside_trench(segments):
+                        accepted_state = np.array([trial_dy, trial_dx, trial_dtheta], dtype=float)
+                        break
+
+                if accepted_state is None:
+                    # Roll back if all capped/backed-off proposals still violate trench bounds.
+                    for body, old_pos, old_angle in zip(segment_bodies, old_positions, old_angles):
+                        body.position = old_pos
+                        body.angle = old_angle
+                    brownian_state[group_id] = np.zeros(3, dtype=float)
+                else:
+                    brownian_state[group_id] = accepted_state
 
             stale_ids = [group_id for group_id in brownian_state.keys() if group_id not in live_ids]
             for group_id in stale_ids:

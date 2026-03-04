@@ -70,17 +70,18 @@ class _DummyBody:
 class _DummySegment:
     def __init__(self, x=0.0, y=0.0, angle=0.0):
         self.body = _DummyBody(x=x, y=y, angle=angle)
+        self.radius = 0.5
 
 
 class _DummyPhysicsRepresentation:
-    def __init__(self):
-        self.segments = [_DummySegment(x=10.0, y=10.0, angle=0.0)]
+    def __init__(self, x=35.0, y=10.0):
+        self.segments = [_DummySegment(x=x, y=y, angle=0.0)]
 
 
 class _DummyCellWithPhysics(_DummyCell):
-    def __init__(self, group_id):
+    def __init__(self, group_id, x=35.0, y=10.0):
         super().__init__(group_id)
-        self.physics_representation = _DummyPhysicsRepresentation()
+        self.physics_representation = _DummyPhysicsRepresentation(x=x, y=y)
 
 
 def _simulation_kwargs(tmp_path):
@@ -282,5 +283,49 @@ def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
     simulation.run_simulation(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    assert float(body.position[0]) != 10.0 or float(body.position[1]) != 10.0
+    assert float(body.position[0]) != 35.0 or float(body.position[1]) != 10.0
     assert float(body.angle) != 0.0
+
+
+def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, monkeypatch):
+    captured = {}
+
+    class _BoundaryJitterColony:
+        def __init__(self):
+            # Near right wall so positive x-jitter should violate bounds.
+            self.cells = [_DummyCellWithPhysics(1, x=46.0, y=10.0)]
+
+        def delete_cell(self, cell):
+            self.cells.remove(cell)
+
+    class _BoundaryJitterSimulator:
+        def __init__(self, **_kwargs):
+            self.space = {"dummy_space": True}
+            self.colony = _BoundaryJitterColony()
+            captured["cell"] = self.colony.cells[0]
+
+        def step(self):
+            return None
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _BoundaryJitterSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+    monkeypatch.setattr(
+        simulation_module.np.random,
+        "normal",
+        lambda loc, scale: scale if scale > 0 else 0.0,
+    )
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_longitudinal_std=0.0,
+        brownian_transverse_std=5.0,
+        brownian_rotation_std=0.02,
+        brownian_persistence=0.0,
+    )
+    simulation.run_simulation(show_window=False)
+
+    body = captured["cell"].physics_representation.segments[0].body
+    assert float(body.position[0]) == pytest.approx(46.0)
+    assert float(body.position[1]) == pytest.approx(10.0)
+    assert float(body.angle) == pytest.approx(0.0)
