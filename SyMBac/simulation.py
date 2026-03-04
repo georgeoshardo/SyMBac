@@ -79,6 +79,10 @@ class Simulation:
         physics_config=None,
         cell_config_overrides=None,
         physics_config_overrides=None,
+        brownian_longitudinal_std=0.0,
+        brownian_transverse_std=0.0,
+        brownian_rotation_std=0.0,
+        brownian_persistence=0.85,
         max_length_var=_UNSET,
         width_var=_UNSET,
     ):
@@ -145,6 +149,20 @@ class Simulation:
         physics_config_overrides : dict or None, optional
             Key-value overrides applied to the resolved physics configuration
             template (whether default or user-provided).
+        brownian_longitudinal_std : float, optional
+            Standard deviation of per-output-frame cell translation along the
+            trench axis (microns). Applied as temporally correlated (OU-like)
+            rigid-body jitter.
+        brownian_transverse_std : float, optional
+            Standard deviation of per-output-frame cell translation across the
+            trench axis (microns). Applied as temporally correlated (OU-like)
+            rigid-body jitter.
+        brownian_rotation_std : float, optional
+            Standard deviation of per-output-frame rigid-body rotation
+            perturbation (radians).
+        brownian_persistence : float, optional
+            Temporal persistence for Brownian jitter in [0, 1). Values near 0
+            are white-noise-like; values near 1 produce slowly drifting motion.
         """
         api_name = f"{self.__class__.__name__}.__init__()"
         _require_provided(api_name, "cell_width", cell_width)
@@ -179,6 +197,15 @@ class Simulation:
             raise TypeError("cell_config_overrides must be a dict when provided.")
         if physics_config_overrides is not None and not isinstance(physics_config_overrides, dict):
             raise TypeError("physics_config_overrides must be a dict when provided.")
+        for name, value in (
+            ("brownian_longitudinal_std", brownian_longitudinal_std),
+            ("brownian_transverse_std", brownian_transverse_std),
+            ("brownian_rotation_std", brownian_rotation_std),
+        ):
+            if isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative float.")
+        if isinstance(brownian_persistence, bool) or not (0.0 <= brownian_persistence < 1.0):
+            raise ValueError("brownian_persistence must be in [0.0, 1.0).")
 
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -203,6 +230,10 @@ class Simulation:
         self.physics_config_template = physics_config
         self.cell_config_overrides = dict(cell_config_overrides or {})
         self.physics_config_overrides = dict(physics_config_overrides or {})
+        self.brownian_longitudinal_std = float(brownian_longitudinal_std)
+        self.brownian_transverse_std = float(brownian_transverse_std)
+        self.brownian_rotation_std = float(brownian_rotation_std)
+        self.brownian_persistence = float(brownian_persistence)
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -260,6 +291,9 @@ class Simulation:
         trench_length_px = self.trench_length * scale_factor
         trench_width_px = self.trench_width * scale_factor
         SUB_STEPS = self.substeps
+        brownian_longitudinal_std_px = self.brownian_longitudinal_std * scale_factor
+        brownian_transverse_std_px = self.brownian_transverse_std * scale_factor
+        brownian_state = {}  # group_id -> np.array([dy, dx, dtheta])
 
         default_cell_kwargs = dict(
             GRANULARITY=GRANULARITY,
@@ -353,6 +387,57 @@ class Simulation:
                 if norm.rvs() <= norm.ppf(self.lysis_p):
                     sim.colony.delete_cell(cell)
 
+        def apply_rigid_body_brownian_jitter(sim):
+            if (
+                brownian_longitudinal_std_px <= 0
+                and brownian_transverse_std_px <= 0
+                and self.brownian_rotation_std <= 0
+            ):
+                return
+
+            rho = self.brownian_persistence
+            noise_scale = np.sqrt(max(0.0, 1.0 - rho ** 2))
+            live_ids = set()
+
+            for cell in sim.colony.cells:
+                group_id = getattr(cell, "group_id", None)
+                if group_id is None:
+                    continue
+                live_ids.add(group_id)
+
+                physics_rep = getattr(cell, "physics_representation", None)
+                segments = getattr(physics_rep, "segments", None)
+                if not segments:
+                    continue
+
+                prev_state = brownian_state.get(group_id, np.zeros(3, dtype=float))
+                dy = rho * prev_state[0] + noise_scale * np.random.normal(0.0, brownian_longitudinal_std_px)
+                dx = rho * prev_state[1] + noise_scale * np.random.normal(0.0, brownian_transverse_std_px)
+                dtheta = rho * prev_state[2] + noise_scale * np.random.normal(0.0, self.brownian_rotation_std)
+                brownian_state[group_id] = np.array([dy, dx, dtheta], dtype=float)
+
+                segment_bodies = [getattr(segment, "body", None) for segment in segments]
+                segment_bodies = [body for body in segment_bodies if body is not None]
+                if not segment_bodies:
+                    continue
+
+                center = np.mean(
+                    np.array([[float(body.position[0]), float(body.position[1])] for body in segment_bodies], dtype=float),
+                    axis=0,
+                )
+                center_vec = physics_rep.segments[0].body.position.__class__(center[0], center[1])
+                translation = physics_rep.segments[0].body.position.__class__(dx, dy)
+
+                for body in segment_bodies:
+                    rel = body.position - center_vec
+                    rel_rot = rel.rotated(dtheta)
+                    body.position = center_vec + rel_rot + translation
+                    body.angle += dtheta
+
+            stale_ids = [group_id for group_id in brownian_state.keys() if group_id not in live_ids]
+            for group_id in stale_ids:
+                brownian_state.pop(group_id, None)
+
         def track_lineage(mother, daughter):
             mother_gen = lineage_info.get(mother.group_id, {}).get('generation', 0)
             lineage_info[daughter.group_id] = {
@@ -414,6 +499,7 @@ class Simulation:
             # Lysis once per output frame so probability is independent of substeps
             if self.lysis_p > 0:
                 handle_lysis(sim)
+            apply_rigid_body_brownian_jitter(sim)
 
             # Skip first 2 warmup frames (matching old engine)
             if frame_idx >= 2:

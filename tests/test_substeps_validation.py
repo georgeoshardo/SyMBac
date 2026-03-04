@@ -58,3 +58,20 @@ def test_config_overrides_validation_rejects_non_dict(tmp_path, field_name, bad_
     kwargs[field_name] = bad_value
     with pytest.raises(TypeError, match=f"{field_name}"):
         Simulation(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("brownian_longitudinal_std", -0.1),
+        ("brownian_transverse_std", -0.1),
+        ("brownian_rotation_std", -0.01),
+        ("brownian_persistence", -0.1),
+        ("brownian_persistence", 1.0),
+    ],
+)
+def test_brownian_validation_rejects_invalid_ranges(tmp_path, field_name, bad_value):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs[field_name] = bad_value
+    with pytest.raises(ValueError):
+        Simulation(**kwargs)

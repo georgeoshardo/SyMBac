@@ -16,5 +16,9 @@ Compatibility Notes
 * All parameters after ``cell_max_length`` in ``Simulation.__init__`` are keyword-only to prevent
   silent positional mis-assignment.
 * ``substeps`` must be a positive integer.
+* Brownian jitter controls are available via
+  ``brownian_longitudinal_std``, ``brownian_transverse_std``,
+  ``brownian_rotation_std``, and ``brownian_persistence``.
+  See :doc:`brownian_jitter_model` for equations and parameter guidance.
 * ``Simulation.run_simulation`` writes ``cell_timeseries.p`` and ``space_timeseries.p`` into ``save_dir``.
 * ``Simulation(load_sim_dir=...)`` expects both artifacts in ``load_sim_dir``.

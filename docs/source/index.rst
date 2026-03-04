@@ -33,6 +33,7 @@ Contents
    :maxdepth: 3
 
    Mother machine simulations <examples/simple_mother_machine.ipynb>
+   Brownian jitter model <brownian_jitter_model>
 
 .. toctree:: 
    :caption: Guide: Agar Pad

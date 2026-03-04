@@ -17,6 +17,7 @@ import SyMBac.simulation as simulation_module
 import SyMBac.cell_snapshot as cell_snapshot_module
 import SyMBac.cell_simulation as cell_simulation_module
 import SyMBac.physics.simulator as physics_simulator_module
+from pymunk.vec2d import Vec2d
 
 
 class _DummyCell:
@@ -58,6 +59,28 @@ class _DummySnapshot:
         self.mother_mask_label = mother_mask_label
         self.just_divided = just_divided
         self.lysis_p = lysis_p
+
+
+class _DummyBody:
+    def __init__(self, x=0.0, y=0.0, angle=0.0):
+        self.position = Vec2d(x, y)
+        self.angle = angle
+
+
+class _DummySegment:
+    def __init__(self, x=0.0, y=0.0, angle=0.0):
+        self.body = _DummyBody(x=x, y=y, angle=angle)
+
+
+class _DummyPhysicsRepresentation:
+    def __init__(self):
+        self.segments = [_DummySegment(x=10.0, y=10.0, angle=0.0)]
+
+
+class _DummyCellWithPhysics(_DummyCell):
+    def __init__(self, group_id):
+        super().__init__(group_id)
+        self.physics_representation = _DummyPhysicsRepresentation()
 
 
 def _simulation_kwargs(tmp_path):
@@ -219,3 +242,45 @@ def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch
     assert cell_cfg.NOISE_STRENGTH == 0.09
     assert physics_cfg.ITERATIONS == 77
     assert physics_cfg.DAMPING == 0.35
+
+
+def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
+    captured = {}
+
+    class _JitterColony:
+        def __init__(self):
+            self.cells = [_DummyCellWithPhysics(1)]
+
+        def delete_cell(self, cell):
+            self.cells.remove(cell)
+
+    class _JitterSimulator:
+        def __init__(self, **_kwargs):
+            self.space = {"dummy_space": True}
+            self.colony = _JitterColony()
+            captured["cell"] = self.colony.cells[0]
+
+        def step(self):
+            return None
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _JitterSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+    monkeypatch.setattr(
+        simulation_module.np.random,
+        "normal",
+        lambda loc, scale: scale if scale > 0 else 0.0,
+    )
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_longitudinal_std=0.05,
+        brownian_transverse_std=0.02,
+        brownian_rotation_std=0.01,
+        brownian_persistence=0.0,
+    )
+    simulation.run_simulation(show_window=False)
+
+    body = captured["cell"].physics_representation.segments[0].body
+    assert float(body.position[0]) != 10.0 or float(body.position[1]) != 10.0
+    assert float(body.angle) != 0.0
