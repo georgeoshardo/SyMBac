@@ -75,6 +75,9 @@ def test_config_overrides_validation_rejects_non_dict(tmp_path, field_name, bad_
         ("brownian_max_dtheta", 0.0),
         ("brownian_backoff_attempts", 0),
         ("brownian_backoff_attempts", 1.5),
+        ("brownian_application_mode", "not-a-mode"),
+        ("brownian_projection_angular_damping", -0.1),
+        ("brownian_projection_angular_damping", 1.1),
     ],
 )
 def test_brownian_validation_rejects_invalid_ranges(tmp_path, field_name, bad_value):
@@ -82,3 +85,15 @@ def test_brownian_validation_rejects_invalid_ranges(tmp_path, field_name, bad_va
     kwargs[field_name] = bad_value
     with pytest.raises(ValueError):
         Simulation(**kwargs)
+
+
+@pytest.mark.parametrize("mode", ["teleport", "velocity", "impulse"])
+def test_brownian_application_mode_accepts_valid_values(tmp_path, mode):
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_application_mode=mode,
+        brownian_projection_angular_damping=0.5,
+    )
+    assert simulation.brownian_application_mode == mode
+    assert simulation.brownian_projection_angular_damping == pytest.approx(0.5)

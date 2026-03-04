@@ -88,6 +88,8 @@ class Simulation:
         brownian_max_dy_px_floor=1.0,
         brownian_max_dtheta=0.03,
         brownian_backoff_attempts=5,
+        brownian_application_mode="teleport",
+        brownian_projection_angular_damping=0.35,
         max_length_var=_UNSET,
         width_var=_UNSET,
     ):
@@ -181,6 +183,15 @@ class Simulation:
         brownian_backoff_attempts : int, optional
             Number of geometric backoff retries before rolling back jitter for
             a frame.
+        brownian_application_mode : {"teleport", "velocity", "impulse"}, optional
+            Brownian application strategy. ``teleport`` applies a rigid-body
+            pose perturbation directly after sub-stepping. ``velocity`` and
+            ``impulse`` convert the sampled perturbation into dynamic
+            perturbations before sub-stepping so collisions are resolved by
+            Pymunk.
+        brownian_projection_angular_damping : float, optional
+            Angular damping factor applied when projection safety correction is
+            needed in ``velocity`` or ``impulse`` modes. Must be in ``[0, 1]``.
         """
         api_name = f"{self.__class__.__name__}.__init__()"
         _require_provided(api_name, "cell_width", cell_width)
@@ -238,6 +249,15 @@ class Simulation:
             or brownian_backoff_attempts < 1
         ):
             raise ValueError("brownian_backoff_attempts must be an integer >= 1.")
+        if brownian_application_mode not in {"teleport", "velocity", "impulse"}:
+            raise ValueError(
+                "brownian_application_mode must be one of: 'teleport', 'velocity', 'impulse'."
+            )
+        if (
+            isinstance(brownian_projection_angular_damping, bool)
+            or not (0.0 <= brownian_projection_angular_damping <= 1.0)
+        ):
+            raise ValueError("brownian_projection_angular_damping must be in [0.0, 1.0].")
 
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -271,6 +291,8 @@ class Simulation:
         self.brownian_max_dy_px_floor = float(brownian_max_dy_px_floor)
         self.brownian_max_dtheta = float(brownian_max_dtheta)
         self.brownian_backoff_attempts = int(brownian_backoff_attempts)
+        self.brownian_application_mode = brownian_application_mode
+        self.brownian_projection_angular_damping = float(brownian_projection_angular_damping)
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -393,6 +415,9 @@ class Simulation:
         physics_config = PhysicsConfig(**resolved_physics_kwargs)
         self._resolved_cell_config = cell_config
         self._resolved_physics_config = physics_config
+        brownian_mode = self.brownian_application_mode
+        dynamic_brownian_mode = brownian_mode in {"velocity", "impulse"}
+        frame_dt = max(float(physics_config.DT) * float(SUB_STEPS), 1e-12)
 
         # --- Lineage tracking ---
         lineage_info = {}  # group_id -> {mother_mask_label, generation}
@@ -409,10 +434,16 @@ class Simulation:
         def remove_out_of_bounds(sim):
             trench_open_end = trench_width_px / 2 + trench_length_px
             for cell in sim.colony.cells[:]:
-                if not cell.physics_representation.segments:
+                segments = getattr(cell.physics_representation, "segments", None)
+                if not segments:
                     continue
-                pos_y = cell.physics_representation.segments[0].position[1]
-                if pos_y < 0 or pos_y > trench_open_end:
+                segment_radii = [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments]
+                segment_ys = [float(segment.position[1]) for segment in segments]
+                min_radius = min(segment_radii) if segment_radii else SEGMENT_RADIUS
+                max_radius = max(segment_radii) if segment_radii else SEGMENT_RADIUS
+                below_floor = min(segment_ys) < -0.25 * min_radius
+                above_open_end = max(segment_ys) > trench_open_end + 0.25 * max_radius
+                if below_floor or above_open_end:
                     sim.colony.delete_cell(cell)
 
         def handle_lysis(sim):
@@ -447,24 +478,71 @@ class Simulation:
             )
             max_dtheta_abs = self.brownian_max_dtheta
             max_backoff_attempts = self.brownian_backoff_attempts
+            enforce_open_end_cap = not dynamic_brownian_mode
 
-            def _segments_inside_trench(candidate_segments):
-                for segment in candidate_segments:
-                    body = getattr(segment, "body", None)
-                    if body is None:
-                        return False
+            def _positions_inside_trench(segments, positions):
+                for segment, position in zip(segments, positions):
                     radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
-                    x = float(body.position[0])
-                    y = float(body.position[1])
+                    x = float(position[0])
+                    y = float(position[1])
                     if x < (trench_center_x - trench_half_width + radius):
                         return False
                     if x > (trench_center_x + trench_half_width - radius):
                         return False
                     if y < (trench_y_min + 0.25 * radius):
                         return False
-                    if y > (trench_y_max - 0.25 * radius):
+                    if enforce_open_end_cap and y > (trench_y_max - 0.25 * radius):
                         return False
                 return True
+
+            def _build_trial_positions(old_positions, center_vec, dx_value, dy_value, dtheta_value):
+                vec_type = center_vec.__class__
+                translation = vec_type(dx_value, dy_value)
+                return [
+                    center_vec + (old_pos - center_vec).rotated(dtheta_value) + translation
+                    for old_pos in old_positions
+                ]
+
+            def _apply_teleport(segment_bodies, old_positions, old_angles, center_vec, dx_value, dy_value, dtheta_value):
+                trial_positions = _build_trial_positions(
+                    old_positions=old_positions,
+                    center_vec=center_vec,
+                    dx_value=dx_value,
+                    dy_value=dy_value,
+                    dtheta_value=dtheta_value,
+                )
+                for body, trial_pos, old_angle in zip(segment_bodies, trial_positions, old_angles):
+                    body.position = trial_pos
+                    body.angle = old_angle + dtheta_value
+
+            def _apply_dynamic_jitter(segment_bodies, center, dx_value, dy_value, dtheta_value):
+                translational_vx = dx_value / frame_dt
+                translational_vy = dy_value / frame_dt
+                angular_velocity = dtheta_value / frame_dt
+
+                for body in segment_bodies:
+                    vec_type = body.position.__class__
+                    rel_x = float(body.position[0] - center[0])
+                    rel_y = float(body.position[1] - center[1])
+                    jitter_velocity = vec_type(
+                        translational_vx - angular_velocity * rel_y,
+                        translational_vy + angular_velocity * rel_x,
+                    )
+
+                    current_velocity = getattr(body, "velocity", vec_type(0.0, 0.0))
+                    current_velocity = vec_type(float(current_velocity[0]), float(current_velocity[1]))
+                    current_angular_velocity = float(getattr(body, "angular_velocity", 0.0))
+
+                    if brownian_mode == "velocity":
+                        body.velocity = current_velocity + jitter_velocity
+                    else:
+                        if hasattr(body, "apply_impulse_at_local_point"):
+                            body_mass = float(getattr(body, "mass", 1.0))
+                            body.apply_impulse_at_local_point(jitter_velocity * body_mass)
+                        else:
+                            body.velocity = current_velocity + jitter_velocity
+
+                    body.angular_velocity = current_angular_velocity + angular_velocity
 
             for cell in sim.colony.cells:
                 group_id = getattr(cell, "group_id", None)
@@ -490,12 +568,13 @@ class Simulation:
                 if not segment_bodies:
                     continue
 
+                vec_type = segment_bodies[0].position.__class__
                 center = np.mean(
                     np.array([[float(body.position[0]), float(body.position[1])] for body in segment_bodies], dtype=float),
                     axis=0,
                 )
-                center_vec = physics_rep.segments[0].body.position.__class__(center[0], center[1])
-                old_positions = [body.position for body in segment_bodies]
+                center_vec = vec_type(center[0], center[1])
+                old_positions = [vec_type(float(body.position[0]), float(body.position[1])) for body in segment_bodies]
                 old_angles = [float(body.angle) for body in segment_bodies]
 
                 accepted_state = None
@@ -504,30 +583,101 @@ class Simulation:
                     trial_dx = dx * scale
                     trial_dy = dy * scale
                     trial_dtheta = dtheta * scale
-                    translation = physics_rep.segments[0].body.position.__class__(trial_dx, trial_dy)
+                    trial_positions = _build_trial_positions(
+                        old_positions=old_positions,
+                        center_vec=center_vec,
+                        dx_value=trial_dx,
+                        dy_value=trial_dy,
+                        dtheta_value=trial_dtheta,
+                    )
 
-                    for body, old_pos, old_angle in zip(segment_bodies, old_positions, old_angles):
-                        rel = old_pos - center_vec
-                        rel_rot = rel.rotated(trial_dtheta)
-                        body.position = center_vec + rel_rot + translation
-                        body.angle = old_angle + trial_dtheta
-
-                    if _segments_inside_trench(segments):
+                    if _positions_inside_trench(segments, trial_positions):
                         accepted_state = np.array([trial_dy, trial_dx, trial_dtheta], dtype=float)
                         break
 
                 if accepted_state is None:
-                    # Roll back if all capped/backed-off proposals still violate trench bounds.
-                    for body, old_pos, old_angle in zip(segment_bodies, old_positions, old_angles):
-                        body.position = old_pos
-                        body.angle = old_angle
                     brownian_state[group_id] = np.zeros(3, dtype=float)
                 else:
+                    if dynamic_brownian_mode:
+                        _apply_dynamic_jitter(
+                            segment_bodies=segment_bodies,
+                            center=center,
+                            dx_value=float(accepted_state[1]),
+                            dy_value=float(accepted_state[0]),
+                            dtheta_value=float(accepted_state[2]),
+                        )
+                    else:
+                        _apply_teleport(
+                            segment_bodies=segment_bodies,
+                            old_positions=old_positions,
+                            old_angles=old_angles,
+                            center_vec=center_vec,
+                            dx_value=float(accepted_state[1]),
+                            dy_value=float(accepted_state[0]),
+                            dtheta_value=float(accepted_state[2]),
+                        )
                     brownian_state[group_id] = accepted_state
 
             stale_ids = [group_id for group_id in brownian_state.keys() if group_id not in live_ids]
             for group_id in stale_ids:
                 brownian_state.pop(group_id, None)
+
+        def project_segments_inside_trench(sim):
+            if not dynamic_brownian_mode:
+                return
+
+            trench_center_x = 35.0
+            trench_half_width = trench_width_px / 2.0
+            trench_y_min = 0.0
+            trench_y_max = trench_width_px / 2.0 + trench_length_px
+            angular_damping = self.brownian_projection_angular_damping
+
+            for cell in sim.colony.cells:
+                group_id = getattr(cell, "group_id", None)
+                physics_rep = getattr(cell, "physics_representation", None)
+                segments = getattr(physics_rep, "segments", None)
+                if not segments:
+                    continue
+
+                projected = False
+                for segment in segments:
+                    body = getattr(segment, "body", None)
+                    if body is None:
+                        continue
+
+                    radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
+                    min_x = trench_center_x - trench_half_width + radius
+                    max_x = trench_center_x + trench_half_width - radius
+                    min_y = trench_y_min + 0.25 * radius
+
+                    x = float(body.position[0])
+                    y = float(body.position[1])
+                    clamped_x = min(max(x, min_x), max_x)
+                    clamped_y = max(y, min_y)
+
+                    if clamped_x == x and clamped_y == y:
+                        continue
+
+                    vec_type = body.position.__class__
+                    body.position = vec_type(clamped_x, clamped_y)
+                    if hasattr(body, "velocity"):
+                        velocity = getattr(body, "velocity")
+                        velocity = vec_type(float(velocity[0]), float(velocity[1]))
+                        if clamped_x != x:
+                            velocity = vec_type(0.0, float(velocity[1]))
+                        if clamped_y != y:
+                            velocity = vec_type(float(velocity[0]), 0.0)
+                        body.velocity = velocity
+                    projected = True
+
+                if projected:
+                    for segment in segments:
+                        body = getattr(segment, "body", None)
+                        if body is None or not hasattr(body, "angular_velocity"):
+                            continue
+                        body.angular_velocity = float(body.angular_velocity) * angular_damping
+                    if group_id in brownian_state:
+                        brownian_state[group_id][2] *= angular_damping
 
         def track_lineage(mother, daughter):
             mother_gen = lineage_info.get(mother.group_id, {}).get('generation', 0)
@@ -585,12 +735,17 @@ class Simulation:
 
         def step_and_capture_frame(frame_idx):
             just_divided_this_frame.clear()
+            if dynamic_brownian_mode:
+                apply_rigid_body_brownian_jitter(sim)
             for _ in range(SUB_STEPS):
                 sim.step()
             # Lysis once per output frame so probability is independent of substeps
             if self.lysis_p > 0:
                 handle_lysis(sim)
-            apply_rigid_body_brownian_jitter(sim)
+            if dynamic_brownian_mode:
+                project_segments_inside_trench(sim)
+            else:
+                apply_rigid_body_brownian_jitter(sim)
 
             # Skip first 2 warmup frames (matching old engine)
             if frame_idx >= 2:

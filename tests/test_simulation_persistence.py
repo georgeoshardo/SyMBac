@@ -65,6 +65,14 @@ class _DummyBody:
     def __init__(self, x=0.0, y=0.0, angle=0.0):
         self.position = Vec2d(x, y)
         self.angle = angle
+        self.velocity = Vec2d(0.0, 0.0)
+        self.angular_velocity = 0.0
+        self.mass = 1.0
+        self.moment = 1.0
+
+    def apply_impulse_at_local_point(self, impulse):
+        impulse_vec = Vec2d(float(impulse[0]), float(impulse[1]))
+        self.velocity = self.velocity + (impulse_vec / self.mass)
 
 
 class _DummySegment:
@@ -329,3 +337,140 @@ def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, mo
     assert float(body.position[0]) == pytest.approx(46.0)
     assert float(body.position[1]) == pytest.approx(10.0)
     assert float(body.angle) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("brownian_mode", ["velocity", "impulse"])
+def test_run_simulation_brownian_dynamic_mode_moves_cells(tmp_path, monkeypatch, brownian_mode):
+    captured = {}
+
+    class _VelocityJitterColony:
+        def __init__(self):
+            self.cells = [_DummyCellWithPhysics(1)]
+
+        def delete_cell(self, cell):
+            self.cells.remove(cell)
+
+    class _VelocityJitterSimulator:
+        def __init__(self, **kwargs):
+            self.space = {"dummy_space": True}
+            self.colony = _VelocityJitterColony()
+            self._dt = float(kwargs["physics_config"].DT)
+            captured["cell"] = self.colony.cells[0]
+
+        def step(self):
+            for cell in self.colony.cells:
+                for segment in cell.physics_representation.segments:
+                    body = segment.body
+                    body.position = body.position + body.velocity * self._dt
+                    body.angle = float(body.angle) + float(body.angular_velocity) * self._dt
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _VelocityJitterSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+    monkeypatch.setattr(
+        simulation_module.np.random,
+        "normal",
+        lambda loc, scale: scale if scale > 0 else 0.0,
+    )
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_longitudinal_std=0.03,
+        brownian_transverse_std=0.01,
+        brownian_rotation_std=0.005,
+        brownian_persistence=0.0,
+        brownian_application_mode=brownian_mode,
+    )
+    simulation.run_simulation(show_window=False)
+
+    body = captured["cell"].physics_representation.segments[0].body
+    assert float(body.position[0]) != pytest.approx(35.0) or float(body.position[1]) != pytest.approx(10.0)
+    assert float(body.angle) != pytest.approx(0.0)
+
+
+def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(tmp_path, monkeypatch):
+    captured = {}
+
+    class _BoundaryProjectionColony:
+        def __init__(self):
+            self.cells = [_DummyCellWithPhysics(1, x=46.0, y=10.0)]
+            self.cells[0].physics_representation.segments[0].body.velocity = Vec2d(20.0, 0.0)
+            self.cells[0].physics_representation.segments[0].body.angular_velocity = 1.0
+
+        def delete_cell(self, cell):
+            self.cells.remove(cell)
+
+    class _BoundaryProjectionSimulator:
+        def __init__(self, **kwargs):
+            self.space = {"dummy_space": True}
+            self.colony = _BoundaryProjectionColony()
+            self._dt = float(kwargs["physics_config"].DT)
+            captured["cell"] = self.colony.cells[0]
+
+        def step(self):
+            for cell in self.colony.cells:
+                for segment in cell.physics_representation.segments:
+                    body = segment.body
+                    body.position = body.position + body.velocity * self._dt
+                    body.angle = float(body.angle) + float(body.angular_velocity) * self._dt
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _BoundaryProjectionSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_application_mode="velocity",
+        brownian_projection_angular_damping=0.2,
+    )
+    simulation.run_simulation(show_window=False)
+
+    body = captured["cell"].physics_representation.segments[0].body
+    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
+    trench_width_px = kwargs["trench_width"] * scale_factor
+    max_x = 35.0 + trench_width_px / 2.0 - 0.5
+    assert float(body.position[0]) <= max_x + 1e-6
+    assert float(body.velocity[0]) == pytest.approx(0.0)
+    assert abs(float(body.angular_velocity)) < 1.0
+
+
+def test_run_simulation_brownian_projection_does_not_cap_open_end(tmp_path, monkeypatch):
+    captured = {}
+    kwargs = _simulation_kwargs(tmp_path)
+    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
+    trench_width_px = kwargs["trench_width"] * scale_factor
+    trench_length_px = kwargs["trench_length"] * scale_factor
+    open_end_y = trench_width_px / 2.0 + trench_length_px
+
+    class _OpenEndProjectionColony:
+        def __init__(self):
+            self.cells = [_DummyCellWithPhysics(1, x=35.0, y=open_end_y - 0.1)]
+            self.cells[0].physics_representation.segments[0].body.velocity = Vec2d(0.0, 20.0)
+
+        def delete_cell(self, cell):
+            self.cells.remove(cell)
+
+    class _OpenEndProjectionSimulator:
+        def __init__(self, **kwargs):
+            self.space = {"dummy_space": True}
+            self.colony = _OpenEndProjectionColony()
+            self._dt = float(kwargs["physics_config"].DT)
+            captured["cell"] = self.colony.cells[0]
+
+        def step(self):
+            for cell in self.colony.cells:
+                for segment in cell.physics_representation.segments:
+                    body = segment.body
+                    body.position = body.position + body.velocity * self._dt
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _OpenEndProjectionSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+
+    simulation = Simulation(
+        **kwargs,
+        brownian_application_mode="velocity",
+    )
+    simulation.run_simulation(show_window=False)
+
+    body = captured["cell"].physics_representation.segments[0].body
+    assert float(body.position[1]) > open_end_y
