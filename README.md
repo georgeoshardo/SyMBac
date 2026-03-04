@@ -54,41 +54,53 @@ That is up to you. SyMBac is **not** a machine learning tool. It is a tool to ge
 
 ## Prerequisites
 
-Please make sure you have an NVIDIA GPU and a working installation of `CUDA` and `cudNN`. If you don't have an NVIDIA GPU then the convolution will default to the CPU, and be **very** slow.
+SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK interface), so make sure that you are running this on a local machine (you should have access to the machine's display).
 
-SyMBac is meant to be run *interactively* (in a notebook + with a small Qt/GTK intWWerface), so make sure that you are running this on a local machine (you should have access to the machine's display).
+A GPU is strongly recommended for convolution performance but is not required — SyMBac will fall back to CPU FFT convolution if no GPU backend is available.
 
 ## Installation
+
+### Base install (CPU only, no GPU acceleration)
 
 ```sh
 pip install SyMBac
 ```
 
-Or to install the development version, run:
+This works on any machine. Convolution will use scipy's FFT backend, which is significantly slower than GPU-accelerated convolution.
+
+### NVIDIA GPU (recommended)
+
+Install SyMBac with [CuPy](https://cupy.dev/) for CUDA-accelerated convolution:
 
 ```sh
-pip install git+https://github.com/georgeoshardo/SyMBac
+pip install "SyMBac[cupy]"
 ```
 
-Activate the Jupyter widgets extension. This is needed to interact with slides in the notebooks to optimise images. 
+This requires a working NVIDIA driver and CUDA 12.x installation. Check with `nvcc --version` or `nvidia-smi`.
+
+### Apple Silicon (MPS)
+
+Install SyMBac with PyTorch for Metal Performance Shaders acceleration:
+
+```sh
+pip install "SyMBac[torch]"
+```
+
+PyTorch will use the MPS backend on Apple Silicon Macs automatically.
+
+### Development version
+
+```sh
+pip install "git+https://github.com/georgeoshardo/SyMBac"
+```
+
+### Jupyter widgets
+
+Activate the Jupyter widgets extension. This is needed to interact with sliders in the notebooks to optimise images.
 
 ```sh
 jupyter nbextension enable --py widgetsnbextension
 ```
-
-### If you're using a GPU:
-
-Check the version of `CUDA` you have installed using `nvcc --version` and install the appropriate version of [cupy](https://cupy.dev/). For example, if you have `CUDA 11.4` you would install as follows:
-
-```sh
-pip install cupy-cuda114
-```
-
-If you installed CUDA on Ubuntu 18.04+ using the new Nvidia supplied repositories, it is a real possibility that `nvcc` won't work. You need to run `nvcc` from the binary folder of where your cuda installation is.
-
-### If you aren't using a GPU:
-
-See FAQs "Do I need to have a GPU?"
 
 ## Usage
 
