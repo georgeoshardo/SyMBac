@@ -290,16 +290,19 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
     space_masks : 2D numy array
         The masks (labelled or bool) for that scene.
 
+    Notes
+    -----
+    Overlap handling uses winner-takes-all semantics: each pixel keeps the
+    maximum OPL contribution among cells instead of being zeroed at overlaps.
+
     """
     space_size = np.array(space_size)  # 1000, 200 a good value
-    space = np.zeros(space_size)
-    space_masks_label = np.zeros(space_size)
-    space_masks_nolabel = np.zeros(space_size)
-    #colour_label = [1]
-
-    space_masks = np.zeros(space_size)
-    if label_masks == False:
-        space_masks = space_masks.astype(bool)
+    # Overlap ownership buffers:
+    # - owner_opl stores the winning per-pixel OPL value
+    # - owner_label stores the label of the winning cell
+    # This avoids zeroing overlap pixels (which creates artificial cracks).
+    owner_opl = np.zeros(space_size, dtype=np.float64)
+    owner_label = np.zeros(space_size, dtype=np.int32)
 
     for properties in cell_properties:
         length, width, angle, position, freq_modif, amp_modif, phase_modif, phase_mult, separation, sim_mask_label, cell_id = properties
@@ -328,39 +331,155 @@ def draw_scene(cell_properties, do_transformation, space_size, offset, label_mas
 
         rotated_OPL_cell = rotate(OPL_cell, -angle, resize=True, clip=False, preserve_range=True, center=(x, y))
         cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
-        offset_y = rotated_OPL_cell.shape[0] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
-        offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
+        offset_y = rotated_OPL_cell.shape[0] - owner_opl[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[0]
+        offset_x = rotated_OPL_cell.shape[1] - owner_opl[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
         assert y > cell_y, "Cell has {} negative pixels in y coordinate, try increasing your offset".format(y - cell_y)
         assert x > cell_x, "Cell has negative pixels in x coordinate, try increasing your offset"
-        space[
-        y - cell_y:y + cell_y + offset_y,
-        x - cell_x:x + cell_x + offset_x
-        ] += rotated_OPL_cell
+        y0 = y - cell_y
+        y1 = y + cell_y + offset_y
+        x0 = x - cell_x
+        x1 = x + cell_x + offset_x
 
-        def get_mask(label_masks):
+        owner_patch = owner_opl[y0:y1, x0:x1]
+        label_patch = owner_label[y0:y1, x0:x1]
+        claim = rotated_OPL_cell > owner_patch
+        owner_patch[claim] = rotated_OPL_cell[claim]
+        label_patch[claim] = sim_mask_label
 
-            if label_masks:
-                space_masks_label[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (rotated_OPL_cell > 0) * sim_mask_label
-                #colour_label[0] += 1
-                return space_masks_label
-            else:
-                space_masks_nolabel[y - cell_y:y + cell_y + offset_y, x - cell_x:x + cell_x + offset_x] += (
-                                                                                                                   rotated_OPL_cell > 0) * 1
-                return space_masks_nolabel
-                # space_masks = opening(space_masks,np.ones((2,11)))
-
-        label_mask = get_mask(True).astype(int)
-        nolabel_mask = get_mask(False).astype(int)
-        label_mask_fixed = np.where(nolabel_mask > 1, 0, label_mask)
-        if label_masks:
-            space_masks = label_mask_fixed
-        else:
-            mask_borders = find_boundaries(label_mask_fixed, mode="thick", connectivity=2)
-            space_masks = np.where(mask_borders, 0, label_mask_fixed)
-            space_masks = opening(space_masks)
-            space_masks = space_masks.astype(bool)
+    space = owner_opl
+    if label_masks:
+        space_masks = owner_label
+    else:
+        mask_borders = find_boundaries(owner_label, mode="thick", connectivity=2)
+        space_masks = np.where(mask_borders, 0, owner_label)
+        space_masks = opening(space_masks)
+        space_masks = space_masks.astype(bool)
         space = space * space_masks.astype(bool)
     return space, space_masks
+
+
+def draw_scene_from_segments(cells_segment_data, space_size, offset, label_masks, cell_texture=False):
+    """
+    Draw an OPL scene and mask from segment chain data.
+
+    Each cell is a chain of overlapping spheres. The OPL at each pixel is
+    2 * max(sqrt(R_i^2 - d_i^2)) over all segments i of that cell, where
+    d_i is the distance from the pixel to segment centre i.
+
+    Parameters
+    ----------
+    cells_segment_data : list of dict
+        Per-cell dicts with keys:
+            'positions': np.array (N,2) — segment (x,y) centres
+            'radii': np.array (N,) — segment radii
+            'mask_label': int
+            'cell_id': int
+    space_size : tuple
+        (height, width) of output arrays.
+    offset : int
+        Pixel offset added to all positions.
+    label_masks : bool
+        If True, mask pixels get the cell's mask_label value.
+        If False, mask is boolean.
+    cell_texture : bool or dict
+        If truthy, apply Perlin noise texture. If dict, passed as
+        kwargs to apply_cell_texture().
+
+    Returns
+    -------
+    scene : np.ndarray
+        2D OPL image.
+    mask : np.ndarray
+        2D labelled or boolean mask.
+    """
+    space_size = np.array(space_size)
+    # Overlap ownership buffers:
+    # - owner_opl stores the winning per-pixel OPL value
+    # - owner_label stores the label of the winning cell
+    # This avoids zeroing overlap pixels (which creates artificial cracks).
+    owner_opl = np.zeros(space_size, dtype=np.float64)
+    owner_label = np.zeros(space_size, dtype=np.int32)
+
+    for cell_data in cells_segment_data:
+        positions = cell_data['positions']  # (N, 2)
+        radii = cell_data['radii']          # (N,)
+        sim_mask_label = cell_data['mask_label']
+        cell_id = cell_data['cell_id']
+
+        if len(positions) == 0:
+            continue
+
+        # Compute bounding box for this cell's segments
+        max_r = np.max(radii)
+        min_x = np.min(positions[:, 0]) - max_r + offset
+        max_x = np.max(positions[:, 0]) + max_r + offset
+        min_y = np.min(positions[:, 1]) - max_r + offset
+        max_y = np.max(positions[:, 1]) + max_r + offset
+
+        # Clip to image bounds
+        y_start = max(0, int(np.floor(min_y)))
+        y_end = min(space_size[0], int(np.ceil(max_y)) + 1)
+        x_start = max(0, int(np.floor(min_x)))
+        x_end = min(space_size[1], int(np.ceil(max_x)) + 1)
+
+        if y_start >= y_end or x_start >= x_end:
+            continue
+
+        # Pixel grid for this cell's bounding box
+        ys = np.arange(y_start, y_end, dtype=np.float64)
+        xs = np.arange(x_start, x_end, dtype=np.float64)
+        grid_y, grid_x = np.meshgrid(ys, xs, indexing='ij')
+
+        # For each segment, compute OPL contribution via vectorised operations
+        opl_patch = np.zeros_like(grid_y)
+        for seg_idx in range(len(positions)):
+            cx = positions[seg_idx, 0] + offset
+            cy = positions[seg_idx, 1] + offset
+            r = radii[seg_idx]
+            d_sq = (grid_x - cx) ** 2 + (grid_y - cy) ** 2
+            r_sq = r * r
+            inside = d_sq < r_sq
+            z = np.zeros_like(d_sq)
+            z[inside] = np.sqrt(r_sq - d_sq[inside])
+            np.maximum(opl_patch, z, out=opl_patch)
+
+        # OPL is 2 * max hemisphere height (full sphere projection)
+        cell_opl = 2.0 * opl_patch
+
+        # Apply texture if requested
+        if cell_texture and np.any(cell_opl > 0):
+            texture_params = cell_texture if isinstance(cell_texture, dict) else {}
+            # Create a tight crop for texture, then paste back
+            nz_rows, nz_cols = np.nonzero(cell_opl > 0)
+            if len(nz_rows) > 0:
+                tr0, tr1 = nz_rows.min(), nz_rows.max() + 1
+                tc0, tc1 = nz_cols.min(), nz_cols.max() + 1
+                crop = cell_opl[tr0:tr1, tc0:tc1]
+                crop = apply_cell_texture(crop, cell_id, **texture_params)
+                cell_opl[tr0:tr1, tc0:tc1] = crop
+
+        owner_patch = owner_opl[y_start:y_end, x_start:x_end]
+        label_patch = owner_label[y_start:y_end, x_start:x_end]
+
+        # Winner-takes-all ownership in contested pixels.
+        claim = cell_opl > owner_patch
+        owner_patch[claim] = cell_opl[claim]
+        label_patch[claim] = sim_mask_label
+
+    scene = owner_opl
+
+    if label_masks:
+        mask = owner_label
+    else:
+        mask_borders = find_boundaries(owner_label, mode="thick", connectivity=2)
+        mask = np.where(mask_borders, 0, owner_label)
+        mask = opening(mask)
+        mask = mask.astype(bool)
+
+    # For binary masks only, keep scene limited to final mask area.
+    if not label_masks:
+        scene = scene * mask.astype(bool)
+    return scene, mask
 
 
 def get_distance(vertex1, vertex2):
@@ -568,6 +687,39 @@ def get_space_size(cell_timeseries_properties):
                 max_x = max_x_
             if max_y_ > max_y:
                 max_y = max_y_
+    return (int(1.2 * max_y), int(1.5 * max_x))
+
+
+def get_space_size_from_segments(cell_timeseries_segments, offset=30):
+    """
+    Compute canvas size from segment-chain timeseries data.
+
+    Parameters
+    ----------
+    cell_timeseries_segments : list of list of dict
+        Per-frame, per-cell segment data dicts with 'positions' and 'radii'.
+    offset : int
+        Pixel offset applied to positions.
+
+    Returns
+    -------
+    tuple
+        (height, width) for the canvas.
+    """
+    max_y, max_x = 0, 0
+    for frame_data in cell_timeseries_segments:
+        for cell_data in frame_data:
+            positions = cell_data['positions']
+            radii = cell_data['radii']
+            if len(positions) == 0:
+                continue
+            max_r = np.max(radii)
+            frame_max_x = np.max(positions[:, 0]) + max_r + offset
+            frame_max_y = np.max(positions[:, 1]) + max_r + offset
+            if frame_max_x > max_x:
+                max_x = frame_max_x
+            if frame_max_y > max_y:
+                max_y = frame_max_y
     return (int(1.2 * max_y), int(1.5 * max_x))
 
 

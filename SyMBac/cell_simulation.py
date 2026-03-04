@@ -1,16 +1,35 @@
 import pickle
 from copy import deepcopy
 import numpy as np
+import os
 from scipy.stats import norm
 from SyMBac.cell import Cell
+from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
 from SyMBac.trench_geometry import trench_creator, get_trench_segments
 import pymunk
 from tqdm.auto import tqdm
 
 #TODO work these functions into a class, possibly in simulation.py
 
-def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                   phys_iters, max_length_var, width_var, save_dir, resize_amount, lysis_p=0, show_window = True):
+
+def run_simulation(
+    trench_length,
+    trench_width,
+    cell_max_length,
+    cell_width,
+    sim_length,
+    pix_mic_conv,
+    gravity,
+    phys_iters,
+    max_length_std=_UNSET,
+    width_std=_UNSET,
+    save_dir=_UNSET,
+    resize_amount=_UNSET,
+    lysis_p=0,
+    show_window=True,
+    max_length_var=_UNSET,
+    width_var=_UNSET,
+):
     """
     Runs the rigid body simulation of bacterial growth based on a variety of parameters. Opens up a Pyglet window to
     display the animation in real-time. If the simulation looks bad to your eye, restart the kernel and rerun the
@@ -37,10 +56,10 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         Number of physics iterations per simulation frame. Increase to resolve collisions if cells are falling into one
         another, but decrease if cells begin to repel one another too much (too high a value causes cells to bounce off
         each other very hard). 20 is a good starting point
-    max_length_var : float
-        Variance of the maximum cell length
-    width_var : float
-        Variance of the maximum cell width
+    max_length_std : float
+        Standard deviation of the maximum cell length
+    width_std : float
+        Standard deviation of the cell width
     save_dir : str
         Location to save simulation output
     lysis_p : float
@@ -55,23 +74,54 @@ def run_simulation(trench_length, trench_width, cell_max_length, cell_width, sim
         Contains the rigid body physics objects which are the cells.
     """
 
+    api_name = "run_simulation()"
+    _require_provided(api_name, "save_dir", save_dir)
+    _require_provided(api_name, "resize_amount", resize_amount)
+    os.makedirs(save_dir, exist_ok=True)
+    max_length_std, max_length_std_is_legacy = _resolve_deprecated_parameter(
+        api_name=api_name,
+        new_name="max_length_std",
+        new_value=max_length_std,
+        legacy_name="max_length_var",
+        legacy_value=max_length_var,
+        compatibility_note=(
+            "Legacy `max_length_var` keeps the old scaling (`* sqrt(scale_factor)`) in this API. "
+            "Use `max_length_std` for the new linear scaling (`* scale_factor`)."
+        ),
+    )
+    width_std, width_std_is_legacy = _resolve_deprecated_parameter(
+        api_name=api_name,
+        new_name="width_std",
+        new_value=width_std,
+        legacy_name="width_var",
+        legacy_value=width_var,
+        compatibility_note=(
+            "Legacy `width_var` keeps the old scaling (`* sqrt(scale_factor)`) in this API. "
+            "Use `width_std` for the new linear scaling (`* scale_factor`)."
+        ),
+    )
+
     if show_window:
         return _run_simulation_in_subprocess(
             trench_length=trench_length, trench_width=trench_width,
             cell_max_length=cell_max_length, cell_width=cell_width,
             sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
-            phys_iters=phys_iters, max_length_var=max_length_var,
-            width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+            phys_iters=phys_iters, max_length_std=max_length_std,
+            width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
             lysis_p=lysis_p,
+            max_length_std_is_legacy=max_length_std_is_legacy,
+            width_std_is_legacy=width_std_is_legacy,
         )
 
     return _run_simulation_impl(
         trench_length=trench_length, trench_width=trench_width,
         cell_max_length=cell_max_length, cell_width=cell_width,
         sim_length=sim_length, pix_mic_conv=pix_mic_conv, gravity=gravity,
-        phys_iters=phys_iters, max_length_var=max_length_var,
-        width_var=width_var, save_dir=save_dir, resize_amount=resize_amount,
+        phys_iters=phys_iters, max_length_std=max_length_std,
+        width_std=width_std, save_dir=save_dir, resize_amount=resize_amount,
         lysis_p=lysis_p, show_window=False,
+        max_length_std_is_legacy=max_length_std_is_legacy,
+        width_std_is_legacy=width_std_is_legacy,
     )
 
 
@@ -107,8 +157,24 @@ def _run_simulation_in_subprocess(**kwargs):
     return result
 
 
-def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_width, sim_length, pix_mic_conv, gravity,
-                         phys_iters, max_length_var, width_var, save_dir, resize_amount, lysis_p=0, show_window=False):
+def _run_simulation_impl(
+    trench_length,
+    trench_width,
+    cell_max_length,
+    cell_width,
+    sim_length,
+    pix_mic_conv,
+    gravity,
+    phys_iters,
+    max_length_std,
+    width_std,
+    save_dir,
+    resize_amount,
+    lysis_p=0,
+    show_window=False,
+    max_length_std_is_legacy=False,
+    width_std_is_legacy=False,
+):
     """Core simulation logic."""
 
     space = create_space()
@@ -120,6 +186,7 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
     dt = 1 / 20  # time-step per frame
     pix_mic_conv = 1 / pix_mic_conv  # micron per pixel
     scale_factor = pix_mic_conv * resize_amount  # resolution scaling factor
+    legacy_scale_factor = np.sqrt(scale_factor)
 
     trench_length = trench_length * scale_factor
     trench_width = trench_width * scale_factor
@@ -138,8 +205,12 @@ def _run_simulation_impl(trench_length, trench_width, cell_max_length, cell_widt
         growth_rate_constant=1,
         max_length=cell_max_length * scale_factor,
         max_length_mean=cell_max_length * scale_factor,
-        max_length_var=max_length_var * np.sqrt(scale_factor),
-        width_var=width_var * np.sqrt(scale_factor),
+        max_length_std=max_length_std * (
+            legacy_scale_factor if max_length_std_is_legacy else scale_factor
+        ),
+        width_std=width_std * (
+            legacy_scale_factor if width_std_is_legacy else scale_factor
+        ),
         width_mean=cell_width * scale_factor,
         mother=None,
         lysis_p=lysis_p,
@@ -323,4 +394,3 @@ def step_and_update(dt, cells, space, phys_iters, ylim, cell_timeseries, x, sim_
         return cells
     x[0] += 1
     return (cells)
-

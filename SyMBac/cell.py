@@ -22,8 +22,8 @@ class Cell:
         growth_rate_constant,
         max_length,
         max_length_mean,
-        max_length_var,
-        width_var,
+        max_length_std,
+        width_std,
         width_mean,
         mother = None,
         daughter = None,
@@ -64,10 +64,10 @@ class Cell:
             The maximum length a cell reaches before dividing
         max_length_mean : float
             should be the same as max_length for reasons unless doing advanced simulations
-        max_length_var : float
-            The variance defining a normal distribution around max_length
-        width_var : float
-            The variance defining a normal distribution around width
+        max_length_std : float
+            The standard deviation defining a normal distribution around max_length
+        width_std : float
+            The standard deviation defining a normal distribution around width
         width_mean : float
             For reasons should be set equal to width unless using advanced features
         body : pymunk.body.Body
@@ -82,7 +82,7 @@ class Cell:
         self.growth_rate_constant = growth_rate_constant
         self.length = length
         self.width_mean = width_mean
-        self.width_var = width_var
+        self.width_std = width_std
         self.width = width
         self.resolution = resolution
         self.angle = angle
@@ -90,7 +90,7 @@ class Cell:
         self.space = space
         self.max_length = max_length
         self.max_length_mean = max_length_mean
-        self.max_length_var = max_length_var
+        self.max_length_std = max_length_std
         self.N_divisions = N_divisions
         self.just_divided = just_divided
         self.body, self.shape = self.create_pm_cell()
@@ -152,17 +152,17 @@ class Cell:
             #self.space.add(cell_body, cell_shape)
             daughter_details = {
                 "length": daughter_length,
-                "width": max(0.1, np.random.normal(self.width_mean,self.width_var)),
+                "width": max(0.1, np.random.normal(self.width_mean,self.width_std)),
                 "resolution": self.resolution,
                 "position": [self.position[0] + self.length/2 *  np.cos(self.angle), self.position[1] + self.length/2 *  np.sin(self.angle)],
                 "angle": self.angle*np.random.uniform(0.95,1.05),
                 "space": self.space,
                 "dt": self.dt,
                 "growth_rate_constant": self.growth_rate_constant,
-                "max_length": max(daughter_length + 0.1, np.random.normal(self.max_length_mean,self.max_length_var)),
+                "max_length": max(daughter_length + 0.1, np.random.normal(self.max_length_mean,self.max_length_std)),
                 "max_length_mean": self.max_length_mean,
-                "max_length_var": self.max_length_var,
-                "width_var": self.width_var,
+                "max_length_std": self.max_length_std,
+                "width_std": self.width_std,
                 "width_mean": self.width_mean,
                 "lysis_p": self.lysis_p,
                 "pinching_sep": 0,

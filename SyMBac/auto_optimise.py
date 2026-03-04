@@ -99,6 +99,9 @@ class AutoOptimiser:
         # Pre-compute real image statistics for contrast ratio metric
         self._precompute_real_stats()
 
+        # Pre-compute mean cell OPL for parameter-based ordering check
+        self._mean_cell_OPL = self._compute_mean_cell_OPL()
+
     def _precompute_real_stats(self):
         """Extract region statistics from real images using auto-segmentation."""
         from skimage.exposure import rescale_intensity
@@ -141,6 +144,40 @@ class AutoOptimiser:
             "moments": max(higher_order_moments_error(real, uniform), 1e-6),
             "contrast": 1.0,  # Already relative
         }
+
+    def _compute_mean_cell_OPL(self):
+        """Pre-compute the average non-zero OPL across representative scenes.
+
+        Samples up to 5 scenes (skipping burn-in) and averages all non-zero
+        pixels to get the typical optical path length for cells. This is used
+        by ``_multiplier_region_intensities`` to estimate cell intensity from
+        the multiplier parameters without rendering.
+
+        Returns
+        -------
+        float
+            Mean non-zero OPL value, or 1.0 as fallback.
+        """
+        scenes = self.renderer.simulation.OPL_scenes
+        sim_length = len(scenes)
+        burn_in = max(1, sim_length // 4)
+        indices = np.linspace(burn_in, sim_length - 1, min(5, sim_length - burn_in), dtype=int)
+
+        all_nonzero = []
+        for idx in indices:
+            scene = scenes[idx]
+            nonzero = scene[scene != 0]
+            if nonzero.size > 0:
+                all_nonzero.append(float(np.mean(np.abs(nonzero))))
+
+        if all_nonzero:
+            return float(np.mean(all_nonzero))
+
+        warnings.warn(
+            "No non-zero OPL values found in simulation scenes. "
+            "Falling back to mean_cell_OPL=1.0 for ordering constraint."
+        )
+        return 1.0
 
     def _smart_init(self):
         """
@@ -271,6 +308,8 @@ class AutoOptimiser:
         Render synthetic images and compute composite loss.
 
         Renders multiple scenes and averages the loss to smooth noise.
+        Checks the intensity ordering constraint *before* rendering so
+        that violating trials are rejected cheaply.
 
         Parameters
         ----------
@@ -282,6 +321,11 @@ class AutoOptimiser:
         float
             Composite loss value (lower is better).
         """
+        # Hard constraint: reject violating trials before expensive rendering
+        ordering_penalty = self._ordering_penalty(params)
+        if ordering_penalty == float("inf"):
+            return float("inf")
+
         # Separate PSF params before rendering
         render_params = {k: v for k, v in params.items() if not k.startswith("_psf_")}
         self._apply_psf_params(params)
@@ -312,13 +356,10 @@ class AutoOptimiser:
                 self._real_images_norm[i % len(self._real_images_norm)]
             )
 
-        # Compute synth region stats for contrast ratio metric or ordering constraint
+        # Compute synth region stats for contrast ratio metric
         synth_regions = None
-        if "contrast" in self.metrics or self.intensity_order is not None:
+        if "contrast" in self.metrics:
             synth_regions = self._estimate_synth_regions(synth_images[0])
-
-        # Check intensity ordering constraint early
-        ordering_penalty = self._ordering_penalty(synth_regions)
 
         # Compute normalised weights: divide each metric by its scale so
         # all metrics contribute roughly equally regardless of raw magnitude
@@ -341,7 +382,40 @@ class AutoOptimiser:
         if not np.isfinite(loss):
             return float("inf")
 
-        return loss + ordering_penalty
+        return loss
+
+    def _multiplier_region_intensities(self, params):
+        """Map region names to pre-convolution intensities from the physics model.
+
+        Uses the multiplier parameters directly to compute what each region's
+        intensity would be, without rendering or segmenting an image.
+
+        Parameters
+        ----------
+        params : dict
+            Must contain ``media_multiplier``, ``cell_multiplier``, and
+            ``device_multiplier``.
+
+        Returns
+        -------
+        dict
+            ``{"media": float, "cell": float, "device": float}``
+        """
+        media_mult = params["media_multiplier"]
+        cell_mult = params["cell_multiplier"]
+        device_mult = params["device_multiplier"]
+
+        if "fluo" in self.renderer.PSF.mode.lower():
+            # In fluorescence mode, media_multiplier = -1 * device_multiplier
+            media_intensity = -1 * device_mult
+        else:
+            media_intensity = media_mult
+
+        return {
+            "media": media_intensity,
+            "cell": media_intensity + self._mean_cell_OPL * cell_mult,
+            "device": device_mult,
+        }
 
     def _estimate_synth_regions(self, synth_image):
         """Estimate region mean intensities from a synthetic image."""
@@ -358,34 +432,33 @@ class AutoOptimiser:
                 "device": float(device_px.mean()) if device_px.size > 0 else 0.0,
             }
         except Exception:
-            return {"media": 0.5, "cell": 0.3, "device": 0.1}
+            return None
 
-    def _ordering_penalty(self, synth_regions):
+    def _ordering_penalty(self, params):
         """
-        Compute a penalty for violating the expected intensity ordering.
+        Hard constraint for the expected intensity ordering.
 
-        For each adjacent pair in ``self.intensity_order``, the first region
-        should be brighter than the second. When this is violated, a penalty
-        proportional to the magnitude of the violation is added. The penalty
-        is large enough (~100x) to dominate the composite loss and steer the
-        optimiser away from these parameter combos.
+        Computes region intensities directly from the multiplier parameters
+        (via ``_multiplier_region_intensities``) instead of segmenting the
+        rendered image. This avoids the circular bug where Otsu-based
+        segmentation assigns labels by brightness rank, making the check
+        tautological.
 
-        Returns 0.0 if the ordering is satisfied or ``intensity_order`` is
-        not set.
+        Returns ``float("inf")`` if any adjacent pair in
+        ``self.intensity_order`` is violated (hard constraint that rejects
+        the trial entirely), or ``0.0`` if satisfied or
+        ``intensity_order is None``.
         """
-        if self.intensity_order is None or synth_regions is None:
+        if self.intensity_order is None:
             return 0.0
 
-        penalty = 0.0
+        intensities = self._multiplier_region_intensities(params)
         for i in range(len(self.intensity_order) - 1):
             brighter = self.intensity_order[i]
             darker = self.intensity_order[i + 1]
-            diff = synth_regions[brighter] - synth_regions[darker]
-            if diff <= 0:
-                # Violated: the region that should be brighter is darker
-                # (or they are equal). Penalty scales with violation size.
-                penalty += 100.0 * (abs(diff) + 0.01)
-        return penalty
+            if intensities[brighter] <= intensities[darker]:
+                return float("inf")
+        return 0.0
 
     def optimise(self, show_progress=True):
         """
