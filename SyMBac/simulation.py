@@ -72,6 +72,7 @@ class Simulation:
         resize_amount=_UNSET,
         save_dir=_UNSET,
         substeps=100,
+        width_upper_limit=None,
         load_sim_dir=None,
         max_length_var=_UNSET,
         width_var=_UNSET,
@@ -118,6 +119,11 @@ class Simulation:
         substeps : int, optional
             Number of physics sub-steps to execute per output frame.
             Defaults to ``100`` when omitted for backward compatibility.
+        width_upper_limit : float or None, optional
+            Hard upper limit on cell width in microns. Useful for ensuring
+            cells cannot grow wider than the mother machine trench. Set to
+            slightly below ``trench_width`` to prevent jamming. ``None``
+            (default) means no limit.
         load_sim_dir : str
             The directory if you wish to load a previously completed simulation
         """
@@ -169,6 +175,7 @@ class Simulation:
         self.offset = 30
         self.load_sim_dir = load_sim_dir
         self.substeps = substeps
+        self.width_upper_limit = width_upper_limit
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -219,6 +226,7 @@ class Simulation:
 
         MAX_LENGTH_STD = max(0.0, self.max_length_std * scale_factor)
         WIDTH_STD = max(0.0, self.width_std * scale_factor)
+        WIDTH_UPPER_LIMIT = (self.width_upper_limit * scale_factor / 2) if self.width_upper_limit is not None else None
 
         GROWTH_RATE = 0.5 * SEGMENT_RADIUS
 
@@ -245,6 +253,7 @@ class Simulation:
             MAX_BEND_ANGLE=0.005,
             STIFFNESS=300_000 * radius_scale,
             SIMPLE_LENGTH=False,
+            WIDTH_UPPER_LIMIT=WIDTH_UPPER_LIMIT,
         )
 
         physics_config = PhysicsConfig(

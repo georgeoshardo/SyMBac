@@ -99,6 +99,7 @@ class CellConfig:
     NUM_SEPTUM_SEGMENTS: int = field(init=False)
 
     SIMPLE_LENGTH: bool = True
+    WIDTH_UPPER_LIMIT: float | None = None  # Maximum segment radius (half-width). None = no limit.
 
     def __post_init__(self):
 

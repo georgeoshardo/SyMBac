@@ -91,7 +91,10 @@ class SimCell:
         base_cell_width = 2.0 * self.config.SEGMENT_RADIUS
         sampled_width = np.random.normal(base_cell_width, self.config.WIDTH_STD)
         min_radius = max(0.1, self.config.SEGMENT_RADIUS * 0.3)
-        return max(min_radius, float(sampled_width) / 2.0)
+        radius = max(min_radius, float(sampled_width) / 2.0)
+        if self.config.WIDTH_UPPER_LIMIT is not None:
+            radius = min(radius, self.config.WIDTH_UPPER_LIMIT)
+        return radius
 
     def set_new_width_target(self) -> None:
         self.target_segment_radius = self.sample_segment_radius()
