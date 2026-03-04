@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "SyMBac"
-version = "0.5.1"
+version = "0.5.2"
 description = "A package for generating synthetic images of bacteria in phase contrast or fluorescence. Used for creating training data for machine learning segmentation and tracking algorithms."
 readme = "README.md"
 license = "GPL-2.0-only"

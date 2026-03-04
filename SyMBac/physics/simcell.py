@@ -74,6 +74,17 @@ class SimCell:
         min_length = max(
             1.0, self.config.MIN_LENGTH_AFTER_DIVISION * self.config.JOINT_DISTANCE * 2
         )
+        # Ensure max_length > birth_length so the cell always has room to
+        # grow before dividing.  Without this, a large MAX_LENGTH_STD can
+        # produce a max_length below the cell's current length, creating a
+        # deadlock where the cell can neither grow nor divide.
+        # (Matches the legacy engine's ``max(daughter_length + 0.1, ...)``.)
+        try:
+            min_length = max(min_length, self.birth_length + self.config.JOINT_DISTANCE)
+        except AttributeError:
+            # birth_length is not yet set during __init__; the config-based
+            # floor is sufficient for seed cells.
+            pass
         return max(min_length, float(sampled_max_length))
 
     def sample_segment_radius(self) -> float:
