@@ -68,6 +68,13 @@ def test_config_overrides_validation_rejects_non_dict(tmp_path, field_name, bad_
         ("brownian_rotation_std", -0.01),
         ("brownian_persistence", -0.1),
         ("brownian_persistence", 1.0),
+        ("brownian_max_dx_fraction_of_trench_width", 0.0),
+        ("brownian_max_dx_fraction_of_trench_width", -0.1),
+        ("brownian_max_dy_fraction_of_segment_radius", 0.0),
+        ("brownian_max_dy_px_floor", 0.0),
+        ("brownian_max_dtheta", 0.0),
+        ("brownian_backoff_attempts", 0),
+        ("brownian_backoff_attempts", 1.5),
     ],
 )
 def test_brownian_validation_rejects_invalid_ranges(tmp_path, field_name, bad_value):

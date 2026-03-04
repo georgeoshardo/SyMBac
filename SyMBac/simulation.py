@@ -83,6 +83,11 @@ class Simulation:
         brownian_transverse_std=0.0,
         brownian_rotation_std=0.0,
         brownian_persistence=0.85,
+        brownian_max_dx_fraction_of_trench_width=0.20,
+        brownian_max_dy_fraction_of_segment_radius=0.75,
+        brownian_max_dy_px_floor=1.0,
+        brownian_max_dtheta=0.03,
+        brownian_backoff_attempts=5,
         max_length_var=_UNSET,
         width_var=_UNSET,
     ):
@@ -163,6 +168,19 @@ class Simulation:
         brownian_persistence : float, optional
             Temporal persistence for Brownian jitter in [0, 1). Values near 0
             are white-noise-like; values near 1 produce slowly drifting motion.
+        brownian_max_dx_fraction_of_trench_width : float, optional
+            Hard cap for per-frame transverse translation. ``|dx|`` is clipped
+            to this fraction of trench width in simulation pixels.
+        brownian_max_dy_fraction_of_segment_radius : float, optional
+            Hard cap component for per-frame longitudinal translation based on
+            current segment radius.
+        brownian_max_dy_px_floor : float, optional
+            Lower bound for the longitudinal cap in simulation pixels.
+        brownian_max_dtheta : float, optional
+            Hard cap for per-frame rotational jitter (radians).
+        brownian_backoff_attempts : int, optional
+            Number of geometric backoff retries before rolling back jitter for
+            a frame.
         """
         api_name = f"{self.__class__.__name__}.__init__()"
         _require_provided(api_name, "cell_width", cell_width)
@@ -206,6 +224,20 @@ class Simulation:
                 raise ValueError(f"{name} must be a non-negative float.")
         if isinstance(brownian_persistence, bool) or not (0.0 <= brownian_persistence < 1.0):
             raise ValueError("brownian_persistence must be in [0.0, 1.0).")
+        for name, value in (
+            ("brownian_max_dx_fraction_of_trench_width", brownian_max_dx_fraction_of_trench_width),
+            ("brownian_max_dy_fraction_of_segment_radius", brownian_max_dy_fraction_of_segment_radius),
+            ("brownian_max_dy_px_floor", brownian_max_dy_px_floor),
+            ("brownian_max_dtheta", brownian_max_dtheta),
+        ):
+            if isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be > 0.")
+        if (
+            isinstance(brownian_backoff_attempts, bool)
+            or not isinstance(brownian_backoff_attempts, int)
+            or brownian_backoff_attempts < 1
+        ):
+            raise ValueError("brownian_backoff_attempts must be an integer >= 1.")
 
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -234,6 +266,11 @@ class Simulation:
         self.brownian_transverse_std = float(brownian_transverse_std)
         self.brownian_rotation_std = float(brownian_rotation_std)
         self.brownian_persistence = float(brownian_persistence)
+        self.brownian_max_dx_fraction_of_trench_width = float(brownian_max_dx_fraction_of_trench_width)
+        self.brownian_max_dy_fraction_of_segment_radius = float(brownian_max_dy_fraction_of_segment_radius)
+        self.brownian_max_dy_px_floor = float(brownian_max_dy_px_floor)
+        self.brownian_max_dtheta = float(brownian_max_dtheta)
+        self.brownian_backoff_attempts = int(brownian_backoff_attempts)
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -403,10 +440,13 @@ class Simulation:
             trench_y_min = 0.0
             trench_y_max = trench_width_px / 2.0 + trench_length_px
             # Hard caps against unrealistically large rigid-body jumps.
-            max_dx_abs = 0.20 * trench_width_px
-            max_dy_abs = max(1.0, 0.75 * SEGMENT_RADIUS)
-            max_dtheta_abs = 0.03  # ~1.7 degrees
-            max_backoff_attempts = 5
+            max_dx_abs = self.brownian_max_dx_fraction_of_trench_width * trench_width_px
+            max_dy_abs = max(
+                self.brownian_max_dy_px_floor,
+                self.brownian_max_dy_fraction_of_segment_radius * SEGMENT_RADIUS,
+            )
+            max_dtheta_abs = self.brownian_max_dtheta
+            max_backoff_attempts = self.brownian_backoff_attempts
 
             def _segments_inside_trench(candidate_segments):
                 for segment in candidate_segments:

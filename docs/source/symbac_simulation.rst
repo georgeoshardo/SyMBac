@@ -19,6 +19,11 @@ Compatibility Notes
 * Brownian jitter controls are available via
   ``brownian_longitudinal_std``, ``brownian_transverse_std``,
   ``brownian_rotation_std``, and ``brownian_persistence``.
+  Safety guard controls are available via
+  ``brownian_max_dx_fraction_of_trench_width``,
+  ``brownian_max_dy_fraction_of_segment_radius``,
+  ``brownian_max_dy_px_floor``, ``brownian_max_dtheta``,
+  and ``brownian_backoff_attempts``.
   See :doc:`brownian_jitter_model` for equations and parameter guidance.
 * ``Simulation.run_simulation`` writes ``cell_timeseries.p`` and ``space_timeseries.p`` into ``save_dir``.
 * ``Simulation(load_sim_dir=...)`` expects both artifacts in ``load_sim_dir``.

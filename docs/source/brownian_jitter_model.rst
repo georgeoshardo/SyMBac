@@ -89,6 +89,42 @@ Parameters in ``Simulation``
 * ``brownian_transverse_std``: transverse translation std (microns/frame).
 * ``brownian_rotation_std``: angular std (radians/frame).
 * ``brownian_persistence``: temporal correlation in ``[0, 1)``.
+* ``brownian_max_dx_fraction_of_trench_width``: hard cap on ``|dx|`` as a
+  fraction of trench width.
+* ``brownian_max_dy_fraction_of_segment_radius``: hard cap component on
+  ``|dy|`` based on segment radius.
+* ``brownian_max_dy_px_floor``: floor (pixels) for the ``|dy|`` cap.
+* ``brownian_max_dtheta``: hard cap on ``|dtheta|`` in radians.
+* ``brownian_backoff_attempts``: number of geometric backoff retries before rollback.
+
+Safety guards (caps + backoff)
+------------------------------
+
+After stochastic sampling, SyMBac applies hard clipping:
+
+.. math::
+
+   |\Delta x_t| \le \alpha_x W_{\mathrm{trench}}
+
+.. math::
+
+   |\Delta y_t| \le \max\!\left(y_{\min}, \alpha_y r_{\mathrm{seg}}\right)
+
+.. math::
+
+   |\Delta \theta_t| \le \theta_{\max}
+
+with:
+
+* :math:`\alpha_x =` ``brownian_max_dx_fraction_of_trench_width``
+* :math:`\alpha_y =` ``brownian_max_dy_fraction_of_segment_radius``
+* :math:`y_{\min} =` ``brownian_max_dy_px_floor``
+* :math:`\theta_{\max} =` ``brownian_max_dtheta``
+
+Then SyMBac validates trench-bound geometry. If invalid, it retries with
+backoff scales :math:`1, 1/2, 1/4, ...` up to
+``brownian_backoff_attempts``. If all retries fail, the frame jitter is
+rolled back for that cell.
 
 Behavioral notes
 ----------------
@@ -98,6 +134,7 @@ Behavioral notes
 * Setting all three std values to zero disables this jitter.
 * This model is independent from per-segment force noise
   (``CellConfig.NOISE_STRENGTH``), and acts as a frame-level rigid-body perturbation.
+* Guard parameters prevent large jumps that can tunnel through trench walls.
 
 Practical starting values
 -------------------------
@@ -108,5 +145,8 @@ For subtle but visible motion in mother-machine data:
 * ``brownian_transverse_std = 0.005`` to ``0.02``
 * ``brownian_rotation_std = 0.002`` to ``0.01``
 * ``brownian_persistence = 0.8`` to ``0.9``
+* ``brownian_max_dx_fraction_of_trench_width = 0.1`` to ``0.25``
+* ``brownian_max_dtheta = 0.01`` to ``0.04``
+* ``brownian_backoff_attempts = 3`` to ``6``
 
 Increase gradually to avoid unrealistic slipping or excessive spinning.
