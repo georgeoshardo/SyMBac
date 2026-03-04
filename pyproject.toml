@@ -51,6 +51,7 @@ dependencies = [
 [project.optional-dependencies]
 torch = ["torch>=2.10.0"]
 cupy = ["cupy-cuda12x"]
+geff = ["geff>=1.1.0"]
 docs = [
     "sphinx_automodapi",
     "sphinx-autobuild",

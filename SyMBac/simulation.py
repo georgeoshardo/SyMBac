@@ -2,6 +2,7 @@ import numpy as np
 from joblib import Parallel, delayed
 import pickle
 import tempfile
+from dataclasses import fields, is_dataclass
 from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
@@ -74,6 +75,10 @@ class Simulation:
         substeps=100,
         width_upper_limit=None,
         load_sim_dir=None,
+        cell_config=None,
+        physics_config=None,
+        cell_config_overrides=None,
+        physics_config_overrides=None,
         max_length_var=_UNSET,
         width_var=_UNSET,
     ):
@@ -126,6 +131,20 @@ class Simulation:
             (default) means no limit.
         load_sim_dir : str
             The directory if you wish to load a previously completed simulation
+        cell_config : SyMBac.physics.config.CellConfig or dict or None, optional
+            Optional full low-level cell physics configuration template.
+            If provided, this is used as the base cell configuration instead
+            of internally computed defaults.
+        physics_config : SyMBac.physics.config.PhysicsConfig or dict or None, optional
+            Optional full low-level global physics configuration template.
+            If provided, this is used as the base physics configuration instead
+            of internally computed defaults.
+        cell_config_overrides : dict or None, optional
+            Key-value overrides applied to the resolved cell configuration
+            template (whether default or user-provided).
+        physics_config_overrides : dict or None, optional
+            Key-value overrides applied to the resolved physics configuration
+            template (whether default or user-provided).
         """
         api_name = f"{self.__class__.__name__}.__init__()"
         _require_provided(api_name, "cell_width", cell_width)
@@ -156,6 +175,10 @@ class Simulation:
 
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
             raise ValueError("substeps must be an integer greater than 0.")
+        if cell_config_overrides is not None and not isinstance(cell_config_overrides, dict):
+            raise TypeError("cell_config_overrides must be a dict when provided.")
+        if physics_config_overrides is not None and not isinstance(physics_config_overrides, dict):
+            raise TypeError("physics_config_overrides must be a dict when provided.")
 
         self.trench_length = trench_length
         self.trench_width = trench_width
@@ -176,6 +199,10 @@ class Simulation:
         self.load_sim_dir = load_sim_dir
         self.substeps = substeps
         self.width_upper_limit = width_upper_limit
+        self.cell_config_template = cell_config
+        self.physics_config_template = physics_config
+        self.cell_config_overrides = dict(cell_config_overrides or {})
+        self.physics_config_overrides = dict(physics_config_overrides or {})
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -234,7 +261,7 @@ class Simulation:
         trench_width_px = self.trench_width * scale_factor
         SUB_STEPS = self.substeps
 
-        cell_config = CellConfig(
+        default_cell_kwargs = dict(
             GRANULARITY=GRANULARITY,
             SEGMENT_RADIUS=SEGMENT_RADIUS,
             SEGMENT_MASS=1.0,
@@ -255,12 +282,46 @@ class Simulation:
             SIMPLE_LENGTH=False,
             WIDTH_UPPER_LIMIT=WIDTH_UPPER_LIMIT,
         )
+        if self.cell_config_template is None:
+            resolved_cell_kwargs = dict(default_cell_kwargs)
+        elif isinstance(self.cell_config_template, dict):
+            resolved_cell_kwargs = dict(self.cell_config_template)
+        elif is_dataclass(self.cell_config_template):
+            resolved_cell_kwargs = {
+                field.name: getattr(self.cell_config_template, field.name)
+                for field in fields(self.cell_config_template)
+                if field.init
+            }
+        else:
+            raise TypeError(
+                "cell_config must be a CellConfig-like dataclass instance, a dict, or None."
+            )
+        resolved_cell_kwargs.update(self.cell_config_overrides)
+        cell_config = CellConfig(**resolved_cell_kwargs)
 
-        physics_config = PhysicsConfig(
+        default_physics_kwargs = dict(
             ITERATIONS=self.phys_iters * 8,
             DAMPING=0.5,
             GRAVITY=(0, self.gravity),
         )
+        if self.physics_config_template is None:
+            resolved_physics_kwargs = dict(default_physics_kwargs)
+        elif isinstance(self.physics_config_template, dict):
+            resolved_physics_kwargs = dict(self.physics_config_template)
+        elif is_dataclass(self.physics_config_template):
+            resolved_physics_kwargs = {
+                field.name: getattr(self.physics_config_template, field.name)
+                for field in fields(self.physics_config_template)
+                if field.init
+            }
+        else:
+            raise TypeError(
+                "physics_config must be a PhysicsConfig-like dataclass instance, a dict, or None."
+            )
+        resolved_physics_kwargs.update(self.physics_config_overrides)
+        physics_config = PhysicsConfig(**resolved_physics_kwargs)
+        self._resolved_cell_config = cell_config
+        self._resolved_physics_config = physics_config
 
         # --- Lineage tracking ---
         lineage_info = {}  # group_id -> {mother_mask_label, generation}

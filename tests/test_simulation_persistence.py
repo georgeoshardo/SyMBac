@@ -177,3 +177,45 @@ def test_cell_simulation_run_simulation_persists_required_pickles(tmp_path):
     assert len(result) == 3
     assert (save_dir / "cell_timeseries.p").exists()
     assert (save_dir / "space_timeseries.p").exists()
+
+
+def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch):
+    captured = {}
+
+    class _CapturingSimulator:
+        def __init__(self, **kwargs):
+            captured["physics_config"] = kwargs["physics_config"]
+            captured["cell_config"] = kwargs["initial_cell_config"]
+            self.space = {"dummy_space": True}
+            self.colony = _DummyColony()
+
+        def step(self):
+            return None
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _CapturingSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        cell_config_overrides={
+            "MAX_BEND_ANGLE": 0.02,
+            "STIFFNESS": 123456.0,
+            "PIVOT_JOINT_STIFFNESS": 4321.0,
+            "NOISE_STRENGTH": 0.09,
+        },
+        physics_config_overrides={
+            "ITERATIONS": 77,
+            "DAMPING": 0.35,
+        },
+    )
+    simulation.run_simulation(show_window=False)
+
+    cell_cfg = captured["cell_config"]
+    physics_cfg = captured["physics_config"]
+    assert cell_cfg.MAX_BEND_ANGLE == 0.02
+    assert cell_cfg.STIFFNESS == 123456.0
+    assert cell_cfg.PIVOT_JOINT_STIFFNESS == 4321.0
+    assert cell_cfg.NOISE_STRENGTH == 0.09
+    assert physics_cfg.ITERATIONS == 77
+    assert physics_cfg.DAMPING == 0.35

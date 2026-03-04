@@ -42,3 +42,19 @@ def test_substeps_validation_accepts_positive_int(tmp_path):
     kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(**kwargs, substeps=3)
     assert simulation.substeps == 3
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("cell_config_overrides", 1),
+        ("cell_config_overrides", []),
+        ("physics_config_overrides", 1.5),
+        ("physics_config_overrides", ()),
+    ],
+)
+def test_config_overrides_validation_rejects_non_dict(tmp_path, field_name, bad_value):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs[field_name] = bad_value
+    with pytest.raises(TypeError, match=f"{field_name}"):
+        Simulation(**kwargs)

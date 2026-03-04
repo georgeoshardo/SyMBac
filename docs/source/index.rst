@@ -46,6 +46,7 @@ Contents
 
    Training Omnipose <examples/omnipose_training_data_generator.ipynb>
    Segmenting with Omnipose <examples/seg_with_omnipose.ipynb>
+   Timeseries Tracking Data <examples/timeseries_tracking_data.ipynb>
 
 .. toctree::
    :caption: Classes reference
