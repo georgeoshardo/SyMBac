@@ -7,7 +7,14 @@ platforms = ["osx-arm64", "linux-64", "win-64"]
 python = ">=3.9,<3.13"
 pytest = ">=9.0.2,<10"
 dask = ">=2026.1.2,<2027"
+pandoc = ">=3.9,<4"
 
 [pypi-dependencies]
 symbac = { path = ".", editable = true }
 geff = ">=1.1.4.1.1, <2"
+sphinx = ">=9.1.0, <10"
+sphinx-automodapi = ">=0.22.0, <0.23"
+nbsphinx = ">=0.9.8, <0.10"
+sphinx-copybutton = ">=0.5.2, <0.6"
+sphinx-rtd-theme = ">=3.1.0, <4"
+sphinx-autobuild = ">=2025.8.25, <2026"
