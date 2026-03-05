@@ -64,8 +64,14 @@ docs = [
 [project.urls]
 Homepage = "https://github.com/georgeoshardo/SyMBac"
 
+[project.scripts]
+symbac-napari = "SyMBac.napari.app:main"
+
+[project.entry-points."napari.manifest"]
+SyMBac = "SyMBac:napari/resources/napari.yaml"
+
 [tool.setuptools.packages.find]
 include = ["SyMBac*"]
 
 [tool.setuptools.package-data]
-SyMBac = ["sample_images/*.tiff"]
+SyMBac = ["sample_images/*.tiff", "napari/resources/*.yaml"]

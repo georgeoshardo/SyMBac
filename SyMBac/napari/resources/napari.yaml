@@ -1,0 +1,30 @@
+name: SyMBac
+schema_version: 0.2.1
+contributions:
+  commands:
+    - id: symbac.create_simulation_dock
+      title: Create SyMBac Simulation Dock
+      python_name: SyMBac.napari.plugin:create_simulation_dock
+    - id: symbac.create_optics_dock
+      title: Create SyMBac Optics Dock
+      python_name: SyMBac.napari.plugin:create_optics_dock
+    - id: symbac.create_regions_dock
+      title: Create SyMBac Regions Dock
+      python_name: SyMBac.napari.plugin:create_regions_dock
+    - id: symbac.create_tuning_dock
+      title: Create SyMBac Tuning Dock
+      python_name: SyMBac.napari.plugin:create_tuning_dock
+    - id: symbac.create_export_dock
+      title: Create SyMBac Export Dock
+      python_name: SyMBac.napari.plugin:create_export_dock
+  widgets:
+    - command: symbac.create_simulation_dock
+      display_name: SyMBac Simulation
+    - command: symbac.create_optics_dock
+      display_name: SyMBac Optics
+    - command: symbac.create_regions_dock
+      display_name: SyMBac Regions
+    - command: symbac.create_tuning_dock
+      display_name: SyMBac Tuning
+    - command: symbac.create_export_dock
+      display_name: SyMBac Export

@@ -1,0 +1,1 @@
+"""SyMBac napari module."""
