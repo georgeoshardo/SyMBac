@@ -28,10 +28,13 @@ class OpticsDock:
             QCheckBox,
             QComboBox,
             QDoubleSpinBox,
+            QGroupBox,
             QFormLayout,
             QHBoxLayout,
             QLabel,
             QPushButton,
+            QScrollArea,
+            QSpinBox,
             QVBoxLayout,
             QWidget,
         )
@@ -40,7 +43,14 @@ class OpticsDock:
         self.layer_manager = layer_manager
 
         self.widget = QWidget()
-        layout = QVBoxLayout(self.widget)
+        root = QVBoxLayout(self.widget)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        scroll.setWidget(container)
+        root.addWidget(scroll)
 
         sample_row = QHBoxLayout()
         sample_row.addWidget(QLabel("Real image"))
@@ -52,6 +62,7 @@ class OpticsDock:
         sample_row.addWidget(self.load_image_button)
         layout.addLayout(sample_row)
 
+        psf_group = QGroupBox("PSF")
         self.psf_form = QFormLayout()
         self.psf_inputs: dict[str, object] = {}
         for key, value in _DEFAULT_PSF_PARAMS.items():
@@ -65,18 +76,27 @@ class OpticsDock:
                 self.psf_inputs[key] = combo
                 self.psf_form.addRow(key, combo)
             else:
-                spin = QDoubleSpinBox()
-                spin.setDecimals(4)
-                spin.setMaximum(10000)
-                spin.setMinimum(-10000)
-                spin.setValue(float(value))
+                if key in {"radius", "resize_amount"}:
+                    spin = QSpinBox()
+                    spin.setMaximum(10000)
+                    spin.setMinimum(1)
+                    spin.setValue(int(value))
+                else:
+                    spin = QDoubleSpinBox()
+                    spin.setDecimals(4)
+                    spin.setMaximum(10000)
+                    spin.setMinimum(0.0)
+                    spin.setValue(float(value))
                 self.psf_inputs[key] = spin
                 self.psf_form.addRow(key, spin)
-        layout.addLayout(self.psf_form)
+        psf_group.setLayout(self.psf_form)
+        layout.addWidget(psf_group)
 
+        camera_group = QGroupBox("Camera")
+        camera_layout = QVBoxLayout(camera_group)
         self.camera_enabled = QCheckBox("Enable camera")
         self.camera_enabled.setChecked(True)
-        layout.addWidget(self.camera_enabled)
+        camera_layout.addWidget(self.camera_enabled)
 
         self.camera_form = QFormLayout()
         self.camera_inputs: dict[str, QDoubleSpinBox] = {}
@@ -84,14 +104,16 @@ class OpticsDock:
             spin = QDoubleSpinBox()
             spin.setDecimals(4)
             spin.setMaximum(10000)
-            spin.setMinimum(-10000)
+            spin.setMinimum(0.0)
             spin.setValue(float(value))
             self.camera_inputs[key] = spin
             self.camera_form.addRow(key, spin)
-        layout.addLayout(self.camera_form)
+        camera_layout.addLayout(self.camera_form)
+        layout.addWidget(camera_group)
 
         self.build_renderer_button = QPushButton("Build Renderer")
         layout.addWidget(self.build_renderer_button)
+        layout.addStretch(1)
 
         self.load_image_button.clicked.connect(self._load_real_image)
         self.build_renderer_button.clicked.connect(self._build_renderer)
@@ -110,8 +132,8 @@ class OpticsDock:
         for key, widget in self.psf_inputs.items():
             if hasattr(widget, "currentText"):
                 out[key] = widget.currentText()
-            elif key == "resize_amount":
-                out[key] = int(round(widget.value()))
+            elif key in {"radius", "resize_amount"}:
+                out[key] = int(widget.value())
             else:
                 out[key] = float(widget.value())
         return out
@@ -122,11 +144,15 @@ class OpticsDock:
         return {key: float(widget.value()) for key, widget in self.camera_inputs.items()}
 
     def _build_renderer(self):
-        from napari.utils.notifications import show_info
+        from napari.utils.notifications import show_error, show_info
 
-        renderer = self.controller.build_renderer(
-            psf_params=self._read_psf_params(),
-            camera_params=self._read_camera_params(),
-        )
-        renderer._ensure_image_params()
+        try:
+            renderer = self.controller.build_renderer(
+                psf_params=self._read_psf_params(),
+                camera_params=self._read_camera_params(),
+            )
+            renderer._ensure_image_params()
+        except Exception as exc:
+            show_error(f"Failed to build renderer: {exc}")
+            return
         show_info("Renderer created.")
