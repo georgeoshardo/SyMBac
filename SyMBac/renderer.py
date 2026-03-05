@@ -270,6 +270,7 @@ class Renderer:
         self.error_params = (
         mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error,
         device_var_error)
+        self._explicit_region_masks = None
 
     def select_intensity_napari(self, auto = True, classes = 3, cells = "dark"):
         if auto:
@@ -291,6 +292,42 @@ class Renderer:
         self.media_label = viewer.add_labels(thresh_media, name="Media")
         self.cell_label = viewer.add_labels(thresh_cells, name="Cell")
         self.device_label = viewer.add_labels(thresh_device, name="Device")
+        self.set_region_masks(
+            media_mask=np.asarray(thresh_media) > 0,
+            cell_mask=np.asarray(thresh_cells) > 0,
+            device_mask=np.asarray(thresh_device) > 0,
+        )
+
+    def set_region_masks(self, media_mask, cell_mask, device_mask) -> None:
+        """
+        Set explicit region masks used for image intensity parameter estimation.
+
+        Parameters
+        ----------
+        media_mask, cell_mask, device_mask : 2D array-like
+            Boolean-compatible masks matching ``self.real_resize.shape``.
+        """
+        shape = tuple(self.real_resize.shape)
+        media = np.asarray(media_mask, dtype=bool)
+        cell = np.asarray(cell_mask, dtype=bool)
+        device = np.asarray(device_mask, dtype=bool)
+        for name, mask in (("media", media), ("cell", cell), ("device", device)):
+            if mask.shape != shape:
+                raise ValueError(
+                    f"{name}_mask shape {mask.shape} must match real image shape {shape}."
+                )
+        self._explicit_region_masks = {
+            "media": media,
+            "cell": cell,
+            "device": device,
+        }
+        # Force recalculation with the new masks.
+        self.image_params = None
+
+    def clear_region_masks(self) -> None:
+        """Clear explicit region masks and return to auto-segmentation/layer fallback."""
+        self._explicit_region_masks = None
+        self.image_params = None
 
     def auto_segment_regions(self, image=None, classes=3, cells="dark"):
         """
@@ -332,7 +369,39 @@ class Renderer:
     def _ensure_image_params(self, cells="dark"):
         if hasattr(self, "image_params") and self.image_params is not None:
             return
-        regions = self.auto_segment_regions(image=self.real_resize, cells=cells)
+
+        regions = None
+        explicit = getattr(self, "_explicit_region_masks", None)
+        if explicit is not None:
+            regions = {
+                "media": np.asarray(explicit["media"], dtype=bool),
+                "cell": np.asarray(explicit["cell"], dtype=bool),
+                "device": np.asarray(explicit["device"], dtype=bool),
+            }
+        else:
+            # Fallback: if napari label layers exist from select_intensity_napari,
+            # use those directly before auto-thresholding.
+            media_layer = getattr(self, "media_label", None)
+            cell_layer = getattr(self, "cell_label", None)
+            device_layer = getattr(self, "device_label", None)
+            if media_layer is not None and cell_layer is not None and device_layer is not None:
+                media_data = np.asarray(getattr(media_layer, "data", media_layer))
+                cell_data = np.asarray(getattr(cell_layer, "data", cell_layer))
+                device_data = np.asarray(getattr(device_layer, "data", device_layer))
+                if (
+                    media_data.shape == self.real_resize.shape
+                    and cell_data.shape == self.real_resize.shape
+                    and device_data.shape == self.real_resize.shape
+                ):
+                    regions = {
+                        "media": media_data > 0,
+                        "cell": cell_data > 0,
+                        "device": device_data > 0,
+                    }
+
+        if regions is None:
+            regions = self.auto_segment_regions(image=self.real_resize, cells=cells)
+
         media = self.real_resize[regions["media"]]
         cell = self.real_resize[regions["cell"]]
         device = self.real_resize[regions["device"]]

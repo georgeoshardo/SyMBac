@@ -106,6 +106,21 @@ jupyter nbextension enable --py widgetsnbextension
 
 [***Read the docs***](https://symbac.readthedocs.io/en/latest/)
 
+### Napari workflow
+
+Launch the structured SyMBac napari UI:
+
+```sh
+symbac-napari
+```
+
+or from Python:
+
+```python
+from SyMBac import launch_napari
+launch_napari()
+```
+
 ## FAQs
 
 * Do I need to have a GPU?

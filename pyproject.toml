@@ -68,7 +68,7 @@ Homepage = "https://github.com/georgeoshardo/SyMBac"
 symbac-napari = "SyMBac.napari.app:main"
 
 [project.entry-points."napari.manifest"]
-SyMBac = "SyMBac:napari/resources/napari.yaml"
+SyMBac = "SyMBac.napari.plugin"
 
 [tool.setuptools.packages.find]
 include = ["SyMBac*"]
