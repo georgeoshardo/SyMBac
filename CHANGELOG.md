@@ -1,3 +1,12 @@
+# 1.0.0
+
+* Breaking API reset for simulation and rendering around strict config models.
+* New Pydantic + YAML round-trip config/plan types in `SyMBac.config_models`.
+* `Simulation` now takes `SimulationSpec` and uses `run()` / `draw_opl()`.
+* Unified dataset export API: `Renderer.export_dataset(...)`.
+* Removed legacy `SyMBac.cell_simulation` API.
+* Removed `AutoOptimiser` and related dependencies.
+
 # 0.2.0
 
 * Reduction in size of code, removal of old garbage

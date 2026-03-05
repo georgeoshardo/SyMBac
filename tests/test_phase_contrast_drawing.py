@@ -1,48 +1,57 @@
 import pymunk
 
-from SyMBac.cell_simulation import run_simulation
-from SyMBac.drawing import draw_scene, generate_curve_props, gen_cell_props_for_draw, get_space_size
+from SyMBac.config_models import (
+    SimulationCellSpec,
+    SimulationGeometrySpec,
+    SimulationPhysicsSpec,
+    SimulationRuntimeSpec,
+    SimulationSpec,
+)
+from SyMBac.simulation import Simulation
 from SyMBac.trench_geometry import get_trench_segments
 
 
-def test_phase_contrast_drawing_pipeline_smoke(tmp_path):
-    cell_timeseries, space, historic_cells = run_simulation(
-        trench_length=15,
-        trench_width=1.5,
-        cell_max_length=6,
-        cell_width=1,
-        sim_length=3,
-        pix_mic_conv=0.0655,
-        gravity=0,
-        phys_iters=2,
-        max_length_std=0.3,
-        width_std=0.1,
-        save_dir=str(tmp_path),
-        resize_amount=1,
-        lysis_p=0.0,
-        show_window=False,
+def _simulation_spec(tmp_path):
+    return SimulationSpec(
+        geometry=SimulationGeometrySpec(
+            trench_length=15.0,
+            trench_width=1.5,
+            pix_mic_conv=0.0655,
+            resize_amount=1,
+        ),
+        cell=SimulationCellSpec(
+            cell_max_length=6.0,
+            cell_width=1.0,
+            max_length_std=0.3,
+            width_std=0.1,
+            lysis_p=0.0,
+        ),
+        physics=SimulationPhysicsSpec(gravity=0.0, phys_iters=2),
+        runtime=SimulationRuntimeSpec(
+            sim_length=2,
+            substeps=1,
+            save_dir=str(tmp_path / "sim"),
+        ),
     )
 
-    assert isinstance(space, pymunk.Space)
-    assert len(historic_cells) > 0
 
-    main_segments = get_trench_segments(space)
+def test_phase_contrast_drawing_pipeline_smoke(tmp_path):
+    simulation = Simulation(_simulation_spec(tmp_path))
+    simulation.run(show_window=False)
+
+    assert isinstance(simulation.space, pymunk.Space)
+    assert len(simulation.cell_timeseries) > 0
+
+    main_segments = get_trench_segments(simulation.space)
     assert len(main_segments) == 2
 
-    id_props = generate_curve_props(cell_timeseries)
-    cell_timeseries_properties = [
-        gen_cell_props_for_draw(frame, id_props)
-        for frame in cell_timeseries
-    ]
-    assert len(cell_timeseries_properties) > 0
-
-    scene, masks = draw_scene(
-        cell_timeseries_properties[0],
+    opl_scenes, masks = simulation.draw_opl(
         do_transformation=True,
-        space_size=get_space_size(cell_timeseries_properties),
-        offset=30,
         label_masks=True,
+        return_output=True,
     )
 
-    assert scene.shape == masks.shape
-    assert scene.ndim == 2
+    assert len(opl_scenes) == simulation.sim_length
+    assert len(masks) == simulation.sim_length
+    assert opl_scenes[0].shape == masks[0].shape
+    assert opl_scenes[0].ndim == 2
