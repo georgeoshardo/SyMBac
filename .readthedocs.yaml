@@ -13,8 +13,9 @@ formats:
 
 # specify dependencies
 python:
-   version: 3.8
-   install:
-      - requirements: docs/source/requirements.txt
-      - method: pip
-        path: .
+  version: "3.12"
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs

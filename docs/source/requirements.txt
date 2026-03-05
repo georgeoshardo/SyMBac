@@ -1,6 +1,0 @@
-sphinx_automodapi
-matplotlib==3.4.3
-nbsphinx
-sphinx_copybutton
-matplotlib-scalebar==0.7.2
-numba
