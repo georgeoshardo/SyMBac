@@ -27,6 +27,7 @@ Contents
    intro
    installation
    faqs
+   migration_v1_api_cleanup
 
 .. toctree:: 
    :caption: Guide: Mother Machine
@@ -63,7 +64,6 @@ Contents
    :maxdepth: 3
 
    symbac_cell_geometry
-   symbac_cell_simulation
    symbac_drawing
    symbac_misc
    symbac_pySHINE

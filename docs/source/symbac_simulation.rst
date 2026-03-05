@@ -6,26 +6,15 @@ SyMBac.simulation
 
     .. automethod:: __init__
 
-Compatibility Notes
--------------------
+Notes
+-----
 
-* ``max_length_var`` and ``width_var`` are deprecated aliases for ``max_length_std`` and ``width_std``.
-  They emit a ``FutureWarning`` and are scheduled for removal on ``2026-09-01``.
-* ``max_length_std`` and ``width_std`` are interpreted in simulation world units and converted
-  using the full resolution ``scale_factor`` across the maintained simulation APIs.
-* All parameters after ``cell_max_length`` in ``Simulation.__init__`` are keyword-only to prevent
-  silent positional mis-assignment.
-* ``substeps`` must be a positive integer.
-* Brownian jitter controls are available via
-  ``brownian_longitudinal_std``, ``brownian_transverse_std``,
-  ``brownian_rotation_std``, ``brownian_persistence``, and
-  ``brownian_application_mode``.
-  Safety guard controls are available via
-  ``brownian_max_dx_fraction_of_trench_width``,
-  ``brownian_max_dy_fraction_of_segment_radius``,
-  ``brownian_max_dy_px_floor``, ``brownian_max_dtheta``,
-  ``brownian_backoff_attempts``, and
-  ``brownian_projection_angular_damping``.
-  See :doc:`brownian_jitter_model` for equations and parameter guidance.
-* ``Simulation.run_simulation`` writes ``cell_timeseries.p`` and ``space_timeseries.p`` into ``save_dir``.
-* ``Simulation(load_sim_dir=...)`` expects both artifacts in ``load_sim_dir``.
+* ``Simulation`` now takes a single :class:`SyMBac.config_models.SimulationSpec`.
+* Run via ``Simulation.run(...)`` and draw OPL via ``Simulation.draw_opl(...)``.
+* Brownian controls live under ``SimulationSpec.brownian``. See
+  :doc:`brownian_jitter_model` for equations and parameter guidance.
+* ``Simulation.run`` writes ``cell_timeseries.p`` and ``space_timeseries.p`` into
+  ``SimulationSpec.runtime.save_dir``.
+* Loading from previous output is configured via
+  ``SimulationSpec.runtime.load_sim_dir``.
+* See :doc:`migration_v1_api_cleanup` for old-to-new API mapping.
