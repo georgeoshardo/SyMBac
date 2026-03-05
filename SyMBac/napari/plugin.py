@@ -6,16 +6,22 @@ from SyMBac.napari.ui.bindings import (
     get_regions_widget,
     get_simulation_widget,
     get_tuning_widget,
+    get_workflow_widget,
 )
 
 
 __all__ = [
+    "create_workflow_dock",
     "create_simulation_dock",
     "create_optics_dock",
     "create_regions_dock",
     "create_tuning_dock",
     "create_export_dock",
 ]
+
+
+def create_workflow_dock(viewer):
+    return get_workflow_widget(viewer)
 
 
 def create_simulation_dock(viewer):

@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 
-def test_napari_manifest_has_five_docks():
+def test_napari_manifest_has_workflow_and_section_docks():
     manifest_path = Path("SyMBac/napari/resources/napari.yaml")
     assert manifest_path.exists()
 
@@ -11,8 +11,9 @@ def test_napari_manifest_has_five_docks():
     widgets = data["contributions"]["widgets"]
     display_names = {widget["display_name"] for widget in widgets}
 
-    assert len(widgets) == 5
+    assert len(widgets) == 6
     assert display_names == {
+        "SyMBac Workflow",
         "SyMBac Simulation",
         "SyMBac Optics",
         "SyMBac Regions",

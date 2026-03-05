@@ -1,13 +1,13 @@
 SyMBac in Napari
 ================
 
-SyMBac now includes a structured napari workflow with five docks:
+SyMBac now includes a structured napari workflow with one main dock and five tabs:
 
-* **SyMBac Simulation**: edit/load/save ``SimulationSpec`` YAML, run simulation, draw OPL scenes.
-* **SyMBac Optics**: pick a real image, configure PSF/camera, build renderer.
-* **SyMBac Regions**: bootstrap or manually edit media/cell/device region labels and apply them to rendering.
-* **SyMBac Tuning**: tune ``RenderConfig`` values and preview synthetic frames.
-* **SyMBac Export**: export random datasets, timeseries datasets, or batch timeseries variants.
+* **Simulation**: set simulation parameters, run simulation, draw OPL scenes.
+* **Optics**: pick a real image, configure PSF/camera, build renderer.
+* **Regions**: bootstrap or manually edit media/cell/device region labels and apply them to rendering.
+* **Tuning**: tune ``RenderConfig`` values and preview synthetic frames.
+* **Export**: export random datasets, timeseries datasets, or batch timeseries variants.
 
 Launch
 ------
@@ -35,10 +35,12 @@ The workflow mirrors the two reference examples:
 
 including simulation setup, OPL drawing, renderer setup, region-label-guided tuning, and dataset export.
 
-YAML Persistence
-----------------
+YAML Persistence (Advanced)
+---------------------------
 
-The napari docks support explicit YAML load/save for:
+The workflow is form-first by default. Advanced YAML panels can be expanded when needed.
+
+The advanced panels support explicit YAML load/save for:
 
 * ``SimulationSpec``
 * ``RenderConfig``

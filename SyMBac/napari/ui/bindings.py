@@ -11,6 +11,7 @@ from SyMBac.napari.ui.docks.regions_dock import RegionsDock
 from SyMBac.napari.ui.docks.simulation_dock import SimulationDock
 from SyMBac.napari.ui.docks.tuning_dock import TuningDock
 from SyMBac.napari.ui.layer_manager import LayerManager
+from SyMBac.napari.ui.workflow_dock import WorkflowDock
 
 _CONTEXTS_BY_VIEWER_ID: dict[int, NapariUIContext] = {}
 _VIEWER_REFS: dict[int, weakref.ref] = {}
@@ -66,6 +67,8 @@ def _get_or_build_dock(context: NapariUIContext, key: str):
         dock = TuningDock(context.controller, context.layer_manager)
     elif key == "export":
         dock = ExportDock(context.controller)
+    elif key == "workflow":
+        dock = WorkflowDock(context)
     else:
         raise ValueError(f"Unknown dock key: {key}")
 
@@ -93,14 +96,10 @@ def get_export_widget(viewer):
     return _get_or_build_dock(get_or_create_context(viewer), "export").widget
 
 
+def get_workflow_widget(viewer):
+    return _get_or_build_dock(get_or_create_context(viewer), "workflow").widget
+
+
 def register_default_docks(viewer) -> None:
-    targets = [
-        ("SyMBac Simulation", get_simulation_widget),
-        ("SyMBac Optics", get_optics_widget),
-        ("SyMBac Regions", get_regions_widget),
-        ("SyMBac Tuning", get_tuning_widget),
-        ("SyMBac Export", get_export_widget),
-    ]
-    for name, factory in targets:
-        widget = factory(viewer)
-        viewer.window.add_dock_widget(widget, name=name, area="right")
+    widget = get_workflow_widget(viewer)
+    viewer.window.add_dock_widget(widget, name="SyMBac Workflow", area="right")

@@ -2,6 +2,9 @@ name: SyMBac
 schema_version: 0.2.1
 contributions:
   commands:
+    - id: symbac.create_workflow_dock
+      title: Create SyMBac Workflow Dock
+      python_name: SyMBac.napari.plugin:create_workflow_dock
     - id: symbac.create_simulation_dock
       title: Create SyMBac Simulation Dock
       python_name: SyMBac.napari.plugin:create_simulation_dock
@@ -18,6 +21,8 @@ contributions:
       title: Create SyMBac Export Dock
       python_name: SyMBac.napari.plugin:create_export_dock
   widgets:
+    - command: symbac.create_workflow_dock
+      display_name: SyMBac Workflow
     - command: symbac.create_simulation_dock
       display_name: SyMBac Simulation
     - command: symbac.create_optics_dock
