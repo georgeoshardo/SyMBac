@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import weakref
 
 from SyMBac.napari.controllers.workflow_controller import WorkflowController
 from SyMBac.napari.state import NapariSessionState
@@ -10,6 +11,9 @@ from SyMBac.napari.ui.docks.regions_dock import RegionsDock
 from SyMBac.napari.ui.docks.simulation_dock import SimulationDock
 from SyMBac.napari.ui.docks.tuning_dock import TuningDock
 from SyMBac.napari.ui.layer_manager import LayerManager
+
+_CONTEXTS_BY_VIEWER_ID: dict[int, NapariUIContext] = {}
+_VIEWER_REFS: dict[int, weakref.ref] = {}
 
 
 @dataclass
@@ -21,15 +25,30 @@ class NapariUIContext:
 
 
 def get_or_create_context(viewer) -> NapariUIContext:
-    ctx = getattr(viewer, "_symbac_ui_context", None)
-    if ctx is not None:
-        return ctx
+    viewer_id = id(viewer)
+    existing_ref = _VIEWER_REFS.get(viewer_id)
+    if existing_ref is not None and existing_ref() is viewer:
+        ctx = _CONTEXTS_BY_VIEWER_ID.get(viewer_id)
+        if ctx is not None:
+            return ctx
 
     state = NapariSessionState()
     layer_manager = LayerManager(viewer)
     controller = WorkflowController(state=state)
     ctx = NapariUIContext(state=state, controller=controller, layer_manager=layer_manager)
-    setattr(viewer, "_symbac_ui_context", ctx)
+
+    _CONTEXTS_BY_VIEWER_ID[viewer_id] = ctx
+
+    def _cleanup(_ref, _viewer_id=viewer_id):
+        _VIEWER_REFS.pop(_viewer_id, None)
+        _CONTEXTS_BY_VIEWER_ID.pop(_viewer_id, None)
+
+    try:
+        _VIEWER_REFS[viewer_id] = weakref.ref(viewer, _cleanup)
+    except TypeError:
+        # Fallback for objects that cannot be weak-referenced.
+        _VIEWER_REFS[viewer_id] = lambda: viewer
+
     return ctx
 
 
