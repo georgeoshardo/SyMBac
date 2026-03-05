@@ -7,13 +7,9 @@ For a quick understanding of what SyMBac is, without reading the preprint_, then
 What is it?
 -----------
 
-SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine, we also have preliminary support for bacteria growing in 2D monolayers on agar pads (again, both in fluorescence and phase contrast).
+SyMBac is a tool to generate synthetic phase contrast or fluorescence images of bacteria growing in mother machine geometries.
 
 .. image:: images/index/paper_figures/syn_mother_machine.png
-   :align: center
-   :width: 1000px
-
-.. image:: images/index/paper_figures/syn_agar_pad.png
    :align: center
    :width: 1000px
 

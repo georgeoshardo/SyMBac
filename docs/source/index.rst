@@ -3,10 +3,9 @@ SyMBac Documentation
 
 
 
-SyMBac (Synthetic Micrographs of Bacteria) is a tool to generate synthetic phase contrast or fluorescence images of bacteria. Currently the tool only supports bacteria growing in the mother machine and on agar pads. 
+SyMBac (Synthetic Micrographs of Bacteria) is a tool to generate synthetic phase contrast or fluorescence images of bacteria in mother machine geometries.
 
 Coming soon:
- - Agar pad simulations (working, code being added)
  - Command line interface (currently testing)
 
 Read the preprint_, SyMBac: Synthetic Micrographs for Accurate Segmentation of Bacterial Cells using Deep Neural Networks, Georgeos Hardo, Maximillian Noka, Somenath Bakshi
@@ -35,12 +34,6 @@ Contents
 
    Mother machine simulations <examples/simple_mother_machine.ipynb>
    Brownian jitter model <brownian_jitter_model>
-
-.. toctree:: 
-   :caption: Guide: Agar Pad
-   :maxdepth: 3
-
-   Agar pad simulations <examples/agar_pad.ipynb>
 
 .. toctree::
    :caption: Examples
