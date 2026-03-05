@@ -69,7 +69,7 @@ def generate_curve_props(cell_timeseries):
     Parameters
     ---------
     cell_timeseries : list(cell_properties)
-        The output of :meth:`SyMBac.simulation.Simulation.run_simulation()`
+        The output of :meth:`SyMBac.simulation.Simulation.run()`
     
     Returns
     -------
@@ -100,7 +100,7 @@ def gen_cell_props_for_draw(cell_timeseries_lists, ID_props):
     Parameters
     ----------
     cell_timeseries_lists : list
-        A list (single frame) from cell_timeseries, the output from run_simulation. E.g: cell_timeseries[x]
+        A list (single frame) from ``cell_timeseries`` (output of ``Simulation.run()``). E.g: ``cell_timeseries[x]``
     ID_props : list
         A list of properties for each cell in that frame, the output of generate_curve_props()
     
@@ -671,7 +671,7 @@ def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
 
 def get_space_size(cell_timeseries_properties):
     """
-    :param cell_timeseries_properties: A list of cell properties over time. Generated from :meth:`SyMBac.simulation.Simulation.draw_simulation_OPL`
+    :param cell_timeseries_properties: A list of cell properties over time. Generated from :meth:`SyMBac.simulation.Simulation.draw_opl`
     :return: Iterates through the simulation timeseries properties, finds the extreme cell positions and retrieves the required image size to fit all cells into.
     :rtype: tuple(float, float)
     """

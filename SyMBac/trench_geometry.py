@@ -36,7 +36,7 @@ def trench_creator(size,trench_length, global_xy, space):
 def get_trench_segments(space):
     """
     A function which extracts the rigid body trench objects from the pymunk space object. Space object should be passed
-    from the return value of the run_simulation() function
+    from the active ``Simulation`` object after ``Simulation.run()``.
 
     Returns
     -------

@@ -6,8 +6,7 @@ class Cell:
     Cells are the agents in the simulation. This class allows for instantiating `Cell` object.
 
     .. note::
-       Typically the user will not need to call this class, as it will be handled by :meth:`SyMBac.cell_simulation`,
-       specifically all cell setup
+       Typically the user will not need to call this class directly. Cell setup
        happens when instantiating a simulation using :meth:`SyMBac.simulation.Simulation`
     """
     def __init__(

@@ -5,6 +5,7 @@ import sys
 import types
 
 import pytest
+from pymunk.vec2d import Vec2d
 
 if importlib.util.find_spec("napari") is None:
     napari_stub = types.ModuleType("napari")
@@ -12,12 +13,19 @@ if importlib.util.find_spec("napari") is None:
     napari_stub.run = lambda: None
     sys.modules.setdefault("napari", napari_stub)
 
-from SyMBac.simulation import Simulation
-import SyMBac.simulation as simulation_module
+from SyMBac.config_models import (
+    BrownianJitterSpec,
+    SimulationCellSpec,
+    SimulationGeometrySpec,
+    SimulationLowLevelSpec,
+    SimulationPhysicsSpec,
+    SimulationRuntimeSpec,
+    SimulationSpec,
+)
 import SyMBac.cell_snapshot as cell_snapshot_module
-import SyMBac.cell_simulation as cell_simulation_module
 import SyMBac.physics.simulator as physics_simulator_module
-from pymunk.vec2d import Vec2d
+import SyMBac.simulation as simulation_module
+from SyMBac.simulation import Simulation
 
 
 class _DummyCell:
@@ -80,6 +88,10 @@ class _DummySegment:
         self.body = _DummyBody(x=x, y=y, angle=angle)
         self.radius = 0.5
 
+    @property
+    def position(self):
+        return self.body.position
+
 
 class _DummyPhysicsRepresentation:
     def __init__(self, x=35.0, y=10.0):
@@ -92,23 +104,44 @@ class _DummyCellWithPhysics(_DummyCell):
         self.physics_representation = _DummyPhysicsRepresentation(x=x, y=y)
 
 
-def _simulation_kwargs(tmp_path):
-    return {
-        "trench_length": 15,
-        "trench_width": 1.5,
-        "cell_max_length": 6.0,
-        "max_length_std": 0.2,
-        "cell_width": 1.0,
-        "width_std": 0.1,
-        "lysis_p": 0.0,
-        "sim_length": 2,
-        "pix_mic_conv": 0.065,
-        "gravity": 0,
-        "phys_iters": 1,
-        "resize_amount": 1,
-        "save_dir": str(tmp_path / "sim"),
-        "substeps": 1,
-    }
+def _simulation_spec(
+    tmp_path,
+    *,
+    save_dir=None,
+    load_sim_dir=None,
+    sim_length=2,
+    substeps=1,
+    cell_config_overrides=None,
+    physics_config_overrides=None,
+    brownian_overrides=None,
+):
+    return SimulationSpec(
+        geometry=SimulationGeometrySpec(
+            trench_length=15.0,
+            trench_width=1.5,
+            pix_mic_conv=0.065,
+            resize_amount=1,
+        ),
+        cell=SimulationCellSpec(
+            cell_max_length=6.0,
+            max_length_std=0.2,
+            cell_width=1.0,
+            width_std=0.1,
+            lysis_p=0.0,
+        ),
+        physics=SimulationPhysicsSpec(gravity=0.0, phys_iters=1),
+        runtime=SimulationRuntimeSpec(
+            sim_length=sim_length,
+            substeps=substeps,
+            save_dir=str(save_dir or (tmp_path / "sim")),
+            load_sim_dir=load_sim_dir,
+        ),
+        low_level=SimulationLowLevelSpec(
+            cell_config_overrides=cell_config_overrides or {},
+            physics_config_overrides=physics_config_overrides or {},
+        ),
+        brownian=BrownianJitterSpec(**(brownian_overrides or {})),
+    )
 
 
 def test_run_simulation_persists_required_pickles(tmp_path, monkeypatch):
@@ -124,8 +157,8 @@ def test_run_simulation_persists_required_pickles(tmp_path, monkeypatch):
 
     monkeypatch.setattr(simulation_module.os, "replace", tracking_replace)
 
-    simulation = Simulation(**_simulation_kwargs(tmp_path))
-    simulation.run_simulation(show_window=False)
+    simulation = Simulation(_simulation_spec(tmp_path))
+    simulation.run(show_window=False)
 
     save_dir = tmp_path / "sim"
     cell_path = save_dir / "cell_timeseries.p"
@@ -154,12 +187,14 @@ def test_load_sim_dir_missing_artifacts_error_names_expected_files(tmp_path):
     with open(load_dir / "cell_timeseries.p", "wb") as handle:
         pickle.dump(["cells"], handle)
 
-    kwargs = _simulation_kwargs(tmp_path)
-    kwargs["load_sim_dir"] = str(load_dir)
-    kwargs["save_dir"] = str(tmp_path / "save_target")
+    spec = _simulation_spec(
+        tmp_path,
+        save_dir=tmp_path / "save_target",
+        load_sim_dir=str(load_dir),
+    )
 
     with pytest.raises(FileNotFoundError) as exc:
-        Simulation(**kwargs)
+        Simulation(spec)
 
     message = str(exc.value)
     assert "cell_timeseries.p" in message
@@ -176,39 +211,15 @@ def test_load_sim_dir_reads_existing_artifacts(tmp_path):
     with open(load_dir / "space_timeseries.p", "wb") as handle:
         pickle.dump(expected_space, handle)
 
-    kwargs = _simulation_kwargs(tmp_path)
-    kwargs["load_sim_dir"] = str(load_dir)
-    kwargs["save_dir"] = str(tmp_path / "save_target")
-
-    simulation = Simulation(**kwargs)
-    assert simulation.cell_timeseries == expected_cells
-    assert simulation.space == expected_space
-
-
-def test_cell_simulation_run_simulation_persists_required_pickles(tmp_path):
-    save_dir = tmp_path / "legacy_sim"
-    save_dir.mkdir()
-    result = cell_simulation_module.run_simulation(
-        trench_length=15,
-        trench_width=1.5,
-        cell_max_length=6.0,
-        cell_width=1.0,
-        sim_length=2,
-        pix_mic_conv=0.065,
-        gravity=0,
-        phys_iters=1,
-        max_length_std=0.2,
-        width_std=0.1,
-        save_dir=str(save_dir),
-        resize_amount=1,
-        lysis_p=0.0,
-        show_window=False,
+    spec = _simulation_spec(
+        tmp_path,
+        save_dir=tmp_path / "save_target",
+        load_sim_dir=str(load_dir),
     )
 
-    assert isinstance(result, tuple)
-    assert len(result) == 3
-    assert (save_dir / "cell_timeseries.p").exists()
-    assert (save_dir / "space_timeseries.p").exists()
+    simulation = Simulation(spec)
+    assert simulation.cell_timeseries == expected_cells
+    assert simulation.space == expected_space
 
 
 def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch):
@@ -227,21 +238,22 @@ def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch
     monkeypatch.setattr(physics_simulator_module, "Simulator", _CapturingSimulator)
     monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
-        **kwargs,
-        cell_config_overrides={
-            "MAX_BEND_ANGLE": 0.02,
-            "STIFFNESS": 123456.0,
-            "PIVOT_JOINT_STIFFNESS": 4321.0,
-            "NOISE_STRENGTH": 0.09,
-        },
-        physics_config_overrides={
-            "ITERATIONS": 77,
-            "DAMPING": 0.35,
-        },
+        _simulation_spec(
+            tmp_path,
+            cell_config_overrides={
+                "MAX_BEND_ANGLE": 0.02,
+                "STIFFNESS": 123456.0,
+                "PIVOT_JOINT_STIFFNESS": 4321.0,
+                "NOISE_STRENGTH": 0.09,
+            },
+            physics_config_overrides={
+                "ITERATIONS": 77,
+                "DAMPING": 0.35,
+            },
+        )
     )
-    simulation.run_simulation(show_window=False)
+    simulation.run(show_window=False)
 
     cell_cfg = captured["cell_config"]
     physics_cfg = captured["physics_config"]
@@ -280,15 +292,18 @@ def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
-        **kwargs,
-        brownian_longitudinal_std=0.05,
-        brownian_transverse_std=0.02,
-        brownian_rotation_std=0.01,
-        brownian_persistence=0.0,
+        _simulation_spec(
+            tmp_path,
+            brownian_overrides={
+                "longitudinal_std": 0.05,
+                "transverse_std": 0.02,
+                "rotation_std": 0.01,
+                "persistence": 0.0,
+            },
+        )
     )
-    simulation.run_simulation(show_window=False)
+    simulation.run(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
     assert float(body.position[0]) != 35.0 or float(body.position[1]) != 10.0
@@ -323,15 +338,18 @@ def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, mo
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
-        **kwargs,
-        brownian_longitudinal_std=0.0,
-        brownian_transverse_std=5.0,
-        brownian_rotation_std=0.02,
-        brownian_persistence=0.0,
+        _simulation_spec(
+            tmp_path,
+            brownian_overrides={
+                "longitudinal_std": 0.0,
+                "transverse_std": 5.0,
+                "rotation_std": 0.02,
+                "persistence": 0.0,
+            },
+        )
     )
-    simulation.run_simulation(show_window=False)
+    simulation.run(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
     assert float(body.position[0]) == pytest.approx(46.0)
@@ -372,16 +390,19 @@ def test_run_simulation_brownian_dynamic_mode_moves_cells(tmp_path, monkeypatch,
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
-        **kwargs,
-        brownian_longitudinal_std=0.03,
-        brownian_transverse_std=0.01,
-        brownian_rotation_std=0.005,
-        brownian_persistence=0.0,
-        brownian_application_mode=brownian_mode,
+        _simulation_spec(
+            tmp_path,
+            brownian_overrides={
+                "longitudinal_std": 0.03,
+                "transverse_std": 0.01,
+                "rotation_std": 0.005,
+                "persistence": 0.0,
+                "application_mode": brownian_mode,
+            },
+        )
     )
-    simulation.run_simulation(show_window=False)
+    simulation.run(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
     assert float(body.position[0]) != pytest.approx(35.0) or float(body.position[1]) != pytest.approx(10.0)
@@ -417,17 +438,19 @@ def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(t
     monkeypatch.setattr(physics_simulator_module, "Simulator", _BoundaryProjectionSimulator)
     monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
 
-    kwargs = _simulation_kwargs(tmp_path)
-    simulation = Simulation(
-        **kwargs,
-        brownian_application_mode="velocity",
-        brownian_projection_angular_damping=0.2,
+    spec = _simulation_spec(
+        tmp_path,
+        brownian_overrides={
+            "application_mode": "velocity",
+            "projection_angular_damping": 0.2,
+        },
     )
-    simulation.run_simulation(show_window=False)
+    simulation = Simulation(spec)
+    simulation.run(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
-    trench_width_px = kwargs["trench_width"] * scale_factor
+    scale_factor = (1 / spec.geometry.pix_mic_conv) * spec.geometry.resize_amount
+    trench_width_px = spec.geometry.trench_width * scale_factor
     max_x = 35.0 + trench_width_px / 2.0 - 0.5
     assert float(body.position[0]) <= max_x + 1e-6
     assert float(body.velocity[0]) == pytest.approx(0.0)
@@ -436,10 +459,11 @@ def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(t
 
 def test_run_simulation_brownian_projection_does_not_cap_open_end(tmp_path, monkeypatch):
     captured = {}
-    kwargs = _simulation_kwargs(tmp_path)
-    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
-    trench_width_px = kwargs["trench_width"] * scale_factor
-    trench_length_px = kwargs["trench_length"] * scale_factor
+
+    base_spec = _simulation_spec(tmp_path)
+    scale_factor = (1 / base_spec.geometry.pix_mic_conv) * base_spec.geometry.resize_amount
+    trench_width_px = base_spec.geometry.trench_width * scale_factor
+    trench_length_px = base_spec.geometry.trench_length * scale_factor
     open_end_y = trench_width_px / 2.0 + trench_length_px
 
     class _OpenEndProjectionColony:
@@ -467,10 +491,12 @@ def test_run_simulation_brownian_projection_does_not_cap_open_end(tmp_path, monk
     monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
 
     simulation = Simulation(
-        **kwargs,
-        brownian_application_mode="velocity",
+        _simulation_spec(
+            tmp_path,
+            brownian_overrides={"application_mode": "velocity"},
+        )
     )
-    simulation.run_simulation(show_window=False)
+    simulation.run(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
     assert float(body.position[1]) > open_end_y
