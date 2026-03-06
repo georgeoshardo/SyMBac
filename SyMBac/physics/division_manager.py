@@ -102,8 +102,8 @@ class DivisionManager:
             new_radius = base_radius - shrinkage
 
             # Recreate shape and update the segment's shape reference
-            cell.physics_representation._mother_septum_segments[i].radius = new_radius
-            cell.physics_representation._daughter_septum_segments[i].radius = new_radius
+            cell.physics_representation._mother_septum_segments[i].set_radius(new_radius)
+            cell.physics_representation._daughter_septum_segments[i].set_radius(new_radius)
 
     def restore_segment_radii(self, cell: 'SimCell') -> None:
         """
@@ -119,8 +119,8 @@ class DivisionManager:
             len(cell.physics_representation._daughter_septum_segments),
         )
         for i in range(septum_segment_count):
-            cell.physics_representation._mother_septum_segments[i].radius = cell.current_segment_radius
-            cell.physics_representation._daughter_septum_segments[i].radius = cell.current_segment_radius
+            cell.physics_representation._mother_septum_segments[i].set_radius(cell.current_segment_radius)
+            cell.physics_representation._daughter_septum_segments[i].set_radius(cell.current_segment_radius)
 
     def split_cell(self, cell: 'SimCell', next_group_id: int) -> 'SimCell':
 

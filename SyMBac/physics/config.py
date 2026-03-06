@@ -102,6 +102,18 @@ class CellConfig:
     WIDTH_UPPER_LIMIT: float | None = None  # Maximum segment radius (half-width). None = no limit.
 
     def __post_init__(self):
+        if self.GRANULARITY <= 0:
+            raise ValueError("GRANULARITY must be greater than 0.")
+        if self.SEGMENT_RADIUS <= 0:
+            raise ValueError("SEGMENT_RADIUS must be greater than 0.")
+        if self.SEGMENT_MASS <= 0:
+            raise ValueError("SEGMENT_MASS must be greater than 0.")
+        if self.GROWTH_RATE < 0:
+            raise ValueError("GROWTH_RATE must be non-negative.")
+        if self.MIN_LENGTH_AFTER_DIVISION <= 0:
+            raise ValueError("MIN_LENGTH_AFTER_DIVISION must be greater than 0.")
+        if self.SEED_CELL_SEGMENTS < 2:
+            raise ValueError("SEED_CELL_SEGMENTS must be at least 2.")
 
         if self.MAX_LENGTH_STD < 0:
             raise ValueError("MAX_LENGTH_STD must be non-negative.")

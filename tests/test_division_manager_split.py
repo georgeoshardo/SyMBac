@@ -26,3 +26,22 @@ def test_split_cell_resets_both_growth_accumulators_and_birth_lengths():
 
     assert mother.birth_length == pytest.approx(mother.length)
     assert daughter.birth_length == pytest.approx(daughter.length)
+
+
+def test_septum_radius_updates_keep_body_moment_in_sync():
+    space = pymunk.Space()
+    config = CellConfig(SEED_CELL_SEGMENTS=12, MIN_LENGTH_AFTER_DIVISION=3)
+    manager = DivisionManager(space=space, config=config)
+    cell = SimCell(space=space, config=config, start_pos=(0, 0), group_id=1)
+
+    manager.set_division_readiness(cell)
+    manager.initialise_mother_daughter_septum_segments(cell)
+    cell.septum_progress = 0.5
+
+    mother_segment = cell.physics_representation._mother_septum_segments[0]
+    original_moment = mother_segment.body.moment
+
+    manager.update_septum_segment_radii(cell)
+
+    assert mother_segment.radius < cell.current_segment_radius
+    assert mother_segment.body.moment != pytest.approx(original_moment)

@@ -80,6 +80,9 @@ class CellSegment:
         self.space = space
         self.use_unsafe_radius_set = use_unsafe_radius_set
 
+    def _moment_for_radius(self, radius: float) -> float:
+        return pymunk.moment_for_circle(self.body.mass, 0, radius)
+
     @property
     def position(self) -> pymunk.Vec2d:
         """Returns the current position of the segment."""
@@ -105,6 +108,11 @@ class CellSegment:
 
     @radius.setter
     def radius(self, new_radius: float) -> None:
+        self.set_radius(new_radius)
+
+    def set_radius(self, new_radius: float) -> None:
+        if new_radius <= 0:
+            raise ValueError("Segment radius must be > 0.")
         if self.use_unsafe_radius_set:
             self.shape.unsafe_set_radius(new_radius)  # More efficient but is it okay?
         else:
@@ -113,3 +121,4 @@ class CellSegment:
             self.shape = pymunk.Circle(self.body, new_radius)
             self.shape.friction, self.shape.filter = friction, filter
             self.space.add(self.shape)
+        self.body.moment = self._moment_for_radius(new_radius)

@@ -60,8 +60,8 @@ class SimCell:
         self.target_segment_radius = self.current_segment_radius
         self.apply_current_width_to_segments()
 
-        self.max_length = self.sample_max_length()
         self.birth_length = self.length
+        self.max_length = self.sample_max_length()
 
         self.adjusted_growth_rate = self.config.GROWTH_RATE
 
@@ -103,7 +103,7 @@ class SimCell:
         if not self.physics_representation.segments:
             return
         for segment in self.physics_representation.segments:
-            segment.radius = self.current_segment_radius
+            segment.set_radius(self.current_segment_radius)
 
     def sync_width_from_segments(self) -> None:
         if not self.physics_representation.segments:
