@@ -114,6 +114,20 @@ class SimulationLowLevelSpec(_StrictModel):
     cell_config_overrides: dict[str, Any] = Field(default_factory=dict)
     physics_config_overrides: dict[str, Any] = Field(default_factory=dict)
 
+    def merged_cell_config(self, defaults: dict[str, Any]) -> dict[str, Any]:
+        resolved = dict(defaults)
+        if self.cell_config is not None:
+            resolved = dict(self.cell_config)
+        resolved.update(self.cell_config_overrides)
+        return resolved
+
+    def merged_physics_config(self, defaults: dict[str, Any]) -> dict[str, Any]:
+        resolved = dict(defaults)
+        if self.physics_config is not None:
+            resolved = dict(self.physics_config)
+        resolved.update(self.physics_config_overrides)
+        return resolved
+
 
 class BrownianJitterSpec(_StrictModel):
     longitudinal_std: float = 0.0
@@ -264,7 +278,7 @@ class DatasetOutputConfig(_YamlModel):
     mask_dtype: str = "uint16"
     n_jobs: int = 1
     prefix: str | None = None
-    export_geff: bool = True
+    export_geff: bool = False
 
     @model_validator(mode="after")
     def _validate(self):
@@ -280,4 +294,3 @@ class RenderResult:
     image: Any
     mask: Any
     superres_mask: Any
-

@@ -5,7 +5,6 @@ import tempfile
 from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
 from SyMBac.trench_geometry import  get_trench_segments
 from SyMBac.config_models import SimulationSpec
-import napari
 import os
 from tqdm.auto import tqdm
 from scipy.stats import norm
@@ -90,10 +89,7 @@ class Simulation:
         self.load_sim_dir = spec.runtime.load_sim_dir
         self.substeps = spec.runtime.substeps
         self.width_upper_limit = spec.cell.width_upper_limit
-        self.cell_config_template = spec.low_level.cell_config
-        self.physics_config_template = spec.low_level.physics_config
-        self.cell_config_overrides = dict(spec.low_level.cell_config_overrides)
-        self.physics_config_overrides = dict(spec.low_level.physics_config_overrides)
+        self.low_level_spec = spec.low_level
         self.brownian_longitudinal_std = float(spec.brownian.longitudinal_std)
         self.brownian_transverse_std = float(spec.brownian.transverse_std)
         self.brownian_rotation_std = float(spec.brownian.rotation_std)
@@ -190,15 +186,7 @@ class Simulation:
             SIMPLE_LENGTH=False,
             WIDTH_UPPER_LIMIT=WIDTH_UPPER_LIMIT,
         )
-        if self.cell_config_template is None:
-            resolved_cell_kwargs = dict(default_cell_kwargs)
-        elif isinstance(self.cell_config_template, dict):
-            resolved_cell_kwargs = dict(self.cell_config_template)
-        else:
-            raise TypeError(
-                "low_level.cell_config must be a dict or None."
-            )
-        resolved_cell_kwargs.update(self.cell_config_overrides)
+        resolved_cell_kwargs = self.low_level_spec.merged_cell_config(default_cell_kwargs)
         cell_config = CellConfig(**resolved_cell_kwargs)
 
         default_physics_kwargs = dict(
@@ -206,15 +194,7 @@ class Simulation:
             DAMPING=0.5,
             GRAVITY=(0, self.gravity),
         )
-        if self.physics_config_template is None:
-            resolved_physics_kwargs = dict(default_physics_kwargs)
-        elif isinstance(self.physics_config_template, dict):
-            resolved_physics_kwargs = dict(self.physics_config_template)
-        else:
-            raise TypeError(
-                "low_level.physics_config must be a dict or None."
-            )
-        resolved_physics_kwargs.update(self.physics_config_overrides)
+        resolved_physics_kwargs = self.low_level_spec.merged_physics_config(default_physics_kwargs)
         physics_config = PhysicsConfig(**resolved_physics_kwargs)
         self._resolved_cell_config = cell_config
         self._resolved_physics_config = physics_config
@@ -747,6 +727,7 @@ class Simulation:
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
         """
+        import napari
         
         viewer = napari.Viewer()
         viewer.add_image(np.array(self.OPL_scenes), name='OPL scenes')

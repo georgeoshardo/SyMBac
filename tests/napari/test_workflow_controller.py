@@ -135,3 +135,30 @@ def test_controller_main_flow(tmp_path):
         seed=9,
     )
     assert batch[0]["count"] == 1
+
+
+def test_controller_invalidates_renderer_when_inputs_change(tmp_path):
+    state = NapariSessionState()
+    controller = WorkflowController(
+        state=state,
+        simulation_service=_SimulationServiceStub(),
+        renderer_service=_RendererServiceStub(),
+        region_service=_RegionServiceStub(),
+        export_service=_ExportServiceStub(),
+    )
+
+    spec = _spec(tmp_path)
+    controller.set_simulation_spec(spec)
+    controller.run_simulation(show_window=False)
+    controller.draw_opl()
+    controller.set_real_image([[1]])
+    controller.build_renderer(psf_params={"radius": 1}, camera_params={"baseline": 1})
+
+    assert state.renderer is not None
+    controller.set_real_image([[2]])
+    assert state.renderer is None
+
+    controller.build_renderer(psf_params={"radius": 1}, camera_params={"baseline": 1})
+    assert state.renderer is not None
+    controller.set_simulation_spec(spec)
+    assert state.renderer is None

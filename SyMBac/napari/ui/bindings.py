@@ -54,9 +54,6 @@ def get_or_create_context(viewer) -> NapariUIContext:
 
 
 def _get_or_build_dock(context: NapariUIContext, key: str):
-    if key in context.docks:
-        return context.docks[key]
-
     if key == "simulation":
         dock = SimulationDock(context.controller, context.layer_manager)
     elif key == "optics":
@@ -71,8 +68,6 @@ def _get_or_build_dock(context: NapariUIContext, key: str):
         dock = WorkflowDock(context)
     else:
         raise ValueError(f"Unknown dock key: {key}")
-
-    context.docks[key] = dock
     return dock
 
 

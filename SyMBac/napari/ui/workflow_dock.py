@@ -13,44 +13,32 @@ class WorkflowDock:
         from SyMBac.napari.ui.docks.simulation_dock import SimulationDock
         from SyMBac.napari.ui.docks.tuning_dock import TuningDock
 
+        self.context = context
         self.widget = QWidget()
         layout = QVBoxLayout(self.widget)
 
-        tabs = QTabWidget()
-        tabs.setDocumentMode(True)
-        tabs.setTabPosition(QTabWidget.North)
-        layout.addWidget(tabs)
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabPosition(QTabWidget.North)
+        layout.addWidget(self.tabs)
 
         controller = context.controller
         layers = context.layer_manager
 
-        simulation = context.docks.get("simulation")
-        if simulation is None:
-            simulation = SimulationDock(controller, layers)
-            context.docks["simulation"] = simulation
+        simulation = SimulationDock(controller, layers)
+        optics = OpticsDock(controller, layers)
+        regions = RegionsDock(controller, layers)
+        tuning = TuningDock(controller, layers)
+        export = ExportDock(controller)
 
-        optics = context.docks.get("optics")
-        if optics is None:
-            optics = OpticsDock(controller, layers)
-            context.docks["optics"] = optics
+        self.tabs.addTab(simulation.widget, "Simulation")
+        self.tabs.addTab(optics.widget, "Optics")
+        self.tabs.addTab(regions.widget, "Regions")
+        self.tabs.addTab(tuning.widget, "Tuning")
+        self.tabs.addTab(export.widget, "Export")
 
-        regions = context.docks.get("regions")
-        if regions is None:
-            regions = RegionsDock(controller, layers)
-            context.docks["regions"] = regions
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
-        tuning = context.docks.get("tuning")
-        if tuning is None:
-            tuning = TuningDock(controller, layers)
-            context.docks["tuning"] = tuning
-
-        export = context.docks.get("export")
-        if export is None:
-            export = ExportDock(controller)
-            context.docks["export"] = export
-
-        tabs.addTab(simulation.widget, "Simulation")
-        tabs.addTab(optics.widget, "Optics")
-        tabs.addTab(regions.widget, "Regions")
-        tabs.addTab(tuning.widget, "Tuning")
-        tabs.addTab(export.widget, "Export")
+    def _on_tab_changed(self, index: int) -> None:
+        tab_name = self.tabs.tabText(index)
+        self.context.layer_manager.show_only_layers(tab_name)

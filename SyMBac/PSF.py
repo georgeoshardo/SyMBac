@@ -35,7 +35,7 @@ class Camera:
         :return: Dark image sample.
         :rtype: np.ndarray
         """
-        rng = np.random.default_rng(2)
+        rng = np.random.default_rng()
         dark_img = rng.normal(loc=self.baseline, scale=self.dark_noise, size=size)
         dark_img = rng.poisson(dark_img)
         if plot:

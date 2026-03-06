@@ -3,6 +3,16 @@ from __future__ import annotations
 import numpy as np
 
 
+# Layers that should be visible for each workflow tab.
+TAB_VISIBLE_LAYERS: dict[str, tuple[str, ...]] = {
+    "Simulation": ("OPL scenes", "Synthetic masks"),
+    "Optics": ("Real image", "PSF preview"),
+    "Regions": ("Real image", "Region media", "Region cell", "Region device"),
+    "Tuning": ("Synthetic preview", "Preview mask", "Real image"),
+    "Export": ("Synthetic preview", "Preview mask", "Real image"),
+}
+
+
 class LayerManager:
     def __init__(self, viewer):
         self.viewer = viewer
@@ -27,12 +37,25 @@ class LayerManager:
         layer.data = np.asarray(data)
         return layer
 
+    def show_only_layers(self, tab_name: str) -> None:
+        visible = set(TAB_VISIBLE_LAYERS.get(tab_name, ()))
+        managed = {name for names in TAB_VISIBLE_LAYERS.values() for name in names}
+        for layer in self.viewer.layers:
+            if layer.name in managed:
+                layer.visible = layer.name in visible
+
     def update_simulation_layers(self, simulation) -> None:
         self.upsert_image("OPL scenes", np.asarray(simulation.OPL_scenes), colormap="gray")
         self.upsert_labels("Synthetic masks", np.asarray(simulation.masks))
 
     def update_real_image(self, real_image) -> None:
         self.upsert_image("Real image", np.asarray(real_image), colormap="gray")
+
+    def update_psf_preview(self, kernel) -> None:
+        data = np.asarray(kernel)
+        if data.ndim == 3:
+            data = data[data.shape[0] // 2]
+        self.upsert_image("PSF preview", data, colormap="gray")
 
     def update_preview_layers(self, result) -> None:
         self.upsert_image("Synthetic preview", np.asarray(result.image), colormap="gray")

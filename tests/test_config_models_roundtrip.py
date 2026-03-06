@@ -94,3 +94,8 @@ def test_render_and_dataset_yaml_roundtrip(tmp_path):
             "kind": "render_config",
             "unexpected": True,
         })
+
+
+def test_dataset_output_config_defaults_disable_geff():
+    output = DatasetOutputConfig(save_dir="/tmp/out")
+    assert output.export_geff is False

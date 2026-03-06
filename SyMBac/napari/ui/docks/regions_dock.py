@@ -41,27 +41,39 @@ class RegionsDock:
         self.clear_button.clicked.connect(self._clear_regions)
 
     def _auto_segment(self):
-        from napari.utils.notifications import show_info
+        from napari.utils.notifications import show_error, show_info
 
-        masks = self.controller.auto_segment_regions(
-            classes=int(self.classes_spin.value()),
-            cells=self.cells_combo.currentText(),
-        )
-        self.layer_manager.set_region_layers(masks)
-        self.controller.set_region_masks(masks)
+        try:
+            masks = self.controller.auto_segment_regions(
+                classes=int(self.classes_spin.value()),
+                cells=self.cells_combo.currentText(),
+            )
+            self.layer_manager.set_region_layers(masks)
+            self.controller.set_region_masks(masks)
+        except Exception as exc:
+            show_error(f"Failed to segment regions: {exc}")
+            return
         show_info("Region labels initialised in viewer.")
 
     def _apply_regions(self):
-        from napari.utils.notifications import show_info
+        from napari.utils.notifications import show_error, show_info
 
-        masks = self.layer_manager.collect_region_masks()
-        self.controller.set_region_masks(masks)
+        try:
+            masks = self.layer_manager.collect_region_masks()
+            self.controller.set_region_masks(masks)
+        except Exception as exc:
+            show_error(f"Failed to apply region masks: {exc}")
+            return
         show_info("Applied region masks to renderer.")
 
     def _clear_regions(self):
-        from napari.utils.notifications import show_info
+        from napari.utils.notifications import show_error, show_info
 
-        if self.controller.state.renderer is None:
-            raise ValueError("Renderer has not been created.")
-        self.controller.state.renderer.clear_region_masks()
+        try:
+            if self.controller.state.renderer is None:
+                raise ValueError("Renderer has not been created.")
+            self.controller.state.renderer.clear_region_masks()
+        except Exception as exc:
+            show_error(f"Failed to clear region masks: {exc}")
+            return
         show_info("Cleared explicit renderer region masks.")

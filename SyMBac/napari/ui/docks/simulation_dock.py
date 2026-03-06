@@ -331,6 +331,13 @@ class SimulationDock:
         def _done(_simulation):
             show_info("Simulation completed.")
 
+        if self.show_window_checkbox.isChecked():
+            try:
+                _done(_task())
+            except Exception as exc:
+                show_error(f"Simulation failed: {exc}")
+            return
+
         start_worker(_task, on_return=_done)
 
     def _draw_opl(self):

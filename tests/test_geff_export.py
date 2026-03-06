@@ -5,12 +5,7 @@ import numpy as np
 import yaml
 from tifffile import imread
 
-from SyMBac.config_models import (
-    DatasetOutputConfig,
-    RenderConfig,
-    RenderResult,
-    TimeseriesDatasetPlan,
-)
+from SyMBac.config_models import DatasetOutputConfig, RandomDatasetPlan, RenderConfig, RenderResult, TimeseriesDatasetPlan
 from SyMBac.lineage import Lineage
 from SyMBac.renderer import Renderer
 
@@ -86,7 +81,7 @@ def test_lineage_to_geff_exports_filtered_temporal_graph(monkeypatch):
 def test_export_dataset_writes_uint16_tiff_masks(tmp_path):
     renderer = Renderer.__new__(Renderer)
     renderer.additional_real_images = None
-    renderer.simulation = types.SimpleNamespace(sim_length=5)
+    renderer.simulation = types.SimpleNamespace(sim_length=5, OPL_scenes=[0, 1, 2, 3, 4])
     renderer._ensure_image_params = lambda *args, **kwargs: None
 
     def _fake_render_frame(_scene_no, config, real_image_override=None):
@@ -127,6 +122,38 @@ def test_export_dataset_writes_uint16_tiff_masks(tmp_path):
     mask_0 = imread(out_dir / "series_000" / "masks" / "frame_00000.tiff")
     assert mask_0.dtype == np.uint16
     assert int(mask_0.max()) == 300
+
+
+def test_random_export_can_sample_last_renderable_frame(tmp_path):
+    renderer = Renderer.__new__(Renderer)
+    renderer.additional_real_images = None
+    renderer.simulation = types.SimpleNamespace(sim_length=10, OPL_scenes=list(range(10)))
+    renderer._ensure_image_params = lambda *args, **kwargs: None
+
+    seen_frames = []
+
+    def _fake_render_frame(scene_no, config, real_image_override=None):
+        del config, real_image_override
+        seen_frames.append(int(scene_no))
+        image = np.array([[0.0, 1.0], [0.5, 0.2]], dtype=np.float32)
+        mask = np.array([[0, 1], [1, 2]], dtype=np.int32)
+        return RenderResult(image=image, mask=mask, superres_mask=np.zeros_like(mask))
+
+    renderer.render_frame = _fake_render_frame
+
+    renderer.export_dataset(
+        plan=RandomDatasetPlan(n_samples=500, sample_amount=0.0, burn_in=0),
+        output=DatasetOutputConfig(
+            save_dir=str(tmp_path / "random_out"),
+            image_format="tiff",
+            mask_dtype="uint16",
+            export_geff=False,
+        ),
+        base_config=RenderConfig(),
+        seed=1,
+    )
+
+    assert max(seen_frames) == 9
 
 
 def test_lineage_to_geff_falls_back_when_track_node_props_unsupported(monkeypatch):

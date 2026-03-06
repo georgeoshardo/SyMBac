@@ -28,6 +28,7 @@ class OpticsDock:
             QCheckBox,
             QComboBox,
             QDoubleSpinBox,
+            QFileDialog,
             QGroupBox,
             QFormLayout,
             QHBoxLayout,
@@ -41,6 +42,7 @@ class OpticsDock:
 
         self.controller = controller
         self.layer_manager = layer_manager
+        self._QFileDialog = QFileDialog
 
         self.widget = QWidget()
         root = QVBoxLayout(self.widget)
@@ -52,17 +54,30 @@ class OpticsDock:
         scroll.setWidget(container)
         root.addWidget(scroll)
 
+        # --- Real image section ---
+        image_group = QGroupBox("Real Image")
+        image_layout = QVBoxLayout(image_group)
+
         sample_row = QHBoxLayout()
-        sample_row.addWidget(QLabel("Real image"))
+        sample_row.addWidget(QLabel("Sample"))
         self.sample_combo = QComboBox()
         self.sample_keys = sorted(get_sample_images().keys())
         self.sample_combo.addItems(self.sample_keys)
         sample_row.addWidget(self.sample_combo)
-        self.load_image_button = QPushButton("Load Real Image")
-        sample_row.addWidget(self.load_image_button)
-        layout.addLayout(sample_row)
+        self.load_sample_button = QPushButton("Load Sample")
+        sample_row.addWidget(self.load_sample_button)
+        image_layout.addLayout(sample_row)
 
+        browse_row = QHBoxLayout()
+        self.browse_button = QPushButton("Browse Image File...")
+        browse_row.addWidget(self.browse_button)
+        image_layout.addLayout(browse_row)
+
+        layout.addWidget(image_group)
+
+        # --- PSF section ---
         psf_group = QGroupBox("PSF")
+        psf_layout = QVBoxLayout(psf_group)
         self.psf_form = QFormLayout()
         self.psf_inputs: dict[str, object] = {}
         for key, value in _DEFAULT_PSF_PARAMS.items():
@@ -89,9 +104,12 @@ class OpticsDock:
                     spin.setValue(float(value))
                 self.psf_inputs[key] = spin
                 self.psf_form.addRow(key, spin)
-        psf_group.setLayout(self.psf_form)
+        psf_layout.addLayout(self.psf_form)
+        self.preview_psf_button = QPushButton("Preview PSF")
+        psf_layout.addWidget(self.preview_psf_button)
         layout.addWidget(psf_group)
 
+        # --- Camera section ---
         camera_group = QGroupBox("Camera")
         camera_layout = QVBoxLayout(camera_group)
         self.camera_enabled = QCheckBox("Enable camera")
@@ -115,10 +133,12 @@ class OpticsDock:
         layout.addWidget(self.build_renderer_button)
         layout.addStretch(1)
 
-        self.load_image_button.clicked.connect(self._load_real_image)
+        self.load_sample_button.clicked.connect(self._load_sample_image)
+        self.browse_button.clicked.connect(self._browse_image_file)
+        self.preview_psf_button.clicked.connect(self._preview_psf)
         self.build_renderer_button.clicked.connect(self._build_renderer)
 
-    def _load_real_image(self):
+    def _load_sample_image(self):
         from napari.utils.notifications import show_info
 
         key = self.sample_combo.currentText()
@@ -126,6 +146,45 @@ class OpticsDock:
         self.controller.set_real_image(image)
         self.layer_manager.update_real_image(image)
         show_info(f"Loaded real image: {key}")
+
+    def _browse_image_file(self):
+        import numpy as np
+        from napari.utils.notifications import show_error, show_info
+
+        path, _ = self._QFileDialog.getOpenFileName(
+            self.widget,
+            "Open Real Image",
+            "",
+            "Images (*.tif *.tiff *.png);;All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            if path.lower().endswith(".png"):
+                from imageio.v3 import imread
+                image = np.asarray(imread(path))
+            else:
+                import tifffile
+                image = np.asarray(tifffile.imread(path))
+            if image.ndim == 3 and image.shape[-1] in (3, 4):
+                image = np.mean(image[..., :3], axis=-1)
+        except Exception as exc:
+            show_error(f"Failed to load image: {exc}")
+            return
+        self.controller.set_real_image(image)
+        self.layer_manager.update_real_image(image)
+        show_info(f"Loaded real image: {path}")
+
+    def _preview_psf(self):
+        from napari.utils.notifications import show_error, show_info
+
+        try:
+            psf = self.controller.preview_psf(self._read_psf_params())
+            self.layer_manager.update_psf_preview(psf.kernel)
+        except Exception as exc:
+            show_error(f"Failed to preview PSF: {exc}")
+            return
+        show_info("PSF preview updated.")
 
     def _read_psf_params(self) -> dict:
         out = {}

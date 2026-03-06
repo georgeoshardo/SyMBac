@@ -1,21 +1,16 @@
 import importlib
-from glob import glob
 import numpy as np
 import psfmodels as psfm
-from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
 from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene, draw_scene_from_segments
 import warnings
-import napari
-import os
 import skimage
 import copy
 
-from ipywidgets import interactive, fixed
 from matplotlib import pyplot as plt
-from skimage.transform import rescale, rotate
+from skimage.transform import rescale
 from skimage.util import random_noise
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -64,7 +59,7 @@ if _CONV_BACKEND == "fftconvolve":
     from scipy.signal import fftconvolve as _fftconvolve
     warnings.warn(
         "No GPU backend (CuPy or PyTorch) found. "
-        "Install CuPy (NVIDIA) or PyTorch (`pip install SyMBac[gpu]`) "
+        "Install CuPy (NVIDIA) or PyTorch (`pip install SyMBac[cupy]` or `pip install SyMBac[torch]`) "
         "to use GPU-accelerated convolution. Falling back to CPU FFT convolution."
     )
 
@@ -142,6 +137,8 @@ class RenderTuner:
         return RenderConfig(**kwargs)
 
     def _build_widget(self, manual_update: bool):
+        from ipywidgets import fixed, interactive
+
         edge_floor_range = self.renderer._estimate_edge_floor_slider_range()
         widget = interactive(
             self.renderer._render_frame_impl,
@@ -255,7 +252,6 @@ class Renderer:
             temp_kernel = self.PSF.kernel
 
         convolved = convolve_rescale(temp_expanded_scene, temp_kernel, 1 / simulation.resize_amount, rescale_int=True)
-        print(simulation.resize_amount, convolved.shape)
         self.real_resize, self.expanded_resized = make_images_same_shape(real_image, convolved, rescale_int=True)
         mean_error = []
         media_error = []
@@ -273,6 +269,8 @@ class Renderer:
         self._explicit_region_masks = None
 
     def select_intensity_napari(self, auto = True, classes = 3, cells = "dark"):
+        import napari
+
         if auto:
             thresholds = threshold_multiotsu(self.real_resize, classes = classes)
             regions = np.digitize(self.real_resize, bins=thresholds)
@@ -511,6 +509,24 @@ class Renderer:
         step = float(np.round(step, 4))
         return 0.0, upper, step
 
+    def _rebuild_psf_for_sigma(self, sigma: float) -> None:
+        if self.PSF.mode != "phase contrast":
+            return
+
+        self.PSF = PSF_generator(
+            radius=self.PSF.radius,
+            wavelength=self.PSF.wavelength,
+            NA=self.PSF.NA,
+            n=self.PSF.n,
+            resize_amount=self.simulation.resize_amount,
+            pix_mic_conv=self.simulation.pix_mic_conv,
+            apo_sigma=sigma,
+            mode="phase contrast",
+            condenser=self.PSF.condenser,
+            offset=getattr(self.PSF, "offset", 0),
+        )
+        self.PSF.calculate_PSF()
+
     def render_synthetic(self, media_multiplier=75, cell_multiplier=1.7,
                          device_multiplier=29, sigma=8.85, scene_no=-1,
                          match_fourier=False, match_histogram=True,
@@ -568,146 +584,28 @@ class Renderer:
         mask : 2D numpy array
             Corresponding segmentation mask.
         """
-        self._ensure_image_params()
-        floored_scene = self._apply_edge_floor_opl(
-            self.simulation.OPL_scenes[scene_no], edge_floor_opl
-        )
-        expanded_scene, expanded_scene_no_cells, expanded_mask = self.generate_PC_OPL(
-            scene=floored_scene,
-            mask=self.simulation.masks[scene_no],
+        config = RenderConfig(
             media_multiplier=media_multiplier,
             cell_multiplier=cell_multiplier,
             device_multiplier=device_multiplier,
-            x_border_expansion_coefficient=self.x_border_expansion_coefficient,
-            y_border_expansion_coefficient=self.y_border_expansion_coefficient,
-            defocus=defocus
+            sigma=sigma,
+            match_fourier=match_fourier,
+            match_histogram=match_histogram,
+            match_noise=match_noise,
+            noise_var=noise_var,
+            defocus=defocus,
+            halo_top_intensity=halo_top_intensity,
+            halo_bottom_intensity=halo_bottom_intensity,
+            halo_start=halo_start,
+            halo_end=halo_end,
+            edge_floor_opl=edge_floor_opl,
         )
-
-        # Halo simulation
-        def halo_line_profile(length, halo_top, halo_bottom, h_start, h_end):
-            h_start = int(h_start * length)
-            h_end = int(h_end * length)
-            part_1 = np.linspace(halo_bottom, halo_bottom, h_start)
-            part_2 = np.linspace(halo_bottom, halo_top, h_end - h_start)
-            part_3 = np.linspace(halo_top, halo_top, length - h_end)
-            return np.concatenate([part_1, part_2, part_3])[:, None]
-
-        halo_array = halo_line_profile(
-            self.real_image.shape[0] * self.simulation.resize_amount,
-            halo_top_intensity, halo_bottom_intensity, halo_start, halo_end
+        result = self.render_frame(
+            frame_index=int(scene_no),
+            config=config,
+            real_image_override=random_real_image,
         )
-        expanded_scene[expanded_scene.shape[0] - len(halo_array):, :] *= halo_array
-        expanded_scene_no_cells[expanded_scene_no_cells.shape[0] - len(halo_array):, :] *= halo_array
-
-        # PSF regeneration if phase contrast
-        if self.PSF.mode == "phase contrast":
-            self.PSF = PSF_generator(
-                radius=self.PSF.radius, wavelength=self.PSF.wavelength,
-                NA=self.PSF.NA, n=self.PSF.n,
-                resize_amount=self.simulation.resize_amount,
-                pix_mic_conv=self.simulation.pix_mic_conv,
-                apo_sigma=sigma, mode="phase contrast",
-                condenser=self.PSF.condenser
-            )
-            self.PSF.calculate_PSF()
-
-        # Convolution — use rescale_int=False to avoid NaN from
-        # rescale_intensity on uniform images; we normalise at the end.
-        kernel = self.PSF.kernel
-        if defocus > 0:
-            kernel = gaussian_filter(kernel, defocus, mode="reflect")
-        convolved = convolve_rescale(
-            expanded_scene, kernel,
-            1 / self.simulation.resize_amount, rescale_int=False
-        )
-
-        real_resize, expanded_resized = make_images_same_shape(
-            self.real_image, convolved, rescale_int=False
-        )
-
-        # Guard: if convolved image is constant, it's a degenerate
-        # parameter combo — return NaN so the caller can detect it.
-        img_range = np.nanmax(expanded_resized) - np.nanmin(expanded_resized)
-        if img_range < 1e-10 or not np.isfinite(img_range):
-            raise ValueError("Degenerate rendering: uniform/NaN image")
-
-        # Normalise to [0, 1] now that we know the range is non-degenerate
-        expanded_resized = rescale_intensity(
-            expanded_resized.astype(np.float32), out_range=(0, 1)
-        )
-        real_resize = rescale_intensity(
-            real_resize.astype(np.float32), out_range=(0, 1)
-        )
-
-        # Fourier / histogram matching
-        if random_real_image is not None:
-            fftim1 = fft.fftshift(fft.fft2(random_real_image))
-        else:
-            fftim1 = fft.fftshift(fft.fft2(real_resize))
-        angs, mags = cart2pol(np.real(fftim1), np.imag(fftim1))
-
-        matched = expanded_resized
-        if match_fourier:
-            matched = sfMatch([real_resize, matched], tarmag=mags)[1]
-            matched = lumMatch(
-                [real_resize, matched], None,
-                [np.mean(real_resize), np.std(real_resize)]
-            )[1]
-        if match_histogram:
-            matched = match_histograms(matched, real_resize)
-
-        # Camera noise
-        if self.camera:
-            baseline = self.camera.baseline
-            sensitivity = self.camera.sensitivity
-            dark_noise = self.camera.dark_noise
-            rng = np.random.default_rng()
-            max_val = matched.max()
-            if max_val < 1e-10:
-                raise ValueError("Degenerate rendering: uniform/NaN image")
-            matched = matched / (max_val / self.real_image.max()) / sensitivity
-            if match_fourier:
-                matched += abs(matched.min())
-            matched = np.clip(matched, 0, None)  # Poisson needs non-negative
-            matched = rng.poisson(matched)
-            noisy_img = matched + rng.normal(
-                loc=baseline, scale=dark_noise, size=matched.shape
-            )
-        else:
-            # Guard against constant image before rescale_intensity
-            m_range = matched.max() - matched.min()
-            if m_range < 1e-10:
-                raise ValueError("Degenerate rendering: uniform/NaN image")
-            noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
-            noisy_img = random_noise(
-                rescale_intensity(noisy_img), mode="gaussian",
-                mean=0, var=noise_var, clip=False
-            )
-
-        if match_noise:
-            noisy_img = match_histograms(noisy_img, real_resize)
-
-        noisy_img = noisy_img.astype(np.float32)
-        n_range = np.nanmax(noisy_img) - np.nanmin(noisy_img)
-        if n_range < 1e-10 or not np.isfinite(n_range):
-            raise ValueError("Degenerate rendering: uniform/NaN image")
-        noisy_img = rescale_intensity(noisy_img, out_range=(0, 1))
-
-        # Mask processing
-        expanded_mask_resized = rescale(
-            expanded_mask, 1 / self.simulation.resize_amount,
-            anti_aliasing=False, preserve_range=True, order=0
-        )
-        if len(np.unique(expanded_mask_resized)) > 2:
-            _, mask = make_images_same_shape(
-                self.real_image, expanded_mask_resized, rescale_int=False
-            )
-        else:
-            _, mask = make_images_same_shape(
-                self.real_image, expanded_mask_resized, rescale_int=True
-            )
-
-        return noisy_img, mask.astype(int)
+        return result.image, result.mask
 
     def _render_frame_impl(self, media_multiplier=75, cell_multiplier=1.7, device_multiplier=29, sigma=8.85,
                            scene_no=-1, match_fourier=False, match_histogram=True, match_noise=False,
@@ -852,12 +750,7 @@ class Renderer:
         real_media_mean, real_cell_mean, real_device_mean, real_means, real_media_var, real_cell_var, real_device_var, real_vars = self.image_params
         mean_error, media_error, cell_error, device_error, mean_var_error, media_var_error, cell_var_error, device_var_error = self.error_params
 
-        if self.PSF.mode == "phase contrast":
-            self.PSF = PSF_generator(radius=self.PSF.radius, wavelength=self.PSF.wavelength, NA=self.PSF.NA,
-                                     n=self.PSF.n, resize_amount=self.simulation.resize_amount,
-                                     pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
-                                     condenser=self.PSF.condenser)
-            self.PSF.calculate_PSF()
+        self._rebuild_psf_for_sigma(sigma)
         if self.PSF.mode.lower() == "3d fluo":  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
@@ -916,12 +809,11 @@ class Renderer:
 
         if self.camera:  # Camera noise simulation
             baseline, sensitivity, dark_noise = self.camera.baseline, self.camera.sensitivity, self.camera.dark_noise
-            rng = np.random.default_rng(2)
             matched = matched / (matched.max() / self.real_image.max()) / sensitivity
             if match_fourier:
                 matched += abs(matched.min()) # Preserve mean > 0 for rng.poisson(matched)
-            matched = rng.poisson(matched)
-            noisy_img = matched + rng.normal(loc=baseline, scale=dark_noise, size=matched.shape)
+            matched = np.random.poisson(matched)
+            noisy_img = matched + np.random.normal(loc=baseline, scale=dark_noise, size=matched.shape)
         else:  # Ad hoc noise mathcing
             noisy_img = random_noise(rescale_intensity(matched), mode="poisson")
             noisy_img = random_noise(rescale_intensity(noisy_img), mode="gaussian", mean=0, var=noise_var, clip=False)
@@ -1021,6 +913,7 @@ class Renderer:
     def render_frame(self, frame_index: int, config: RenderConfig, real_image_override=None) -> RenderResult:
         if not isinstance(config, RenderConfig):
             raise TypeError("config must be a RenderConfig instance.")
+        frame_index = self._normalize_frame_index(frame_index)
         self._ensure_image_params()
         image, mask, superres_mask = self._render_frame_impl(
             media_multiplier=config.media_multiplier,
@@ -1247,6 +1140,37 @@ class Renderer:
         imwrite(image_path, skimage.img_as_uint(rescale_intensity(image)))
         imwrite(mask_path, mask.astype(mask_dtype, copy=False))
 
+    def _scene_count(self) -> int:
+        scenes = getattr(self.simulation, "OPL_scenes", None)
+        if scenes is not None:
+            return len(scenes)
+
+        sim_length = getattr(self.simulation, "sim_length", None)
+        if sim_length is None:
+            raise ValueError("Simulation has no OPL scenes yet. Run draw_opl first.")
+        return int(sim_length)
+
+    def _normalize_frame_index(self, frame_index: int) -> int:
+        total_frames = self._scene_count()
+        normalized = int(frame_index)
+        if normalized < 0:
+            normalized += total_frames
+        if normalized < 0 or normalized >= total_frames:
+            raise IndexError(
+                f"frame_index={frame_index} is out of range for {total_frames} renderable frames."
+            )
+        return normalized
+
+    def _available_scene_indices(self, burn_in: int) -> np.ndarray:
+        total_frames = self._scene_count()
+        if burn_in < 0:
+            raise ValueError("burn_in must be >= 0.")
+        if burn_in >= total_frames:
+            raise ValueError(
+                f"burn_in={burn_in} leaves no frames to render from total_frames={total_frames}."
+            )
+        return np.arange(burn_in, total_frames, dtype=int)
+
     def export_dataset(
         self,
         plan: DatasetPlan,
@@ -1312,8 +1236,12 @@ class Renderer:
         images_dir.mkdir(parents=True, exist_ok=True)
         masks_dir.mkdir(parents=True, exist_ok=True)
 
-        frame_max = max(self.simulation.sim_length - 2, plan.burn_in + 1)
-        frame_choices = rng.integers(low=plan.burn_in, high=frame_max, size=plan.n_samples)
+        self._available_scene_indices(plan.burn_in)
+        frame_choices = rng.integers(
+            low=plan.burn_in,
+            high=self._scene_count(),
+            size=plan.n_samples,
+        )
         prefix = output.prefix or ""
 
         records = []
@@ -1369,17 +1297,14 @@ class Renderer:
         mask_dtype: np.dtype,
         rng: np.random.Generator,
     ):
-        available_frames = self.simulation.sim_length - plan.burn_in
-        if available_frames <= 0:
-            raise ValueError(
-                f"burn_in={plan.burn_in} leaves no frames to render from sim_length={self.simulation.sim_length}."
-            )
+        available_scene_nos = self._available_scene_indices(plan.burn_in)
+        available_frames = len(available_scene_nos)
         frames_per_series = plan.frames_per_series or available_frames
         if frames_per_series > available_frames:
             raise ValueError(
                 f"frames_per_series={frames_per_series} exceeds available frames={available_frames}."
             )
-        scene_nos = np.arange(plan.burn_in, plan.burn_in + frames_per_series, dtype=int)
+        scene_nos = available_scene_nos[:frames_per_series]
         prefix = output.prefix or ""
 
         metadata = {

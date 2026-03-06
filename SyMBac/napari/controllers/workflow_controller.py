@@ -29,9 +29,14 @@ class WorkflowController:
         self.region_service = region_service or RegionService()
         self.export_service = export_service or ExportService()
 
+    def _invalidate_renderer_state(self) -> None:
+        self.state.renderer = None
+        self.state.last_metadata = None
+
     def set_simulation_spec(self, spec: SimulationSpec) -> None:
         self.state.simulation_spec = spec
         self.state.simulation = None
+        self._invalidate_renderer_state()
 
     def run_simulation(self, show_window: bool = False):
         if self.state.simulation_spec is None:
@@ -39,6 +44,7 @@ class WorkflowController:
         simulation = self.simulation_service.build(self.state.simulation_spec)
         self.simulation_service.run(simulation, show_window=show_window)
         self.state.simulation = simulation
+        self._invalidate_renderer_state()
         return simulation
 
     def draw_opl(self, do_transformation: bool = False, label_masks: bool = True):
@@ -49,10 +55,19 @@ class WorkflowController:
             do_transformation=do_transformation,
             label_masks=label_masks,
         )
+        self._invalidate_renderer_state()
         return self.state.simulation
 
     def set_real_image(self, real_image) -> None:
         self.state.real_image = real_image
+        self._invalidate_renderer_state()
+
+    def preview_psf(self, psf_params: dict):
+        psf = self.renderer_service.build_psf(psf_params)
+        self.state.psf = psf
+        self.state.psf_params = dict(psf_params)
+        self._invalidate_renderer_state()
+        return psf
 
     def build_renderer(self, psf_params: dict, camera_params: dict | None = None):
         if self.state.simulation is None:
