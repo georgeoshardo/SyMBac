@@ -22,47 +22,26 @@ def build_live_frame_segments(cells):
     return frame_segments
 
 
-def render_live_frame_image(
-    frame_segments,
-    scene_shape,
-    trench_center_x,
-    trench_width,
-    trench_height,
-    wall_thickness=3,
-):
-    """Rasterize the current segment-chain state into a preview image."""
+def _draw_thick_segment(image, p1, p2, thickness, value):
+    x1, y1 = float(p1[0]), float(p1[1])
+    x2, y2 = float(p2[0]), float(p2[1])
+    radius = max(1.0, float(thickness))
+    distance = float(np.hypot(x2 - x1, y2 - y1))
+    steps = max(1, int(np.ceil(distance / max(1.0, radius * 0.5))))
+    for idx in range(steps + 1):
+        alpha = idx / max(steps, 1)
+        x = x1 + alpha * (x2 - x1)
+        y = y1 + alpha * (y2 - y1)
+        rr, cc = disk((y, x), radius, shape=image.shape)
+        image[rr, cc] = value
+
+
+def render_live_frame_image(frame_segments, static_segments, scene_shape, wall_value=96):
+    """Rasterize exact geometry segments plus current cells into a preview image."""
     image = np.zeros(scene_shape, dtype=np.uint8)
-    height, width = image.shape
 
-    half_width = float(trench_width) / 2.0
-    x_left = int(round(trench_center_x - half_width))
-    x_right = int(round(trench_center_x + half_width))
-    y_side_start = int(round(half_width))
-    y_top = int(round(trench_height))
-
-    wall_value = 96
-
-    x0 = max(0, x_left - wall_thickness)
-    x1 = min(width, x_left + wall_thickness + 1)
-    x2 = max(0, x_right - wall_thickness)
-    x3 = min(width, x_right + wall_thickness + 1)
-    y0 = max(0, y_side_start)
-    y1 = min(height, y_top)
-
-    if y1 > y0:
-        image[y0:y1, x0:x1] = wall_value
-        image[y0:y1, x2:x3] = wall_value
-
-    arc_samples = max(32, int(np.ceil(np.pi * max(half_width, 1.0))))
-    arc_xs = np.linspace(-half_width, half_width, arc_samples)
-    arc_ys = half_width - np.sqrt(np.maximum(0.0, half_width**2 - arc_xs**2))
-    for dx, dy in zip(arc_xs, arc_ys):
-        rr, cc = disk(
-            (dy, trench_center_x + dx),
-            max(1.0, float(wall_thickness)),
-            shape=image.shape,
-        )
-        image[rr, cc] = wall_value
+    for segment in static_segments:
+        _draw_thick_segment(image, segment.p1, segment.p2, segment.thickness, wall_value)
 
     for positions, radii in frame_segments:
         if len(positions) == 0:
@@ -78,15 +57,13 @@ def render_live_frame_image(
             image[rr, cc] = 255
 
             if prev_position is not None:
-                dx = px - prev_position[0]
-                dy = py - prev_position[1]
-                distance = float(np.hypot(dx, dy))
+                distance = float(np.hypot(px - prev_position[0], py - prev_position[1]))
                 step = max(1.0, min(pr, prev_radius))
                 n_interp = max(1, int(np.ceil(distance / step)))
                 for idx in range(1, n_interp):
                     alpha = idx / n_interp
-                    ix = prev_position[0] + alpha * dx
-                    iy = prev_position[1] + alpha * dy
+                    ix = prev_position[0] + alpha * (px - prev_position[0])
+                    iy = prev_position[1] + alpha * (py - prev_position[1])
                     ir = max(1.0, prev_radius + alpha * (pr - prev_radius))
                     rr, cc = disk((iy, ix), ir, shape=image.shape)
                     image[rr, cc] = 255

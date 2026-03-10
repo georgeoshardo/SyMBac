@@ -7,4 +7,12 @@ from .growth_manager import GrowthManager
 from .division_manager import DivisionManager
 from .colony import Colony
 from .simulator import Simulator
-from .microfluidic_geometry import trench_creator, box_creator
+from .microfluidic_geometry import (
+    Bounds2D,
+    GeometryLayout,
+    GeometrySpec,
+    SegmentPrimitive,
+    TrenchGeometrySpec,
+    trench_creator,
+    box_creator,
+)
