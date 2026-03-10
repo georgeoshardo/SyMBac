@@ -17,6 +17,13 @@ from SyMBac.simulation import Simulation
 import SyMBac.simulation as simulation_module
 import SyMBac.cell_snapshot as cell_snapshot_module
 import SyMBac.physics.simulator as physics_simulator_module
+from SyMBac.physics.microfluidic_geometry import (
+    Bounds2D,
+    GeometryLayout,
+    GeometrySpec,
+    SegmentPrimitive,
+    TrenchGeometrySpec,
+)
 from pymunk.vec2d import Vec2d
 
 
@@ -54,7 +61,7 @@ class _DummySnapshot:
     ):
         self.mask_label = simcell.group_id
         self.ID = simcell.group_id
-        self.segment_positions = np.array([[35.0, 10.0]], dtype=np.float64)
+        self.segment_positions = np.array([[0.0, 0.0]], dtype=np.float64)
         self.segment_radii = np.array([0.5], dtype=np.float64)
         self.t = t
         self.generation = generation
@@ -116,12 +123,12 @@ class _DummySegment:
 
 
 class _DummyPhysicsRepresentation:
-    def __init__(self, x=35.0, y=10.0):
+    def __init__(self, x=0.0, y=0.0):
         self.segments = [_DummySegment(x=x, y=y, angle=0.0)]
 
 
 class _DummyCellWithPhysics(_DummyCell):
-    def __init__(self, group_id, x=35.0, y=10.0):
+    def __init__(self, group_id, x=0.0, y=0.0):
         super().__init__(group_id)
         self.physics_representation = _DummyPhysicsRepresentation(x=x, y=y)
 
@@ -143,6 +150,86 @@ def _simulation_kwargs(tmp_path):
         "save_dir": str(tmp_path / "sim"),
         "substeps": 1,
     }
+
+
+def _scale_factor(kwargs):
+    return (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
+
+
+def _default_geometry_layout(kwargs):
+    scale_factor = _scale_factor(kwargs)
+    geometry = TrenchGeometrySpec(
+        width=kwargs["trench_width"] * scale_factor,
+        trench_length=kwargs["trench_length"] * scale_factor,
+    )
+    return geometry, GeometryLayout(geometry)
+
+
+def _default_world_point(kwargs, local_x=0.0, local_y=10.0):
+    _geometry, layout = _default_geometry_layout(kwargs)
+    return layout.to_world_point((local_x, local_y))
+
+
+class _CustomGeometrySpec(GeometrySpec):
+    def __init__(self):
+        self._local_bounds = Bounds2D(min_x=-5.0, min_y=-2.0, max_x=7.0, max_y=14.0)
+
+    @property
+    def local_bounds(self):
+        return self._local_bounds
+
+    @property
+    def default_padding_x(self):
+        return 12.0
+
+    @property
+    def default_padding_y(self):
+        return 18.0
+
+    @property
+    def characteristic_width(self):
+        return 12.0
+
+    def build(self, space, layout):
+        return None
+
+    def preview_primitives(self, layout):
+        p1 = layout.to_world_point((-5.0, 0.0))
+        p2 = layout.to_world_point((7.0, 0.0))
+        return [SegmentPrimitive(p1=p1, p2=p2, thickness=2.0)]
+
+    def seed_cell_local_position(self, segment_radius):
+        return (1.5, 6.0 + 0.5 * float(segment_radius))
+
+    def positions_within_bounds(self, positions, radii, layout, *, enforce_open_end_cap):
+        local_positions = layout.to_local_points(positions)
+        for position, radius in zip(local_positions, radii):
+            if float(position[0]) < (-5.0 + float(radius)):
+                return False
+            if float(position[0]) > (7.0 - float(radius)):
+                return False
+            if float(position[1]) < (0.0 + float(radius)):
+                return False
+            if enforce_open_end_cap and float(position[1]) > (14.0 - float(radius)):
+                return False
+        return True
+
+    def cell_out_of_bounds(self, positions, radii, layout):
+        return not self.positions_within_bounds(
+            positions,
+            radii,
+            layout,
+            enforce_open_end_cap=False,
+        )
+
+    def project_body_inside_bounds(self, body, radius, layout):
+        local_position = layout.to_local_point((float(body.position[0]), float(body.position[1])))
+        clamped_x = min(max(local_position[0], -5.0 + float(radius)), 7.0 - float(radius))
+        clamped_y = min(max(local_position[1], 0.0 + float(radius)), 14.0 - float(radius))
+        projected = (clamped_x != local_position[0]) or (clamped_y != local_position[1])
+        if projected:
+            body.position = Vec2d(*layout.to_world_point((clamped_x, clamped_y)))
+        return projected, (clamped_x != local_position[0]), (clamped_y != local_position[1])
 
 
 def test_run_simulation_persists_required_pickles(tmp_path, monkeypatch):
@@ -306,12 +393,73 @@ def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch
     assert physics_cfg.DAMPING == 0.35
 
 
+def test_run_simulation_default_geometry_uses_layout_derived_seed_position(tmp_path, monkeypatch):
+    captured = {}
+
+    class _CapturingSimulator:
+        def __init__(self, **kwargs):
+            captured["cell_config"] = kwargs["initial_cell_config"]
+            self.space = {"dummy_space": True}
+            self.colony = _DummyColony()
+
+        def step(self):
+            return None
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _CapturingSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(**kwargs)
+    simulation.run_simulation(show_window=False)
+
+    expected_start = simulation._geometry_layout.to_world_point(
+        simulation._geometry_spec.seed_cell_local_position(
+            segment_radius=captured["cell_config"].SEGMENT_RADIUS
+        )
+    )
+    assert captured["cell_config"].START_POS == pytest.approx(expected_start)
+
+
+def test_run_simulation_accepts_custom_geometry_without_manual_world_coordinates(tmp_path, monkeypatch):
+    captured = {}
+
+    class _CapturingSimulator:
+        def __init__(self, **kwargs):
+            captured["cell_config"] = kwargs["initial_cell_config"]
+            self.space = {"dummy_space": True}
+            self.colony = _DummyColony()
+
+        def step(self):
+            return None
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _CapturingSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+
+    kwargs = _simulation_kwargs(tmp_path)
+    custom_geometry = _CustomGeometrySpec()
+    simulation = Simulation(**kwargs, geometry=custom_geometry)
+    simulation.run_simulation(show_window=False)
+
+    expected_layout = GeometryLayout(custom_geometry)
+    expected_start = expected_layout.to_world_point(
+        custom_geometry.seed_cell_local_position(
+            segment_radius=captured["cell_config"].SEGMENT_RADIUS
+        )
+    )
+    assert simulation._geometry_spec is custom_geometry
+    assert simulation._geometry_layout.world_bounds.min_x == pytest.approx(expected_layout.padding_x)
+    assert simulation._geometry_layout.world_bounds.min_y == pytest.approx(expected_layout.padding_y)
+    assert captured["cell_config"].START_POS == pytest.approx(expected_start)
+
+
 def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
     captured = {}
+    kwargs = _simulation_kwargs(tmp_path)
+    start_x, start_y = _default_world_point(kwargs)
 
     class _JitterColony:
         def __init__(self):
-            self.cells = [_DummyCellWithPhysics(1)]
+            self.cells = [_DummyCellWithPhysics(1, x=start_x, y=start_y)]
 
         def delete_cell(self, cell):
             self.cells.remove(cell)
@@ -333,7 +481,6 @@ def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
         **kwargs,
         brownian_longitudinal_std=0.05,
@@ -344,17 +491,20 @@ def test_run_simulation_brownian_jitter_moves_cells(tmp_path, monkeypatch):
     simulation.run_simulation(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    assert float(body.position[0]) != 35.0 or float(body.position[1]) != 10.0
+    assert float(body.position[0]) != pytest.approx(start_x) or float(body.position[1]) != pytest.approx(start_y)
     assert float(body.angle) != 0.0
 
 
 def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, monkeypatch):
     captured = {}
+    kwargs = _simulation_kwargs(tmp_path)
+    geometry, layout = _default_geometry_layout(kwargs)
+    start_x, start_y = layout.to_world_point((geometry.inner_half_width - 0.5, 10.0))
 
     class _BoundaryJitterColony:
         def __init__(self):
             # Near right wall so positive x-jitter should violate bounds.
-            self.cells = [_DummyCellWithPhysics(1, x=46.0, y=10.0)]
+            self.cells = [_DummyCellWithPhysics(1, x=start_x, y=start_y)]
 
         def delete_cell(self, cell):
             self.cells.remove(cell)
@@ -376,7 +526,6 @@ def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, mo
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
         **kwargs,
         brownian_longitudinal_std=0.0,
@@ -387,18 +536,20 @@ def test_run_simulation_brownian_jitter_rolls_back_if_out_of_bounds(tmp_path, mo
     simulation.run_simulation(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    assert float(body.position[0]) == pytest.approx(46.0)
-    assert float(body.position[1]) == pytest.approx(10.0)
+    assert float(body.position[0]) == pytest.approx(start_x)
+    assert float(body.position[1]) == pytest.approx(start_y)
     assert float(body.angle) == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize("brownian_mode", ["velocity", "impulse"])
 def test_run_simulation_brownian_dynamic_mode_moves_cells(tmp_path, monkeypatch, brownian_mode):
     captured = {}
+    kwargs = _simulation_kwargs(tmp_path)
+    start_x, start_y = _default_world_point(kwargs)
 
     class _VelocityJitterColony:
         def __init__(self):
-            self.cells = [_DummyCellWithPhysics(1)]
+            self.cells = [_DummyCellWithPhysics(1, x=start_x, y=start_y)]
 
         def delete_cell(self, cell):
             self.cells.remove(cell)
@@ -425,7 +576,6 @@ def test_run_simulation_brownian_dynamic_mode_moves_cells(tmp_path, monkeypatch,
         lambda loc, scale: scale if scale > 0 else 0.0,
     )
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
         **kwargs,
         brownian_longitudinal_std=0.03,
@@ -437,16 +587,19 @@ def test_run_simulation_brownian_dynamic_mode_moves_cells(tmp_path, monkeypatch,
     simulation.run_simulation(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    assert float(body.position[0]) != pytest.approx(35.0) or float(body.position[1]) != pytest.approx(10.0)
+    assert float(body.position[0]) != pytest.approx(start_x) or float(body.position[1]) != pytest.approx(start_y)
     assert float(body.angle) != pytest.approx(0.0)
 
 
 def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(tmp_path, monkeypatch):
     captured = {}
+    kwargs = _simulation_kwargs(tmp_path)
+    geometry, layout = _default_geometry_layout(kwargs)
+    start_x, start_y = layout.to_world_point((geometry.inner_half_width - 0.5, 10.0))
 
     class _BoundaryProjectionColony:
         def __init__(self):
-            self.cells = [_DummyCellWithPhysics(1, x=46.0, y=10.0)]
+            self.cells = [_DummyCellWithPhysics(1, x=start_x, y=start_y)]
             self.cells[0].physics_representation.segments[0].body.velocity = Vec2d(20.0, 0.0)
             self.cells[0].physics_representation.segments[0].body.angular_velocity = 1.0
 
@@ -470,7 +623,6 @@ def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(t
     monkeypatch.setattr(physics_simulator_module, "Simulator", _BoundaryProjectionSimulator)
     monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
 
-    kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(
         **kwargs,
         brownian_application_mode="velocity",
@@ -479,9 +631,7 @@ def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(t
     simulation.run_simulation(show_window=False)
 
     body = captured["cell"].physics_representation.segments[0].body
-    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
-    trench_width_px = kwargs["trench_width"] * scale_factor
-    max_x = 35.0 + trench_width_px / 2.0 - 0.5
+    max_x = layout.to_world_point((geometry.inner_half_width - 0.5, 0.0))[0]
     assert float(body.position[0]) <= max_x + 1e-6
     assert float(body.velocity[0]) == pytest.approx(0.0)
     assert abs(float(body.angular_velocity)) < 1.0
@@ -490,14 +640,13 @@ def test_run_simulation_brownian_projection_clamps_out_of_bounds_velocity_mode(t
 def test_run_simulation_brownian_projection_does_not_cap_open_end(tmp_path, monkeypatch):
     captured = {}
     kwargs = _simulation_kwargs(tmp_path)
-    scale_factor = (1 / kwargs["pix_mic_conv"]) * kwargs["resize_amount"]
-    trench_width_px = kwargs["trench_width"] * scale_factor
-    trench_length_px = kwargs["trench_length"] * scale_factor
-    open_end_y = trench_width_px / 2.0 + trench_length_px
+    geometry, layout = _default_geometry_layout(kwargs)
+    start_x, start_y = layout.to_world_point((0.0, geometry.open_end_y - 0.1))
+    open_end_y = layout.to_world_point((0.0, geometry.open_end_y))[1]
 
     class _OpenEndProjectionColony:
         def __init__(self):
-            self.cells = [_DummyCellWithPhysics(1, x=35.0, y=open_end_y - 0.1)]
+            self.cells = [_DummyCellWithPhysics(1, x=start_x, y=start_y)]
             self.cells[0].physics_representation.segments[0].body.velocity = Vec2d(0.0, 20.0)
 
         def delete_cell(self, cell):

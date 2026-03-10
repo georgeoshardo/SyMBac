@@ -6,7 +6,6 @@ from dataclasses import fields, is_dataclass
 from SyMBac._deprecation import _UNSET, _require_provided
 from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 from SyMBac.trench_geometry import  get_trench_segments
-import napari
 import os
 from tqdm.auto import tqdm
 from scipy.stats import norm
@@ -75,6 +74,7 @@ class Simulation:
         substeps=100,
         width_upper_limit=None,
         load_sim_dir=None,
+        geometry=None,
         cell_config=None,
         physics_config=None,
         cell_config_overrides=None,
@@ -140,6 +140,10 @@ class Simulation:
             (default) means no limit.
         load_sim_dir : str
             The directory if you wish to load a previously completed simulation
+        geometry : object or None, optional
+            Optional advanced geometry specification object. When omitted, the
+            default trench geometry is constructed from ``trench_length`` and
+            ``trench_width``.
         cell_config : SyMBac.physics.config.CellConfig or dict or None, optional
             Optional full low-level cell physics configuration template.
             If provided, this is used as the base cell configuration instead
@@ -255,6 +259,7 @@ class Simulation:
         self.save_dir = save_dir
         self.offset = 30
         self.load_sim_dir = load_sim_dir
+        self.geometry = geometry
         self.substeps = substeps
         self.width_upper_limit = width_upper_limit
         self.cell_config_template = cell_config
@@ -319,11 +324,11 @@ class Simulation:
         """
         Run the simulation using the segment-chain physics engine.
 
-        :param bool show_window: If True, opens a live Pyglet window with physics debug drawing while simulating.
+        :param bool show_window: If True, opens a live pyqtgraph preview window while simulating.
         """
         from SyMBac.physics.config import CellConfig, PhysicsConfig
         from SyMBac.physics.simulator import Simulator
-        from SyMBac.physics import microfluidic_geometry
+        from SyMBac.physics.microfluidic_geometry import GeometryLayout, TrenchGeometrySpec
         from SyMBac.cell_snapshot import CellSnapshot
 
         # --- Scale parameters from microns to pixels ---
@@ -348,6 +353,13 @@ class Simulation:
         brownian_longitudinal_std_px = self.brownian_longitudinal_std * scale_factor
         brownian_transverse_std_px = self.brownian_transverse_std * scale_factor
         brownian_state = {}  # group_id -> np.array([dy, dx, dtheta])
+        geometry_spec = self.geometry
+        if geometry_spec is None:
+            geometry_spec = TrenchGeometrySpec(width=trench_width_px, trench_length=trench_length_px)
+        geometry_layout = GeometryLayout(geometry_spec)
+        self._geometry_spec = geometry_spec
+        self._geometry_layout = geometry_layout
+        geometry_width_px = float(getattr(geometry_spec, "characteristic_width", geometry_layout.local_bounds.width))
 
         default_cell_kwargs = dict(
             GRANULARITY=GRANULARITY,
@@ -361,7 +373,9 @@ class Simulation:
             SEED_CELL_SEGMENTS=SEED_CELL_SEGMENTS,
             PIVOT_JOINT_STIFFNESS=5_000 * radius_scale,
             NOISE_STRENGTH=0.05,
-            START_POS=(35, trench_width_px / 2 + SEGMENT_RADIUS * 3),
+            START_POS=geometry_layout.to_world_point(
+                geometry_spec.seed_cell_local_position(segment_radius=SEGMENT_RADIUS)
+            ),
             START_ANGLE=np.pi / 2,
             SEPTUM_DURATION=1.5,
             ROTARY_LIMIT_JOINT=True,
@@ -418,27 +432,30 @@ class Simulation:
         lineage_info = {}  # group_id -> {mother_mask_label, generation}
         just_divided_this_frame = set()
 
-        def create_trench(sim):
-            microfluidic_geometry.trench_creator(
-                width=trench_width_px,
-                trench_length=trench_length_px,
-                global_xy=(35, 0),
-                space=sim.space,
+        def _cell_segment_state(cell):
+            physics_rep = getattr(cell, "physics_representation", None)
+            segments = getattr(physics_rep, "segments", None)
+            if not segments:
+                return None, None
+            positions = np.array(
+                [[float(segment.position[0]), float(segment.position[1])] for segment in segments],
+                dtype=np.float64,
             )
+            radii = np.array(
+                [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments],
+                dtype=np.float64,
+            )
+            return positions, radii
+
+        def create_geometry(sim):
+            geometry_spec.build(sim.space, geometry_layout)
 
         def remove_out_of_bounds(sim):
-            trench_open_end = trench_width_px / 2 + trench_length_px
             for cell in sim.colony.cells[:]:
-                segments = getattr(cell.physics_representation, "segments", None)
-                if not segments:
+                positions, radii = _cell_segment_state(cell)
+                if positions is None:
                     continue
-                segment_radii = [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments]
-                segment_ys = [float(segment.position[1]) for segment in segments]
-                min_radius = min(segment_radii) if segment_radii else SEGMENT_RADIUS
-                max_radius = max(segment_radii) if segment_radii else SEGMENT_RADIUS
-                below_floor = min(segment_ys) < -0.25 * min_radius
-                above_open_end = max(segment_ys) > trench_open_end + 0.25 * max_radius
-                if below_floor or above_open_end:
+                if geometry_spec.cell_out_of_bounds(positions, radii, geometry_layout):
                     sim.colony.delete_cell(cell)
 
         def handle_lysis(sim):
@@ -461,12 +478,8 @@ class Simulation:
             rho = self.brownian_persistence
             noise_scale = np.sqrt(max(0.0, 1.0 - rho ** 2))
             live_ids = set()
-            trench_center_x = 35.0
-            trench_half_width = trench_width_px / 2.0
-            trench_y_min = 0.0
-            trench_y_max = trench_width_px / 2.0 + trench_length_px
             # Hard caps against unrealistically large rigid-body jumps.
-            max_dx_abs = self.brownian_max_dx_fraction_of_trench_width * trench_width_px
+            max_dx_abs = self.brownian_max_dx_fraction_of_trench_width * geometry_width_px
             max_dy_abs = max(
                 self.brownian_max_dy_px_floor,
                 self.brownian_max_dy_fraction_of_segment_radius * SEGMENT_RADIUS,
@@ -474,21 +487,6 @@ class Simulation:
             max_dtheta_abs = self.brownian_max_dtheta
             max_backoff_attempts = self.brownian_backoff_attempts
             enforce_open_end_cap = not dynamic_brownian_mode
-
-            def _positions_inside_trench(segments, positions):
-                for segment, position in zip(segments, positions):
-                    radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
-                    x = float(position[0])
-                    y = float(position[1])
-                    if x < (trench_center_x - trench_half_width + radius):
-                        return False
-                    if x > (trench_center_x + trench_half_width - radius):
-                        return False
-                    if y < (trench_y_min + 0.25 * radius):
-                        return False
-                    if enforce_open_end_cap and y > (trench_y_max - 0.25 * radius):
-                        return False
-                return True
 
             def _build_trial_positions(old_positions, center_vec, dx_value, dy_value, dtheta_value):
                 vec_type = center_vec.__class__
@@ -562,6 +560,10 @@ class Simulation:
                 segment_bodies = [body for body in segment_bodies if body is not None]
                 if not segment_bodies:
                     continue
+                radii = np.array(
+                    [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments],
+                    dtype=np.float64,
+                )
 
                 vec_type = segment_bodies[0].position.__class__
                 center = np.mean(
@@ -586,7 +588,12 @@ class Simulation:
                         dtheta_value=trial_dtheta,
                     )
 
-                    if _positions_inside_trench(segments, trial_positions):
+                    if geometry_spec.positions_within_bounds(
+                        trial_positions,
+                        radii,
+                        geometry_layout,
+                        enforce_open_end_cap=enforce_open_end_cap,
+                    ):
                         accepted_state = np.array([trial_dy, trial_dx, trial_dtheta], dtype=float)
                         break
 
@@ -617,14 +624,9 @@ class Simulation:
             for group_id in stale_ids:
                 brownian_state.pop(group_id, None)
 
-        def project_segments_inside_trench(sim):
+        def project_segments_inside_geometry(sim):
             if not dynamic_brownian_mode:
                 return
-
-            trench_center_x = 35.0
-            trench_half_width = trench_width_px / 2.0
-            trench_y_min = 0.0
-            trench_y_max = trench_width_px / 2.0 + trench_length_px
             angular_damping = self.brownian_projection_angular_damping
 
             for cell in sim.colony.cells:
@@ -641,29 +643,8 @@ class Simulation:
                         continue
 
                     radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
-                    min_x = trench_center_x - trench_half_width + radius
-                    max_x = trench_center_x + trench_half_width - radius
-                    min_y = trench_y_min + 0.25 * radius
-
-                    x = float(body.position[0])
-                    y = float(body.position[1])
-                    clamped_x = min(max(x, min_x), max_x)
-                    clamped_y = max(y, min_y)
-
-                    if clamped_x == x and clamped_y == y:
-                        continue
-
-                    vec_type = body.position.__class__
-                    body.position = vec_type(clamped_x, clamped_y)
-                    if hasattr(body, "velocity"):
-                        velocity = getattr(body, "velocity")
-                        velocity = vec_type(float(velocity[0]), float(velocity[1]))
-                        if clamped_x != x:
-                            velocity = vec_type(0.0, float(velocity[1]))
-                        if clamped_y != y:
-                            velocity = vec_type(float(velocity[0]), 0.0)
-                        body.velocity = velocity
-                    projected = True
+                    body_projected, _, _ = geometry_spec.project_body_inside_bounds(body, radius, geometry_layout)
+                    projected = projected or body_projected
 
                 if projected:
                     for segment in segments:
@@ -710,7 +691,7 @@ class Simulation:
         sim = Simulator(
             physics_config=physics_config,
             initial_cell_config=cell_config,
-            post_init_hooks=[create_trench],
+            post_init_hooks=[create_geometry],
             pre_cell_grow_hooks=[cell_growth_rate_updater],
             post_cell_grow_hooks=[post_growth_width_sync],
             post_step_hooks=post_step_hooks,
@@ -738,7 +719,7 @@ class Simulation:
             if self.lysis_p > 0:
                 handle_lysis(sim)
             if dynamic_brownian_mode:
-                project_segments_inside_trench(sim)
+                project_segments_inside_geometry(sim)
             else:
                 apply_rigid_body_brownian_jitter(sim)
 
@@ -760,19 +741,22 @@ class Simulation:
 
         if show_window:
             try:
-                import pyglet
-                from pymunk.pyglet_util import DrawOptions
+                import threading
+                import time
+                from SyMBac.live_viewer import (
+                    LiveSimulationViewer,
+                    build_live_frame_segments,
+                    render_live_frame_image,
+                )
             except ImportError as e:
                 raise ImportError(
-                    "show_window=True requires pyglet. Install it or rerun with show_window=False."
+                    "show_window=True requires pyqtgraph and a working Qt binding. "
+                    "Install them or rerun with show_window=False."
                 ) from e
 
-            import threading
-            import time
-
-            window = pyglet.window.Window(900, 900, "SyMBac", resizable=True)
-            draw_options = DrawOptions()
-            draw_options.shape_outline_color = (235, 235, 235, 255)
+            preview_shape = geometry_layout.preview_shape
+            static_preview_segments = geometry_spec.preview_primitives(geometry_layout)
+            viewer = LiveSimulationViewer(scene_shape=preview_shape, title="SyMBac Live")
             progress_bar = tqdm(total=total_frames, desc='Running simulation')
             state = {
                 "frame_idx": 0,
@@ -780,17 +764,33 @@ class Simulation:
                 "stopped": False,
                 "done": False,
                 "worker_error": None,
+                "latest_image": render_live_frame_image(
+                    build_live_frame_segments(sim.colony.cells),
+                    static_preview_segments,
+                    preview_shape,
+                ),
+                "latest_image_frame_idx": -1,
             }
-            sim_lock = threading.Lock()
+            state_lock = threading.Lock()
             stop_event = threading.Event()
+
+            def publish_live_frame(frame_idx):
+                image = render_live_frame_image(
+                    build_live_frame_segments(sim.colony.cells),
+                    static_preview_segments,
+                    preview_shape,
+                )
+                with state_lock:
+                    state["latest_image"] = image
+                    state["latest_image_frame_idx"] = frame_idx
 
             def simulation_worker():
                 try:
                     for frame_idx in range(total_frames):
                         if stop_event.is_set():
                             break
-                        with sim_lock:
-                            step_and_capture_frame(frame_idx)
+                        step_and_capture_frame(frame_idx)
+                        publish_live_frame(frame_idx)
                         state["frame_idx"] = frame_idx + 1
                         time.sleep(0)
                 except Exception as e:
@@ -801,46 +801,51 @@ class Simulation:
             worker_thread = threading.Thread(target=simulation_worker, daemon=True)
             worker_thread.start()
 
-            @window.event
-            def on_draw():
-                window.clear()
-                with sim_lock:
-                    sim.space.debug_draw(draw_options)
-
             def stop_loop():
                 if state["stopped"]:
                     return
                 state["stopped"] = True
                 stop_event.set()
-                pyglet.clock.unschedule(update_ui)
                 if state["frame_idx"] > state["progress_idx"]:
                     progress_bar.update(state["frame_idx"] - state["progress_idx"])
                     state["progress_idx"] = state["frame_idx"]
                 progress_bar.close()
                 if worker_thread.is_alive():
                     worker_thread.join(timeout=1.0)
-                if not window.has_exit:
-                    window.close()
-                pyglet.app.exit()
+                viewer.close()
 
-            @window.event
-            def on_key_press(symbol, modifier):
-                if symbol in (pyglet.window.key.E, pyglet.window.key.ESCAPE):
+            last_drawn_frame_idx = None
+            try:
+                while True:
+                    viewer.process_events()
+                    if viewer.closed:
+                        stop_loop()
+                        break
+
+                    with state_lock:
+                        latest_image = state["latest_image"]
+                        latest_image_frame_idx = state["latest_image_frame_idx"]
+
+                    if latest_image is not None and latest_image_frame_idx != last_drawn_frame_idx:
+                        viewer.update_image(
+                            latest_image,
+                            title=f"SyMBac Live ({min(state['frame_idx'], total_frames)}/{total_frames})",
+                        )
+                        last_drawn_frame_idx = latest_image_frame_idx
+
+                    if state["frame_idx"] > state["progress_idx"]:
+                        progress_bar.update(state["frame_idx"] - state["progress_idx"])
+                        state["progress_idx"] = state["frame_idx"]
+
+                    if state["done"]:
+                        stop_loop()
+                        break
+
+                    time.sleep(1 / 60.0)
+            finally:
+                if not state["stopped"]:
                     stop_loop()
 
-            @window.event
-            def on_close():
-                stop_loop()
-
-            def update_ui(_dt):
-                if state["frame_idx"] > state["progress_idx"]:
-                    progress_bar.update(state["frame_idx"] - state["progress_idx"])
-                    state["progress_idx"] = state["frame_idx"]
-                if state["done"]:
-                    stop_loop()
-
-            pyglet.clock.schedule_interval(update_ui, 1 / 60.0)
-            pyglet.app.run()
             if state["worker_error"] is not None:
                 raise RuntimeError("Simulation worker failed during show_window=True execution.") from state["worker_error"]
         else:
@@ -895,7 +900,8 @@ class Simulation:
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
         """
-        
+        import napari
+
         viewer = napari.Viewer()
         viewer.add_image(np.array(self.OPL_scenes), name='OPL scenes')
         viewer.add_labels(np.array(self.masks), name='Synthetic masks')
