@@ -10,3 +10,4 @@ dask = ">=2026.1.2,<2027"
 
 [pypi-dependencies]
 symbac = { path = ".", editable = true }
+geff = ">=1.1.4.1.1, <2"

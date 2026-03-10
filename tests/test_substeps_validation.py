@@ -42,3 +42,58 @@ def test_substeps_validation_accepts_positive_int(tmp_path):
     kwargs = _simulation_kwargs(tmp_path)
     simulation = Simulation(**kwargs, substeps=3)
     assert simulation.substeps == 3
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("cell_config_overrides", 1),
+        ("cell_config_overrides", []),
+        ("physics_config_overrides", 1.5),
+        ("physics_config_overrides", ()),
+    ],
+)
+def test_config_overrides_validation_rejects_non_dict(tmp_path, field_name, bad_value):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs[field_name] = bad_value
+    with pytest.raises(TypeError, match=f"{field_name}"):
+        Simulation(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("brownian_longitudinal_std", -0.1),
+        ("brownian_transverse_std", -0.1),
+        ("brownian_rotation_std", -0.01),
+        ("brownian_persistence", -0.1),
+        ("brownian_persistence", 1.0),
+        ("brownian_max_dx_fraction_of_trench_width", 0.0),
+        ("brownian_max_dx_fraction_of_trench_width", -0.1),
+        ("brownian_max_dy_fraction_of_segment_radius", 0.0),
+        ("brownian_max_dy_px_floor", 0.0),
+        ("brownian_max_dtheta", 0.0),
+        ("brownian_backoff_attempts", 0),
+        ("brownian_backoff_attempts", 1.5),
+        ("brownian_application_mode", "not-a-mode"),
+        ("brownian_projection_angular_damping", -0.1),
+        ("brownian_projection_angular_damping", 1.1),
+    ],
+)
+def test_brownian_validation_rejects_invalid_ranges(tmp_path, field_name, bad_value):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs[field_name] = bad_value
+    with pytest.raises(ValueError):
+        Simulation(**kwargs)
+
+
+@pytest.mark.parametrize("mode", ["teleport", "velocity", "impulse"])
+def test_brownian_application_mode_accepts_valid_values(tmp_path, mode):
+    kwargs = _simulation_kwargs(tmp_path)
+    simulation = Simulation(
+        **kwargs,
+        brownian_application_mode=mode,
+        brownian_projection_angular_damping=0.5,
+    )
+    assert simulation.brownian_application_mode == mode
+    assert simulation.brownian_projection_angular_damping == pytest.approx(0.5)

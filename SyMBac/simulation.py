@@ -2,8 +2,9 @@ import numpy as np
 from joblib import Parallel, delayed
 import pickle
 import tempfile
-from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
-from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
+from dataclasses import fields, is_dataclass
+from SyMBac._deprecation import _UNSET, _require_provided
+from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 from SyMBac.trench_geometry import  get_trench_segments
 import napari
 import os
@@ -50,7 +51,7 @@ class Simulation:
             substeps = 100
         )
     >>> my_simulation.run_simulation(show_window=False)
-    >>> my_simulation.draw_simulation_OPL(do_transformation=True, label_masks=True)
+    >>> my_simulation.draw_simulation_OPL(label_masks=True)
     >>> my_simulation.visualise_in_napari()
 
     """
@@ -74,8 +75,21 @@ class Simulation:
         substeps=100,
         width_upper_limit=None,
         load_sim_dir=None,
-        max_length_var=_UNSET,
-        width_var=_UNSET,
+        cell_config=None,
+        physics_config=None,
+        cell_config_overrides=None,
+        physics_config_overrides=None,
+        brownian_longitudinal_std=0.0,
+        brownian_transverse_std=0.0,
+        brownian_rotation_std=0.0,
+        brownian_persistence=0.85,
+        brownian_max_dx_fraction_of_trench_width=0.20,
+        brownian_max_dy_fraction_of_segment_radius=0.75,
+        brownian_max_dy_px_floor=1.0,
+        brownian_max_dtheta=0.03,
+        brownian_backoff_attempts=5,
+        brownian_application_mode="teleport",
+        brownian_projection_angular_damping=0.35,
     ):
         """
         Initialising a Simulation object
@@ -126,6 +140,56 @@ class Simulation:
             (default) means no limit.
         load_sim_dir : str
             The directory if you wish to load a previously completed simulation
+        cell_config : SyMBac.physics.config.CellConfig or dict or None, optional
+            Optional full low-level cell physics configuration template.
+            If provided, this is used as the base cell configuration instead
+            of internally computed defaults.
+        physics_config : SyMBac.physics.config.PhysicsConfig or dict or None, optional
+            Optional full low-level global physics configuration template.
+            If provided, this is used as the base physics configuration instead
+            of internally computed defaults.
+        cell_config_overrides : dict or None, optional
+            Key-value overrides applied to the resolved cell configuration
+            template (whether default or user-provided).
+        physics_config_overrides : dict or None, optional
+            Key-value overrides applied to the resolved physics configuration
+            template (whether default or user-provided).
+        brownian_longitudinal_std : float, optional
+            Standard deviation of per-output-frame cell translation along the
+            trench axis (microns). Applied as temporally correlated (OU-like)
+            rigid-body jitter.
+        brownian_transverse_std : float, optional
+            Standard deviation of per-output-frame cell translation across the
+            trench axis (microns). Applied as temporally correlated (OU-like)
+            rigid-body jitter.
+        brownian_rotation_std : float, optional
+            Standard deviation of per-output-frame rigid-body rotation
+            perturbation (radians).
+        brownian_persistence : float, optional
+            Temporal persistence for Brownian jitter in [0, 1). Values near 0
+            are white-noise-like; values near 1 produce slowly drifting motion.
+        brownian_max_dx_fraction_of_trench_width : float, optional
+            Hard cap for per-frame transverse translation. ``|dx|`` is clipped
+            to this fraction of trench width in simulation pixels.
+        brownian_max_dy_fraction_of_segment_radius : float, optional
+            Hard cap component for per-frame longitudinal translation based on
+            current segment radius.
+        brownian_max_dy_px_floor : float, optional
+            Lower bound for the longitudinal cap in simulation pixels.
+        brownian_max_dtheta : float, optional
+            Hard cap for per-frame rotational jitter (radians).
+        brownian_backoff_attempts : int, optional
+            Number of geometric backoff retries before rolling back jitter for
+            a frame.
+        brownian_application_mode : {"teleport", "velocity", "impulse"}, optional
+            Brownian application strategy. ``teleport`` applies a rigid-body
+            pose perturbation directly after sub-stepping. ``velocity`` and
+            ``impulse`` convert the sampled perturbation into dynamic
+            perturbations before sub-stepping so collisions are resolved by
+            Pymunk.
+        brownian_projection_angular_damping : float, optional
+            Angular damping factor applied when projection safety correction is
+            needed in ``velocity`` or ``impulse`` modes. Must be in ``[0, 1]``.
         """
         api_name = f"{self.__class__.__name__}.__init__()"
         _require_provided(api_name, "cell_width", cell_width)
@@ -137,34 +201,51 @@ class Simulation:
         _require_provided(api_name, "resize_amount", resize_amount)
         _require_provided(api_name, "save_dir", save_dir)
 
-        max_length_std, _ = _resolve_deprecated_parameter(
-            api_name=api_name,
-            new_name="max_length_std",
-            new_value=max_length_std,
-            legacy_name="max_length_var",
-            legacy_value=max_length_var,
-            compatibility_note="`max_length_var` is interpreted as a standard deviation in this API.",
-        )
-        width_std, _ = _resolve_deprecated_parameter(
-            api_name=api_name,
-            new_name="width_std",
-            new_value=width_std,
-            legacy_name="width_var",
-            legacy_value=width_var,
-            compatibility_note="`width_var` is interpreted as a standard deviation in this API.",
-        )
-
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
             raise ValueError("substeps must be an integer greater than 0.")
+        if cell_config_overrides is not None and not isinstance(cell_config_overrides, dict):
+            raise TypeError("cell_config_overrides must be a dict when provided.")
+        if physics_config_overrides is not None and not isinstance(physics_config_overrides, dict):
+            raise TypeError("physics_config_overrides must be a dict when provided.")
+        for name, value in (
+            ("brownian_longitudinal_std", brownian_longitudinal_std),
+            ("brownian_transverse_std", brownian_transverse_std),
+            ("brownian_rotation_std", brownian_rotation_std),
+        ):
+            if isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative float.")
+        if isinstance(brownian_persistence, bool) or not (0.0 <= brownian_persistence < 1.0):
+            raise ValueError("brownian_persistence must be in [0.0, 1.0).")
+        for name, value in (
+            ("brownian_max_dx_fraction_of_trench_width", brownian_max_dx_fraction_of_trench_width),
+            ("brownian_max_dy_fraction_of_segment_radius", brownian_max_dy_fraction_of_segment_radius),
+            ("brownian_max_dy_px_floor", brownian_max_dy_px_floor),
+            ("brownian_max_dtheta", brownian_max_dtheta),
+        ):
+            if isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be > 0.")
+        if (
+            isinstance(brownian_backoff_attempts, bool)
+            or not isinstance(brownian_backoff_attempts, int)
+            or brownian_backoff_attempts < 1
+        ):
+            raise ValueError("brownian_backoff_attempts must be an integer >= 1.")
+        if brownian_application_mode not in {"teleport", "velocity", "impulse"}:
+            raise ValueError(
+                "brownian_application_mode must be one of: 'teleport', 'velocity', 'impulse'."
+            )
+        if (
+            isinstance(brownian_projection_angular_damping, bool)
+            or not (0.0 <= brownian_projection_angular_damping <= 1.0)
+        ):
+            raise ValueError("brownian_projection_angular_damping must be in [0.0, 1.0].")
 
         self.trench_length = trench_length
         self.trench_width = trench_width
         self.cell_max_length = cell_max_length
         self.max_length_std = max_length_std
-        self.max_length_var = max_length_std
         self.cell_width = cell_width
         self.width_std = width_std
-        self.width_var = width_std
         self.lysis_p = lysis_p
         self.sim_length = sim_length
         self.pix_mic_conv = pix_mic_conv
@@ -176,6 +257,21 @@ class Simulation:
         self.load_sim_dir = load_sim_dir
         self.substeps = substeps
         self.width_upper_limit = width_upper_limit
+        self.cell_config_template = cell_config
+        self.physics_config_template = physics_config
+        self.cell_config_overrides = dict(cell_config_overrides or {})
+        self.physics_config_overrides = dict(physics_config_overrides or {})
+        self.brownian_longitudinal_std = float(brownian_longitudinal_std)
+        self.brownian_transverse_std = float(brownian_transverse_std)
+        self.brownian_rotation_std = float(brownian_rotation_std)
+        self.brownian_persistence = float(brownian_persistence)
+        self.brownian_max_dx_fraction_of_trench_width = float(brownian_max_dx_fraction_of_trench_width)
+        self.brownian_max_dy_fraction_of_segment_radius = float(brownian_max_dy_fraction_of_segment_radius)
+        self.brownian_max_dy_px_floor = float(brownian_max_dy_px_floor)
+        self.brownian_max_dtheta = float(brownian_max_dtheta)
+        self.brownian_backoff_attempts = int(brownian_backoff_attempts)
+        self.brownian_application_mode = brownian_application_mode
+        self.brownian_projection_angular_damping = float(brownian_projection_angular_damping)
 
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -199,8 +295,24 @@ class Simulation:
                 self.cell_timeseries = pickle.load(f)
             with open(os.path.join(self.load_sim_dir, "space_timeseries.p"), 'rb') as f:
                 self.space = pickle.load(f)
+            if not self._loaded_timeseries_uses_segments(self.cell_timeseries):
+                raise ValueError(
+                    "Legacy simulation artifacts are no longer supported. "
+                    "Regenerate the simulation with the current segment-based engine."
+                )
 
-    
+    @staticmethod
+    def _loaded_timeseries_uses_segments(cell_timeseries):
+        if not isinstance(cell_timeseries, (list, tuple)):
+            return False
+        for frame in cell_timeseries:
+            if not isinstance(frame, (list, tuple)):
+                return False
+            for cell in frame:
+                if not hasattr(cell, "segment_positions"):
+                    return False
+        return True
+
 
 
     def run_simulation(self, show_window=True):
@@ -233,8 +345,11 @@ class Simulation:
         trench_length_px = self.trench_length * scale_factor
         trench_width_px = self.trench_width * scale_factor
         SUB_STEPS = self.substeps
+        brownian_longitudinal_std_px = self.brownian_longitudinal_std * scale_factor
+        brownian_transverse_std_px = self.brownian_transverse_std * scale_factor
+        brownian_state = {}  # group_id -> np.array([dy, dx, dtheta])
 
-        cell_config = CellConfig(
+        default_cell_kwargs = dict(
             GRANULARITY=GRANULARITY,
             SEGMENT_RADIUS=SEGMENT_RADIUS,
             SEGMENT_MASS=1.0,
@@ -255,12 +370,49 @@ class Simulation:
             SIMPLE_LENGTH=False,
             WIDTH_UPPER_LIMIT=WIDTH_UPPER_LIMIT,
         )
+        if self.cell_config_template is None:
+            resolved_cell_kwargs = dict(default_cell_kwargs)
+        elif isinstance(self.cell_config_template, dict):
+            resolved_cell_kwargs = dict(self.cell_config_template)
+        elif is_dataclass(self.cell_config_template):
+            resolved_cell_kwargs = {
+                field.name: getattr(self.cell_config_template, field.name)
+                for field in fields(self.cell_config_template)
+                if field.init
+            }
+        else:
+            raise TypeError(
+                "cell_config must be a CellConfig-like dataclass instance, a dict, or None."
+            )
+        resolved_cell_kwargs.update(self.cell_config_overrides)
+        cell_config = CellConfig(**resolved_cell_kwargs)
 
-        physics_config = PhysicsConfig(
+        default_physics_kwargs = dict(
             ITERATIONS=self.phys_iters * 8,
             DAMPING=0.5,
             GRAVITY=(0, self.gravity),
         )
+        if self.physics_config_template is None:
+            resolved_physics_kwargs = dict(default_physics_kwargs)
+        elif isinstance(self.physics_config_template, dict):
+            resolved_physics_kwargs = dict(self.physics_config_template)
+        elif is_dataclass(self.physics_config_template):
+            resolved_physics_kwargs = {
+                field.name: getattr(self.physics_config_template, field.name)
+                for field in fields(self.physics_config_template)
+                if field.init
+            }
+        else:
+            raise TypeError(
+                "physics_config must be a PhysicsConfig-like dataclass instance, a dict, or None."
+            )
+        resolved_physics_kwargs.update(self.physics_config_overrides)
+        physics_config = PhysicsConfig(**resolved_physics_kwargs)
+        self._resolved_cell_config = cell_config
+        self._resolved_physics_config = physics_config
+        brownian_mode = self.brownian_application_mode
+        dynamic_brownian_mode = brownian_mode in {"velocity", "impulse"}
+        frame_dt = max(float(physics_config.DT) * float(SUB_STEPS), 1e-12)
 
         # --- Lineage tracking ---
         lineage_info = {}  # group_id -> {mother_mask_label, generation}
@@ -277,10 +429,16 @@ class Simulation:
         def remove_out_of_bounds(sim):
             trench_open_end = trench_width_px / 2 + trench_length_px
             for cell in sim.colony.cells[:]:
-                if not cell.physics_representation.segments:
+                segments = getattr(cell.physics_representation, "segments", None)
+                if not segments:
                     continue
-                pos_y = cell.physics_representation.segments[0].position[1]
-                if pos_y < 0 or pos_y > trench_open_end:
+                segment_radii = [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments]
+                segment_ys = [float(segment.position[1]) for segment in segments]
+                min_radius = min(segment_radii) if segment_radii else SEGMENT_RADIUS
+                max_radius = max(segment_radii) if segment_radii else SEGMENT_RADIUS
+                below_floor = min(segment_ys) < -0.25 * min_radius
+                above_open_end = max(segment_ys) > trench_open_end + 0.25 * max_radius
+                if below_floor or above_open_end:
                     sim.colony.delete_cell(cell)
 
         def handle_lysis(sim):
@@ -291,6 +449,230 @@ class Simulation:
                     break
                 if norm.rvs() <= norm.ppf(self.lysis_p):
                     sim.colony.delete_cell(cell)
+
+        def apply_rigid_body_brownian_jitter(sim):
+            if (
+                brownian_longitudinal_std_px <= 0
+                and brownian_transverse_std_px <= 0
+                and self.brownian_rotation_std <= 0
+            ):
+                return
+
+            rho = self.brownian_persistence
+            noise_scale = np.sqrt(max(0.0, 1.0 - rho ** 2))
+            live_ids = set()
+            trench_center_x = 35.0
+            trench_half_width = trench_width_px / 2.0
+            trench_y_min = 0.0
+            trench_y_max = trench_width_px / 2.0 + trench_length_px
+            # Hard caps against unrealistically large rigid-body jumps.
+            max_dx_abs = self.brownian_max_dx_fraction_of_trench_width * trench_width_px
+            max_dy_abs = max(
+                self.brownian_max_dy_px_floor,
+                self.brownian_max_dy_fraction_of_segment_radius * SEGMENT_RADIUS,
+            )
+            max_dtheta_abs = self.brownian_max_dtheta
+            max_backoff_attempts = self.brownian_backoff_attempts
+            enforce_open_end_cap = not dynamic_brownian_mode
+
+            def _positions_inside_trench(segments, positions):
+                for segment, position in zip(segments, positions):
+                    radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
+                    x = float(position[0])
+                    y = float(position[1])
+                    if x < (trench_center_x - trench_half_width + radius):
+                        return False
+                    if x > (trench_center_x + trench_half_width - radius):
+                        return False
+                    if y < (trench_y_min + 0.25 * radius):
+                        return False
+                    if enforce_open_end_cap and y > (trench_y_max - 0.25 * radius):
+                        return False
+                return True
+
+            def _build_trial_positions(old_positions, center_vec, dx_value, dy_value, dtheta_value):
+                vec_type = center_vec.__class__
+                translation = vec_type(dx_value, dy_value)
+                return [
+                    center_vec + (old_pos - center_vec).rotated(dtheta_value) + translation
+                    for old_pos in old_positions
+                ]
+
+            def _apply_teleport(segment_bodies, old_positions, old_angles, center_vec, dx_value, dy_value, dtheta_value):
+                trial_positions = _build_trial_positions(
+                    old_positions=old_positions,
+                    center_vec=center_vec,
+                    dx_value=dx_value,
+                    dy_value=dy_value,
+                    dtheta_value=dtheta_value,
+                )
+                for body, trial_pos, old_angle in zip(segment_bodies, trial_positions, old_angles):
+                    body.position = trial_pos
+                    body.angle = old_angle + dtheta_value
+
+            def _apply_dynamic_jitter(segment_bodies, center, dx_value, dy_value, dtheta_value):
+                translational_vx = dx_value / frame_dt
+                translational_vy = dy_value / frame_dt
+                angular_velocity = dtheta_value / frame_dt
+
+                for body in segment_bodies:
+                    vec_type = body.position.__class__
+                    rel_x = float(body.position[0] - center[0])
+                    rel_y = float(body.position[1] - center[1])
+                    jitter_velocity = vec_type(
+                        translational_vx - angular_velocity * rel_y,
+                        translational_vy + angular_velocity * rel_x,
+                    )
+
+                    current_velocity = getattr(body, "velocity", vec_type(0.0, 0.0))
+                    current_velocity = vec_type(float(current_velocity[0]), float(current_velocity[1]))
+                    current_angular_velocity = float(getattr(body, "angular_velocity", 0.0))
+
+                    if brownian_mode == "velocity":
+                        body.velocity = current_velocity + jitter_velocity
+                    else:
+                        if hasattr(body, "apply_impulse_at_local_point"):
+                            body_mass = float(getattr(body, "mass", 1.0))
+                            body.apply_impulse_at_local_point(jitter_velocity * body_mass)
+                        else:
+                            body.velocity = current_velocity + jitter_velocity
+
+                    body.angular_velocity = current_angular_velocity + angular_velocity
+
+            for cell in sim.colony.cells:
+                group_id = getattr(cell, "group_id", None)
+                if group_id is None:
+                    continue
+                live_ids.add(group_id)
+
+                physics_rep = getattr(cell, "physics_representation", None)
+                segments = getattr(physics_rep, "segments", None)
+                if not segments:
+                    continue
+
+                prev_state = brownian_state.get(group_id, np.zeros(3, dtype=float))
+                dy = rho * prev_state[0] + noise_scale * np.random.normal(0.0, brownian_longitudinal_std_px)
+                dx = rho * prev_state[1] + noise_scale * np.random.normal(0.0, brownian_transverse_std_px)
+                dtheta = rho * prev_state[2] + noise_scale * np.random.normal(0.0, self.brownian_rotation_std)
+                dy = float(np.clip(dy, -max_dy_abs, max_dy_abs))
+                dx = float(np.clip(dx, -max_dx_abs, max_dx_abs))
+                dtheta = float(np.clip(dtheta, -max_dtheta_abs, max_dtheta_abs))
+
+                segment_bodies = [getattr(segment, "body", None) for segment in segments]
+                segment_bodies = [body for body in segment_bodies if body is not None]
+                if not segment_bodies:
+                    continue
+
+                vec_type = segment_bodies[0].position.__class__
+                center = np.mean(
+                    np.array([[float(body.position[0]), float(body.position[1])] for body in segment_bodies], dtype=float),
+                    axis=0,
+                )
+                center_vec = vec_type(center[0], center[1])
+                old_positions = [vec_type(float(body.position[0]), float(body.position[1])) for body in segment_bodies]
+                old_angles = [float(body.angle) for body in segment_bodies]
+
+                accepted_state = None
+                for attempt in range(max_backoff_attempts):
+                    scale = 0.5 ** attempt
+                    trial_dx = dx * scale
+                    trial_dy = dy * scale
+                    trial_dtheta = dtheta * scale
+                    trial_positions = _build_trial_positions(
+                        old_positions=old_positions,
+                        center_vec=center_vec,
+                        dx_value=trial_dx,
+                        dy_value=trial_dy,
+                        dtheta_value=trial_dtheta,
+                    )
+
+                    if _positions_inside_trench(segments, trial_positions):
+                        accepted_state = np.array([trial_dy, trial_dx, trial_dtheta], dtype=float)
+                        break
+
+                if accepted_state is None:
+                    brownian_state[group_id] = np.zeros(3, dtype=float)
+                else:
+                    if dynamic_brownian_mode:
+                        _apply_dynamic_jitter(
+                            segment_bodies=segment_bodies,
+                            center=center,
+                            dx_value=float(accepted_state[1]),
+                            dy_value=float(accepted_state[0]),
+                            dtheta_value=float(accepted_state[2]),
+                        )
+                    else:
+                        _apply_teleport(
+                            segment_bodies=segment_bodies,
+                            old_positions=old_positions,
+                            old_angles=old_angles,
+                            center_vec=center_vec,
+                            dx_value=float(accepted_state[1]),
+                            dy_value=float(accepted_state[0]),
+                            dtheta_value=float(accepted_state[2]),
+                        )
+                    brownian_state[group_id] = accepted_state
+
+            stale_ids = [group_id for group_id in brownian_state.keys() if group_id not in live_ids]
+            for group_id in stale_ids:
+                brownian_state.pop(group_id, None)
+
+        def project_segments_inside_trench(sim):
+            if not dynamic_brownian_mode:
+                return
+
+            trench_center_x = 35.0
+            trench_half_width = trench_width_px / 2.0
+            trench_y_min = 0.0
+            trench_y_max = trench_width_px / 2.0 + trench_length_px
+            angular_damping = self.brownian_projection_angular_damping
+
+            for cell in sim.colony.cells:
+                group_id = getattr(cell, "group_id", None)
+                physics_rep = getattr(cell, "physics_representation", None)
+                segments = getattr(physics_rep, "segments", None)
+                if not segments:
+                    continue
+
+                projected = False
+                for segment in segments:
+                    body = getattr(segment, "body", None)
+                    if body is None:
+                        continue
+
+                    radius = float(getattr(segment, "radius", SEGMENT_RADIUS))
+                    min_x = trench_center_x - trench_half_width + radius
+                    max_x = trench_center_x + trench_half_width - radius
+                    min_y = trench_y_min + 0.25 * radius
+
+                    x = float(body.position[0])
+                    y = float(body.position[1])
+                    clamped_x = min(max(x, min_x), max_x)
+                    clamped_y = max(y, min_y)
+
+                    if clamped_x == x and clamped_y == y:
+                        continue
+
+                    vec_type = body.position.__class__
+                    body.position = vec_type(clamped_x, clamped_y)
+                    if hasattr(body, "velocity"):
+                        velocity = getattr(body, "velocity")
+                        velocity = vec_type(float(velocity[0]), float(velocity[1]))
+                        if clamped_x != x:
+                            velocity = vec_type(0.0, float(velocity[1]))
+                        if clamped_y != y:
+                            velocity = vec_type(float(velocity[0]), 0.0)
+                        body.velocity = velocity
+                    projected = True
+
+                if projected:
+                    for segment in segments:
+                        body = getattr(segment, "body", None)
+                        if body is None or not hasattr(body, "angular_velocity"):
+                            continue
+                        body.angular_velocity = float(body.angular_velocity) * angular_damping
+                    if group_id in brownian_state:
+                        brownian_state[group_id][2] *= angular_damping
 
         def track_lineage(mother, daughter):
             mother_gen = lineage_info.get(mother.group_id, {}).get('generation', 0)
@@ -348,11 +730,17 @@ class Simulation:
 
         def step_and_capture_frame(frame_idx):
             just_divided_this_frame.clear()
+            if dynamic_brownian_mode:
+                apply_rigid_body_brownian_jitter(sim)
             for _ in range(SUB_STEPS):
                 sim.step()
             # Lysis once per output frame so probability is independent of substeps
             if self.lysis_p > 0:
                 handle_lysis(sim)
+            if dynamic_brownian_mode:
+                project_segments_inside_trench(sim)
+            else:
+                apply_rigid_body_brownian_jitter(sim)
 
             # Skip first 2 warmup frames (matching old engine)
             if frame_idx >= 2:
@@ -465,83 +853,39 @@ class Simulation:
         _atomic_pickle_dump(self.cell_timeseries, os.path.join(self.save_dir, "cell_timeseries.p"))
         _atomic_pickle_dump(self.space, os.path.join(self.save_dir, "space_timeseries.p"))
 
-    def draw_simulation_OPL(self, do_transformation=True, label_masks=True, return_output=False):
+    def draw_simulation_OPL(self, label_masks=True, return_output=False):
         """
         Draw the optical path length images from the simulation.
 
-        Uses segment-based drawing if the simulation was run with the new physics
-        engine, otherwise falls back to the old vertex-based pipeline.
+        Uses the maintained segment-based drawing pipeline.
 
-        :param bool do_transformation: Whether to bend cells (old pipeline only; new engine bends physically).
         :param bool label_masks: If True, masks are labelled per-cell; if False, binary.
         :param bool return_output: If True, return (OPL_scenes, masks).
         """
-        # Detect new-engine snapshots (CellSnapshot with segment data)
-        _has_segments = (
-            hasattr(self, 'cell_timeseries')
-            and len(self.cell_timeseries) > 0
-            and len(self.cell_timeseries[0]) > 0
-            and hasattr(self.cell_timeseries[0][0], 'segment_positions')
-        )
+        if not self._loaded_timeseries_uses_segments(getattr(self, "cell_timeseries", [])):
+            raise ValueError(
+                "Simulation cell_timeseries must contain segment-based snapshots. "
+                "Legacy rigid-body data is no longer supported."
+            )
 
-        if _has_segments:
-            from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
+        self.main_segments = get_trench_segments(self.space)
 
-            # Trench geometry for the Renderer (same pymunk space, just parse it)
-            self.main_segments = get_trench_segments(self.space)
+        self.cell_timeseries_segments = []
+        for frame_snapshots in self.cell_timeseries:
+            frame_segments = [snap.to_segment_dict() for snap in frame_snapshots]
+            self.cell_timeseries_segments.append(frame_segments)
 
-            # Build per-frame segment data for drawing
-            self.cell_timeseries_segments = []
-            for frame_snapshots in self.cell_timeseries:
-                frame_segments = [snap.to_segment_dict() for snap in frame_snapshots]
-                self.cell_timeseries_segments.append(frame_segments)
+        space_size = get_space_size_from_segments(self.cell_timeseries_segments, self.offset)
+        self._space_size = space_size
+        self._label_masks = label_masks
 
-            space_size = get_space_size_from_segments(self.cell_timeseries_segments, self.offset)
-            self._space_size = space_size
-            self._label_masks = label_masks
-            self._do_transformation = do_transformation
+        scenes = Parallel(n_jobs=-1)(delayed(draw_scene_from_segments)(
+            frame_segments, space_size, self.offset, label_masks
+        ) for frame_segments in tqdm(
+            self.cell_timeseries_segments, desc='Rendering cell optical path lengths'))
 
-            scenes = Parallel(n_jobs=-1)(delayed(draw_scene_from_segments)(
-                frame_segments, space_size, self.offset, label_masks
-            ) for frame_segments in tqdm(
-                self.cell_timeseries_segments, desc='Rendering cell optical path lengths'))
-
-            self.OPL_scenes = [s[0] for s in scenes]
-            self.masks = [s[1] for s in scenes]
-
-            # Build old-format properties for backwards compatibility
-            self.cell_timeseries_properties = []
-            for frame_snapshots in self.cell_timeseries:
-                frame_props = []
-                for snap in frame_snapshots:
-                    angle_deg = np.rad2deg(snap.angle) + 90
-                    pos = np.array([snap.position[0], snap.position[1]])
-                    frame_props.append([
-                        snap.length, snap.width, angle_deg, pos,
-                        1.0, 1.0, 0.0, 20,
-                        snap.pinching_sep, snap.mask_label, snap.ID
-                    ])
-                self.cell_timeseries_properties.append(frame_props)
-        else:
-            # Old pipeline (loaded from pickle or old Cell objects)
-            self.main_segments = get_trench_segments(self.space)
-            ID_props = generate_curve_props(self.cell_timeseries)
-
-            self.cell_timeseries_properties = Parallel(n_jobs=-1)(
-                delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(
-                    self.cell_timeseries, desc='Extracting cell properties from the simulation'))
-
-            space_size = get_space_size(self.cell_timeseries_properties)
-            self._space_size = space_size
-            self._do_transformation = do_transformation
-            self._label_masks = label_masks
-
-            scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
-                cell_properties, do_transformation, space_size, self.offset, label_masks
-            ) for cell_properties in tqdm(
-                self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
-            self.OPL_scenes = [_[0] for _ in scenes]
-            self.masks = [_[1] for _ in scenes]
+        self.OPL_scenes = [s[0] for s in scenes]
+        self.masks = [s[1] for s in scenes]
 
         if return_output:
             return self.OPL_scenes, self.masks

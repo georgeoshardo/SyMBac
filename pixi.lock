@@ -199,6 +199,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/37/82dbef0f6342eb01f54bca073ac1498433d6ce71e50c3c3282b655733b31/fonttools-4.61.1-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b6/36/853cad240ec63e21a37a512ee19c896b655ce1772d803a3dd80fccfe63fe/freetype_py-2.5.1-py3-none-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/6a/bd/d91c5e39f490a49df14320f4e8c80161cfcce09f1e2cde1edd16a551abb3/frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/0e/cb/316cc74b64be3174682ea2915d380fb7f50da926868122dc311442b75e11/geff-1.1.4.1.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/18/9d/4e52ab1a81556dcb6ed1b246d72ebde9773f23cf5848d0aa3ffba7c40ce7/geff_spec-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/a9/a780cc66f86335a6019f557a8aaca8fbb970728f0efd2430d15ff1beae0e/google_crc32c-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/50/1f/5155f55bd71cabd03765a4aac9ac446be129895271f73872c36ebd4b04b6/greenlet-3.3.2-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b6/9d/cd4777dbcf3bef9d9627e0fe4bc43d2e294b1baeb01d0422399d5e9de319/HeapDict-1.0.1-py3-none-any.whl
@@ -489,6 +491,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/6f/16/7decaa24a1bd3a70c607b2e29f0adc6159f36a7e40eaba59846414765fd4/fonttools-4.61.1-cp312-cp312-macosx_10_13_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/38/a8/258dd138ebe60c79cd8cfaa6d021599208a33f0175a5e29b01f60c9ab2c7/freetype_py-2.5.1-py3-none-macosx_10_9_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/2b/94/5c8a2b50a496b11dd519f4a24cb5496cf125681dd99e94c604ccdea9419a/frozenlist-1.8.0-cp312-cp312-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/0e/cb/316cc74b64be3174682ea2915d380fb7f50da926868122dc311442b75e11/geff-1.1.4.1.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/18/9d/4e52ab1a81556dcb6ed1b246d72ebde9773f23cf5848d0aa3ffba7c40ce7/geff_spec-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e9/5f/7307325b1198b59324c0fa9807cafb551afb65e831699f2ce211ad5c8240/google_crc32c-1.8.0-cp312-cp312-macosx_12_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/b6/9d/cd4777dbcf3bef9d9627e0fe4bc43d2e294b1baeb01d0422399d5e9de319/HeapDict-1.0.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/96/36/5bddefea3d7adf22a64f9aa9701492f8a9fe6948223f5cf2602c22ec9be7/hsluv-5.0.4-py2.py3-none-any.whl
@@ -773,6 +777,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/80/3b/a3e81b71aed5a688e89dfe0e2694b26b78c7d7f39a5ffd8a7d75f54a12a8/fonttools-4.61.1-cp312-cp312-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/93/6e/bd7fbfacca077bc6f34f1a1109800a2c41ab50f4704d3a0507ba41009915/freetype_py-2.5.1-py3-none-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/b8/af/38e51a553dd66eb064cdf193841f16f077585d4d28394c2fa6235cb41765/frozenlist-1.8.0-cp312-cp312-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/0e/cb/316cc74b64be3174682ea2915d380fb7f50da926868122dc311442b75e11/geff-1.1.4.1.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/18/9d/4e52ab1a81556dcb6ed1b246d72ebde9773f23cf5848d0aa3ffba7c40ce7/geff_spec-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/df/c0/87c2073e0c72515bb8733d4eef7b21548e8d189f094b5dad20b0ecaf64f6/google_crc32c-1.8.0-cp312-cp312-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/9b/40/cc802e067d02af8b60b6771cea7d57e21ef5e6659912814babb42b864713/greenlet-3.3.2-cp312-cp312-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/b6/9d/cd4777dbcf3bef9d9627e0fe4bc43d2e294b1baeb01d0422399d5e9de319/HeapDict-1.0.1-py3-none-any.whl
@@ -2621,6 +2627,44 @@ packages:
   - pkg:pypi/fsspec?source=compressed-mapping
   size: 148757
   timestamp: 1770387898414
+- pypi: https://files.pythonhosted.org/packages/0e/cb/316cc74b64be3174682ea2915d380fb7f50da926868122dc311442b75e11/geff-1.1.4.1.1-py3-none-any.whl
+  name: geff
+  version: 1.1.4.1.1
+  sha256: 0dd4ca252f880a91f7f26572d2de70a0c12fd7fa327a792960a64b096b3ac944
+  requires_dist:
+  - geff-spec<1.2
+  - networkx>=3.2.1
+  - numcodecs>=0.13,<0.16 ; python_full_version == '3.10.*'
+  - numcodecs>=0.13
+  - numcodecs>=0.15 ; python_full_version >= '3.13'
+  - numpy>=1.24
+  - numpy>=1.26 ; python_full_version >= '3.12'
+  - numpy>=2.1 ; python_full_version >= '3.13'
+  - pydantic>=2.11
+  - typer>=0.14.0
+  - zarr>=2.18,<4
+  - dask>=2024.10 ; extra == 'ctc'
+  - imagecodecs>=2025.3.30 ; extra == 'ctc'
+  - scikit-image>=0.23.2 ; extra == 'ctc'
+  - scikit-image>=0.25 ; python_full_version >= '3.13' and extra == 'ctc'
+  - tifffile>=2024.10 ; extra == 'ctc'
+  - pandas>=2 ; extra == 'pandas'
+  - pandas>=2.3 ; python_full_version >= '3.12' and extra == 'pandas'
+  - rustworkx>=0.16.0 ; extra == 'rx'
+  - spatial-graph>=0.0.4 ; extra == 'spatial-graph'
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/18/9d/4e52ab1a81556dcb6ed1b246d72ebde9773f23cf5848d0aa3ffba7c40ce7/geff_spec-1.1.1-py3-none-any.whl
+  name: geff-spec
+  version: 1.1.1
+  sha256: 2e1bd5ba5c6186cc5bac24f93ac74821f2c7e6ce2a7aa0af791c00b6203af80d
+  requires_dist:
+  - pydantic>=2.11
+  - numpy>=1.24
+  - numpy>=1.26 ; python_full_version >= '3.12'
+  - numpy>=2.1 ; python_full_version >= '3.13'
+  - annotated-types
+  - zarr>=2.18,<4
+  requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/gflags-2.2.2-h5888daf_1005.conda
   sha256: 6c33bf0c4d8f418546ba9c250db4e4221040936aef8956353bc764d4877bc39a
   md5: d411fc29e338efb48c5fd4576d71d881
@@ -8537,7 +8581,7 @@ packages:
 - pypi: ./
   name: symbac
   version: 0.5.2
-  sha256: 28dcbcdd75c1f7a8e88ac036a9e50c344e9ddb1db114b738ebb36ddcbef0893c
+  sha256: 655cf214144816316810f3ba6472b65ba40d4ab768587b7a6fb515fe2122781e
   requires_dist:
   - tifffile>=2026.2.24
   - scikit-image>=0.26.0
@@ -8560,6 +8604,7 @@ packages:
   - noise>=1.2.2
   - torch>=2.10.0 ; extra == 'torch'
   - cupy-cuda12x ; extra == 'cupy'
+  - geff>=1.1.0 ; extra == 'geff'
   - sphinx-automodapi ; extra == 'docs'
   - sphinx-autobuild ; extra == 'docs'
   - nbsphinx ; extra == 'docs'

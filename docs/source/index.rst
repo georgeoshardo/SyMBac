@@ -33,6 +33,7 @@ Contents
    :maxdepth: 3
 
    Mother machine simulations <examples/simple_mother_machine.ipynb>
+   Brownian jitter model <brownian_jitter_model>
 
 .. toctree:: 
    :caption: Guide: Agar Pad
@@ -46,12 +47,12 @@ Contents
 
    Training Omnipose <examples/omnipose_training_data_generator.ipynb>
    Segmenting with Omnipose <examples/seg_with_omnipose.ipynb>
+   Timeseries Tracking Data <examples/timeseries_tracking_data.ipynb>
 
 .. toctree::
    :caption: Classes reference
    :maxdepth: 3
 
-   symbac_cell
    symbac_PSF
    symbac_renderer
    symbac_simulation
@@ -61,7 +62,6 @@ Contents
    :maxdepth: 3
 
    symbac_cell_geometry
-   symbac_cell_simulation
    symbac_drawing
    symbac_misc
    symbac_pySHINE

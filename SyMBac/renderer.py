@@ -2,8 +2,9 @@ import importlib
 from glob import glob
 import numpy as np
 import psfmodels as psfm
+import json
 
-from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene, draw_scene_from_segments
+from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene_from_segments
 import warnings
 import napari
 import os
@@ -24,6 +25,7 @@ from PIL import Image
 from SyMBac.PSF import PSF_generator
 from SyMBac.pySHINE import cart2pol, sfMatch, lumMatch
 from skimage.filters import threshold_multiotsu
+from tifffile import imwrite
 import random
 
 _CONV_BACKEND = "fftconvolve"  # default (always available)
@@ -570,7 +572,7 @@ class Renderer:
             Intensity multiplier for device
         sigma : float
             Radius of a gaussian which simulates PSF apodisation
-        scene_no : int in range(len(cell_timeseries_properties))
+        scene_no : int in range(len(self.simulation.OPL_scenes))
             The index of which scene to render
         scale : float
             The micron/pixel value of the image
@@ -579,7 +581,7 @@ class Renderer:
         match_histogram : bool
             If true, match the intensity histogram of a synthetic image to a real image
         offset : int
-            The same offset value from draw_scene
+            The same offset value used by the segment renderer
         debug_plot : bool
             True if you want to see a quick preview of the rendered synthetic image
         noise_var : float
@@ -624,23 +626,13 @@ class Renderer:
 
         if cell_texture_strength > 0:
             texture_params = {"strength": cell_texture_strength, "scale": cell_texture_scale}
-            if hasattr(self.simulation, 'cell_timeseries_segments'):
-                textured_scene, mask = draw_scene_from_segments(
-                    self.simulation.cell_timeseries_segments[scene_no],
-                    self.simulation._space_size,
-                    self.simulation.offset,
-                    self.simulation._label_masks,
-                    cell_texture=texture_params,
-                )
-            else:
-                textured_scene, mask = draw_scene(
-                    self.simulation.cell_timeseries_properties[scene_no],
-                    self.simulation._do_transformation,
-                    self.simulation._space_size,
-                    self.simulation.offset,
-                    self.simulation._label_masks,
-                    cell_texture=texture_params,
-                )
+            textured_scene, mask = draw_scene_from_segments(
+                self.simulation.cell_timeseries_segments[scene_no],
+                self.simulation._space_size,
+                self.simulation.offset,
+                self.simulation._label_masks,
+                cell_texture=texture_params,
+            )
             # Apply OPL floor on the untextured scene, then reapply texture
             # modulation to preserve texture contrast at higher floor values.
             if edge_floor_opl > 0 and base_scene.shape == textured_scene.shape:
@@ -1254,3 +1246,205 @@ class Renderer:
                                 zip(
                                     range(render_sample_parameters["n_samples"]), render_sample_parameters["media_multipliers"], render_sample_parameters["cell_multipliers"], render_sample_parameters["device_multipliers"], render_sample_parameters["sigmas"], render_sample_parameters["scene_nos"], render_sample_parameters["hist_match_bools"], render_sample_parameters["noise_match_bools"], render_sample_parameters["fourier_match_bools"])
                                 , desc="Rendering synthetic images"))
+
+    def generate_timeseries_training_data(
+        self,
+        save_dir,
+        burn_in=0,
+        sample_amount=0.02,
+        n_series=1,
+        frames_per_series=None,
+        mask_dtype=np.uint16,
+        export_geff=True,
+        seed=None,
+        n_jobs=1,
+        image_format="tiff",
+    ):
+        """
+        Generate temporally coherent training sequences for tracking.
+
+        Rendering parameters are sampled once per series and held constant
+        across all frames in that series. Different series receive different
+        sampled parameters.
+        """
+        if not hasattr(self, "params"):
+            raise AttributeError(
+                "Renderer parameters not initialised. Run optimise_synth_image(...) or set renderer.params first."
+            )
+        if isinstance(n_series, bool) or not isinstance(n_series, int) or n_series <= 0:
+            raise ValueError("n_series must be a positive integer.")
+        if isinstance(burn_in, bool) or not isinstance(burn_in, int) or burn_in < 0:
+            raise ValueError("burn_in must be a non-negative integer.")
+        if sample_amount < 0:
+            raise ValueError("sample_amount must be >= 0.")
+
+        available_frames = self.simulation.sim_length - burn_in
+        if available_frames <= 0:
+            raise ValueError(
+                f"burn_in={burn_in} leaves no frames to render from sim_length={self.simulation.sim_length}."
+            )
+        if frames_per_series is None:
+            frames_per_series = available_frames
+        if (
+            isinstance(frames_per_series, bool)
+            or not isinstance(frames_per_series, int)
+            or frames_per_series <= 0
+        ):
+            raise ValueError("frames_per_series must be a positive integer.")
+        if frames_per_series > available_frames:
+            raise ValueError(
+                f"frames_per_series={frames_per_series} exceeds available frames={available_frames} "
+                f"(sim_length={self.simulation.sim_length}, burn_in={burn_in})."
+            )
+
+        image_format = str(image_format).lower()
+        if image_format not in {"tif", "tiff", "png"}:
+            raise ValueError("image_format must be one of: 'tif', 'tiff', 'png'.")
+        image_ext = "png" if image_format == "png" else "tiff"
+        mask_dtype = np.dtype(mask_dtype)
+
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+        rng = np.random.default_rng(seed)
+
+        os.makedirs(save_dir, exist_ok=True)
+        scene_nos = np.arange(burn_in, burn_in + frames_per_series, dtype=int)
+        base_params = self.params.kwargs
+
+        def _series_parameters():
+            return {
+                "media_multiplier": float(
+                    rng.uniform(1 - sample_amount, 1 + sample_amount) * base_params["media_multiplier"]
+                ),
+                "cell_multiplier": float(
+                    rng.uniform(1 - sample_amount, 1 + sample_amount) * base_params["cell_multiplier"]
+                ),
+                "device_multiplier": float(
+                    rng.uniform(1 - sample_amount, 1 + sample_amount) * base_params["device_multiplier"]
+                ),
+                "sigma": float(
+                    rng.uniform(1 - sample_amount, 1 + sample_amount) * base_params["sigma"]
+                ),
+                "match_histogram": bool(base_params["match_histogram"]),
+                "match_noise": bool(base_params["match_noise"]),
+                "match_fourier": bool(base_params["match_fourier"]),
+                "noise_var": float(base_params["noise_var"]),
+                "defocus": float(base_params["defocus"]),
+                "halo_top_intensity": float(base_params["halo_top_intensity"]),
+                "halo_bottom_intensity": float(base_params["halo_bottom_intensity"]),
+                "halo_start": float(base_params["halo_start"]),
+                "halo_end": float(base_params["halo_end"]),
+                "cell_texture_strength": float(base_params["cell_texture_strength"]),
+                "cell_texture_scale": float(base_params["cell_texture_scale"]),
+                "edge_floor_opl": float(base_params.get("edge_floor_opl", 0.0)),
+            }
+
+        metadata = {
+            "save_dir": os.path.abspath(save_dir),
+            "n_series": int(n_series),
+            "burn_in": int(burn_in),
+            "frames_per_series": int(frames_per_series),
+            "simulation_frame_start": int(scene_nos[0]),
+            "simulation_frame_end_exclusive": int(scene_nos[-1] + 1),
+            "sample_amount": float(sample_amount),
+            "mask_dtype": str(mask_dtype),
+            "image_format": image_ext,
+            "series": [],
+        }
+
+        for series_idx in range(n_series):
+            series_id = f"series_{series_idx:03d}"
+            series_dir = os.path.join(save_dir, series_id)
+            images_dir = os.path.join(series_dir, "images")
+            masks_dir = os.path.join(series_dir, "masks")
+            os.makedirs(images_dir, exist_ok=True)
+            os.makedirs(masks_dir, exist_ok=True)
+
+            params = _series_parameters()
+            series_real_image = random.choice(self.additional_real_images) if self.additional_real_images else None
+
+            def _render_one(frame_idx, scene_no):
+                syn_image, mask, _ = self.generate_test_comparison(
+                    media_multiplier=params["media_multiplier"],
+                    cell_multiplier=params["cell_multiplier"],
+                    device_multiplier=params["device_multiplier"],
+                    sigma=params["sigma"],
+                    scene_no=int(scene_no),
+                    match_fourier=params["match_fourier"],
+                    match_histogram=params["match_histogram"],
+                    match_noise=params["match_noise"],
+                    debug_plot=False,
+                    noise_var=params["noise_var"],
+                    defocus=params["defocus"],
+                    halo_top_intensity=params["halo_top_intensity"],
+                    halo_bottom_intensity=params["halo_bottom_intensity"],
+                    halo_start=params["halo_start"],
+                    halo_end=params["halo_end"],
+                    random_real_image=series_real_image,
+                    cell_texture_strength=params["cell_texture_strength"],
+                    cell_texture_scale=params["cell_texture_scale"],
+                    edge_floor_opl=params["edge_floor_opl"],
+                )
+                image_path = os.path.join(images_dir, f"frame_{frame_idx:05d}.{image_ext}")
+                mask_path = os.path.join(masks_dir, f"frame_{frame_idx:05d}.{image_ext}")
+
+                if image_ext == "png":
+                    Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image))).save(image_path)
+                    Image.fromarray(mask.astype(mask_dtype, copy=False)).save(mask_path)
+                else:
+                    imwrite(image_path, skimage.img_as_uint(rescale_intensity(syn_image)))
+                    imwrite(mask_path, mask.astype(mask_dtype, copy=False))
+
+                return {
+                    "frame_idx": int(frame_idx),
+                    "simulation_frame_idx": int(scene_no),
+                    "image_path": os.path.relpath(image_path, series_dir),
+                    "mask_path": os.path.relpath(mask_path, series_dir),
+                }
+
+            if n_jobs == 1:
+                frames = [_render_one(frame_idx, scene_no) for frame_idx, scene_no in enumerate(scene_nos)]
+            else:
+                frames = Parallel(n_jobs=n_jobs, backend="threading")(
+                    delayed(_render_one)(frame_idx, scene_no)
+                    for frame_idx, scene_no in enumerate(scene_nos)
+                )
+                frames = sorted(frames, key=lambda item: item["frame_idx"])
+
+            manifest = {
+                "series_id": series_id,
+                "simulation_frame_start": int(scene_nos[0]),
+                "simulation_frame_end_exclusive": int(scene_nos[-1] + 1),
+                "render_parameters": params,
+                "frames": frames,
+            }
+            manifest_path = os.path.join(series_dir, "manifest.json")
+            with open(manifest_path, "w", encoding="utf-8") as handle:
+                json.dump(manifest, handle, indent=2)
+
+            geff_path = None
+            if export_geff:
+                from SyMBac.lineage import Lineage
+
+                lineage = Lineage(self.simulation)
+                geff_path = os.path.join(series_dir, "lineage.geff")
+                lineage.to_geff(
+                    geff_path,
+                    frame_range=(int(scene_nos[0]), int(scene_nos[-1] + 1)),
+                    overwrite=True,
+                )
+
+            metadata["series"].append(
+                {
+                    "series_id": series_id,
+                    "manifest_path": os.path.relpath(manifest_path, save_dir),
+                    "lineage_store": os.path.relpath(geff_path, save_dir) if geff_path else None,
+                }
+            )
+
+        metadata_path = os.path.join(save_dir, "metadata.json")
+        with open(metadata_path, "w", encoding="utf-8") as handle:
+            json.dump(metadata, handle, indent=2)
+
+        return metadata

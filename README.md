@@ -42,7 +42,7 @@ Additionally,
 
 <img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/speed_comparison.png" alt="comparisons" width="400"  />
 
-* The image generation process uses a rigid body physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:
+* The image generation process uses a segment-chain physics model to simulate bacterial growth, 3D cell geometry to calculate the light's optical path, and a model of the phase contrast/fluorescence optics (point spread function), with some post-rendering optimisation to match image similarity:
 
 <img src="https://github.com/georgeoshardo/SyMBac/raw/main/readme_files/image_generation.jpeg" alt="comparisons"  width="600" />
 
