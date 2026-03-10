@@ -3,8 +3,8 @@ from joblib import Parallel, delayed
 import pickle
 import tempfile
 from dataclasses import fields, is_dataclass
-from SyMBac._deprecation import _UNSET, _resolve_deprecated_parameter, _require_provided
-from SyMBac.drawing import draw_scene, get_space_size, gen_cell_props_for_draw, generate_curve_props
+from SyMBac._deprecation import _UNSET, _require_provided
+from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 from SyMBac.trench_geometry import  get_trench_segments
 import napari
 import os
@@ -51,7 +51,7 @@ class Simulation:
             substeps = 100
         )
     >>> my_simulation.run_simulation(show_window=False)
-    >>> my_simulation.draw_simulation_OPL(do_transformation=True, label_masks=True)
+    >>> my_simulation.draw_simulation_OPL(label_masks=True)
     >>> my_simulation.visualise_in_napari()
 
     """
@@ -90,8 +90,6 @@ class Simulation:
         brownian_backoff_attempts=5,
         brownian_application_mode="teleport",
         brownian_projection_angular_damping=0.35,
-        max_length_var=_UNSET,
-        width_var=_UNSET,
     ):
         """
         Initialising a Simulation object
@@ -203,23 +201,6 @@ class Simulation:
         _require_provided(api_name, "resize_amount", resize_amount)
         _require_provided(api_name, "save_dir", save_dir)
 
-        max_length_std, _ = _resolve_deprecated_parameter(
-            api_name=api_name,
-            new_name="max_length_std",
-            new_value=max_length_std,
-            legacy_name="max_length_var",
-            legacy_value=max_length_var,
-            compatibility_note="`max_length_var` is interpreted as a standard deviation in this API.",
-        )
-        width_std, _ = _resolve_deprecated_parameter(
-            api_name=api_name,
-            new_name="width_std",
-            new_value=width_std,
-            legacy_name="width_var",
-            legacy_value=width_var,
-            compatibility_note="`width_var` is interpreted as a standard deviation in this API.",
-        )
-
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
             raise ValueError("substeps must be an integer greater than 0.")
         if cell_config_overrides is not None and not isinstance(cell_config_overrides, dict):
@@ -263,10 +244,8 @@ class Simulation:
         self.trench_width = trench_width
         self.cell_max_length = cell_max_length
         self.max_length_std = max_length_std
-        self.max_length_var = max_length_std
         self.cell_width = cell_width
         self.width_std = width_std
-        self.width_var = width_std
         self.lysis_p = lysis_p
         self.sim_length = sim_length
         self.pix_mic_conv = pix_mic_conv
@@ -316,8 +295,24 @@ class Simulation:
                 self.cell_timeseries = pickle.load(f)
             with open(os.path.join(self.load_sim_dir, "space_timeseries.p"), 'rb') as f:
                 self.space = pickle.load(f)
+            if not self._loaded_timeseries_uses_segments(self.cell_timeseries):
+                raise ValueError(
+                    "Legacy simulation artifacts are no longer supported. "
+                    "Regenerate the simulation with the current segment-based engine."
+                )
 
-    
+    @staticmethod
+    def _loaded_timeseries_uses_segments(cell_timeseries):
+        if not isinstance(cell_timeseries, (list, tuple)):
+            return False
+        for frame in cell_timeseries:
+            if not isinstance(frame, (list, tuple)):
+                return False
+            for cell in frame:
+                if not hasattr(cell, "segment_positions"):
+                    return False
+        return True
+
 
 
     def run_simulation(self, show_window=True):
@@ -858,83 +853,39 @@ class Simulation:
         _atomic_pickle_dump(self.cell_timeseries, os.path.join(self.save_dir, "cell_timeseries.p"))
         _atomic_pickle_dump(self.space, os.path.join(self.save_dir, "space_timeseries.p"))
 
-    def draw_simulation_OPL(self, do_transformation=True, label_masks=True, return_output=False):
+    def draw_simulation_OPL(self, label_masks=True, return_output=False):
         """
         Draw the optical path length images from the simulation.
 
-        Uses segment-based drawing if the simulation was run with the new physics
-        engine, otherwise falls back to the old vertex-based pipeline.
+        Uses the maintained segment-based drawing pipeline.
 
-        :param bool do_transformation: Whether to bend cells (old pipeline only; new engine bends physically).
         :param bool label_masks: If True, masks are labelled per-cell; if False, binary.
         :param bool return_output: If True, return (OPL_scenes, masks).
         """
-        # Detect new-engine snapshots (CellSnapshot with segment data)
-        _has_segments = (
-            hasattr(self, 'cell_timeseries')
-            and len(self.cell_timeseries) > 0
-            and len(self.cell_timeseries[0]) > 0
-            and hasattr(self.cell_timeseries[0][0], 'segment_positions')
-        )
+        if not self._loaded_timeseries_uses_segments(getattr(self, "cell_timeseries", [])):
+            raise ValueError(
+                "Simulation cell_timeseries must contain segment-based snapshots. "
+                "Legacy rigid-body data is no longer supported."
+            )
 
-        if _has_segments:
-            from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
+        self.main_segments = get_trench_segments(self.space)
 
-            # Trench geometry for the Renderer (same pymunk space, just parse it)
-            self.main_segments = get_trench_segments(self.space)
+        self.cell_timeseries_segments = []
+        for frame_snapshots in self.cell_timeseries:
+            frame_segments = [snap.to_segment_dict() for snap in frame_snapshots]
+            self.cell_timeseries_segments.append(frame_segments)
 
-            # Build per-frame segment data for drawing
-            self.cell_timeseries_segments = []
-            for frame_snapshots in self.cell_timeseries:
-                frame_segments = [snap.to_segment_dict() for snap in frame_snapshots]
-                self.cell_timeseries_segments.append(frame_segments)
+        space_size = get_space_size_from_segments(self.cell_timeseries_segments, self.offset)
+        self._space_size = space_size
+        self._label_masks = label_masks
 
-            space_size = get_space_size_from_segments(self.cell_timeseries_segments, self.offset)
-            self._space_size = space_size
-            self._label_masks = label_masks
-            self._do_transformation = do_transformation
+        scenes = Parallel(n_jobs=-1)(delayed(draw_scene_from_segments)(
+            frame_segments, space_size, self.offset, label_masks
+        ) for frame_segments in tqdm(
+            self.cell_timeseries_segments, desc='Rendering cell optical path lengths'))
 
-            scenes = Parallel(n_jobs=-1)(delayed(draw_scene_from_segments)(
-                frame_segments, space_size, self.offset, label_masks
-            ) for frame_segments in tqdm(
-                self.cell_timeseries_segments, desc='Rendering cell optical path lengths'))
-
-            self.OPL_scenes = [s[0] for s in scenes]
-            self.masks = [s[1] for s in scenes]
-
-            # Build old-format properties for backwards compatibility
-            self.cell_timeseries_properties = []
-            for frame_snapshots in self.cell_timeseries:
-                frame_props = []
-                for snap in frame_snapshots:
-                    angle_deg = np.rad2deg(snap.angle) + 90
-                    pos = np.array([snap.position[0], snap.position[1]])
-                    frame_props.append([
-                        snap.length, snap.width, angle_deg, pos,
-                        1.0, 1.0, 0.0, 20,
-                        snap.pinching_sep, snap.mask_label, snap.ID
-                    ])
-                self.cell_timeseries_properties.append(frame_props)
-        else:
-            # Old pipeline (loaded from pickle or old Cell objects)
-            self.main_segments = get_trench_segments(self.space)
-            ID_props = generate_curve_props(self.cell_timeseries)
-
-            self.cell_timeseries_properties = Parallel(n_jobs=-1)(
-                delayed(gen_cell_props_for_draw)(a, ID_props) for a in tqdm(
-                    self.cell_timeseries, desc='Extracting cell properties from the simulation'))
-
-            space_size = get_space_size(self.cell_timeseries_properties)
-            self._space_size = space_size
-            self._do_transformation = do_transformation
-            self._label_masks = label_masks
-
-            scenes = Parallel(n_jobs=-1)(delayed(draw_scene)(
-                cell_properties, do_transformation, space_size, self.offset, label_masks
-            ) for cell_properties in tqdm(
-                self.cell_timeseries_properties, desc='Rendering cell optical path lengths'))
-            self.OPL_scenes = [_[0] for _ in scenes]
-            self.masks = [_[1] for _ in scenes]
+        self.OPL_scenes = [s[0] for s in scenes]
+        self.masks = [s[1] for s in scenes]
 
         if return_output:
             return self.OPL_scenes, self.masks

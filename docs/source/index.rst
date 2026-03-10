@@ -53,7 +53,6 @@ Contents
    :caption: Classes reference
    :maxdepth: 3
 
-   symbac_cell
    symbac_PSF
    symbac_renderer
    symbac_simulation
@@ -63,7 +62,6 @@ Contents
    :maxdepth: 3
 
    symbac_cell_geometry
-   symbac_cell_simulation
    symbac_drawing
    symbac_misc
    symbac_pySHINE

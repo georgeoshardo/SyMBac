@@ -4,7 +4,7 @@ import numpy as np
 import psfmodels as psfm
 import json
 
-from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene, draw_scene_from_segments
+from SyMBac.drawing import make_images_same_shape, perc_diff, draw_scene_from_segments
 import warnings
 import napari
 import os
@@ -572,7 +572,7 @@ class Renderer:
             Intensity multiplier for device
         sigma : float
             Radius of a gaussian which simulates PSF apodisation
-        scene_no : int in range(len(cell_timeseries_properties))
+        scene_no : int in range(len(self.simulation.OPL_scenes))
             The index of which scene to render
         scale : float
             The micron/pixel value of the image
@@ -581,7 +581,7 @@ class Renderer:
         match_histogram : bool
             If true, match the intensity histogram of a synthetic image to a real image
         offset : int
-            The same offset value from draw_scene
+            The same offset value used by the segment renderer
         debug_plot : bool
             True if you want to see a quick preview of the rendered synthetic image
         noise_var : float
@@ -626,23 +626,13 @@ class Renderer:
 
         if cell_texture_strength > 0:
             texture_params = {"strength": cell_texture_strength, "scale": cell_texture_scale}
-            if hasattr(self.simulation, 'cell_timeseries_segments'):
-                textured_scene, mask = draw_scene_from_segments(
-                    self.simulation.cell_timeseries_segments[scene_no],
-                    self.simulation._space_size,
-                    self.simulation.offset,
-                    self.simulation._label_masks,
-                    cell_texture=texture_params,
-                )
-            else:
-                textured_scene, mask = draw_scene(
-                    self.simulation.cell_timeseries_properties[scene_no],
-                    self.simulation._do_transformation,
-                    self.simulation._space_size,
-                    self.simulation.offset,
-                    self.simulation._label_masks,
-                    cell_texture=texture_params,
-                )
+            textured_scene, mask = draw_scene_from_segments(
+                self.simulation.cell_timeseries_segments[scene_no],
+                self.simulation._space_size,
+                self.simulation.offset,
+                self.simulation._label_masks,
+                cell_texture=texture_params,
+            )
             # Apply OPL floor on the untextured scene, then reapply texture
             # modulation to preserve texture contrast at higher floor values.
             if edge_floor_opl > 0 and base_scene.shape == textured_scene.shape:

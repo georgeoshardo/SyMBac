@@ -25,7 +25,7 @@ class Lineage:
         if isinstance(cell_dict, dict):
             attr_names.update(cell_dict.keys())
         attr_names.update(cls._iter_slot_names(cell))
-        attr_names.update({"mask_label", "mother_mask_label", "t", "mother"})
+        attr_names.update({"mask_label", "mother_mask_label", "t"})
 
         record = {}
         for attr_name in attr_names:
@@ -65,14 +65,6 @@ class Lineage:
                 lineage_df[["mother_mask_label", "mask_label"]].itertuples(index=False, name=None)
             )
 
-        for cell in all_cells:
-            mother = getattr(cell, "mother", None)
-            mother_mask_label = getattr(mother, "mask_label", None) if mother is not None else None
-            mask_label = getattr(cell, "mask_label", None)
-            if self._is_missing(mother_mask_label) or self._is_missing(mask_label):
-                continue
-            family_tree_edges.append((mother_mask_label, mask_label))
-
         if family_tree_edges:
             unique_edges = list(dict.fromkeys(family_tree_edges))
             self.family_tree_edgelist = np.array(unique_edges, dtype=object)
@@ -98,10 +90,7 @@ class Lineage:
 
         for node in list(self.temporal_lineage_graph.nodes):
             cell = self.temporal_lineage_graph.nodes[node]["cell"]
-            mother = getattr(cell, "mother", None)
-            mother_mask_label = getattr(mother, "mask_label", None) if mother is not None else None
-            if self._is_missing(mother_mask_label):
-                mother_mask_label = getattr(cell, "mother_mask_label", None)
+            mother_mask_label = getattr(cell, "mother_mask_label", None)
 
             if self._is_missing(mother_mask_label):
                 continue

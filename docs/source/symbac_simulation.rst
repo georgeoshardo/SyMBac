@@ -9,8 +9,6 @@ SyMBac.simulation
 Compatibility Notes
 -------------------
 
-* ``max_length_var`` and ``width_var`` are deprecated aliases for ``max_length_std`` and ``width_std``.
-  They emit a ``FutureWarning`` and are scheduled for removal on ``2026-09-01``.
 * ``max_length_std`` and ``width_std`` are interpreted in simulation world units and converted
   using the full resolution ``scale_factor`` across the maintained simulation APIs.
 * All parameters after ``cell_max_length`` in ``Simulation.__init__`` are keyword-only to prevent
@@ -28,4 +26,5 @@ Compatibility Notes
   ``brownian_projection_angular_damping``.
   See :doc:`brownian_jitter_model` for equations and parameter guidance.
 * ``Simulation.run_simulation`` writes ``cell_timeseries.p`` and ``space_timeseries.p`` into ``save_dir``.
-* ``Simulation(load_sim_dir=...)`` expects both artifacts in ``load_sim_dir``.
+* ``Simulation(load_sim_dir=...)`` only supports artifacts produced by the maintained segment-chain simulator.
+  Legacy rigid-body pickles are no longer supported and must be regenerated.

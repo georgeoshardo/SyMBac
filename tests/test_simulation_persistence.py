@@ -4,6 +4,7 @@ import pickle
 import sys
 import types
 
+import numpy as np
 import pytest
 
 if importlib.util.find_spec("napari") is None:
@@ -15,7 +16,6 @@ if importlib.util.find_spec("napari") is None:
 from SyMBac.simulation import Simulation
 import SyMBac.simulation as simulation_module
 import SyMBac.cell_snapshot as cell_snapshot_module
-import SyMBac.cell_simulation as cell_simulation_module
 import SyMBac.physics.simulator as physics_simulator_module
 from pymunk.vec2d import Vec2d
 
@@ -53,12 +53,46 @@ class _DummySnapshot:
         lysis_p=0.0,
     ):
         self.mask_label = simcell.group_id
-        self.segment_positions = []
+        self.ID = simcell.group_id
+        self.segment_positions = np.array([[35.0, 10.0]], dtype=np.float64)
+        self.segment_radii = np.array([0.5], dtype=np.float64)
         self.t = t
         self.generation = generation
         self.mother_mask_label = mother_mask_label
         self.just_divided = just_divided
         self.lysis_p = lysis_p
+
+    def to_segment_dict(self):
+        return {
+            "positions": self.segment_positions,
+            "radii": self.segment_radii,
+            "mask_label": self.mask_label,
+            "cell_id": self.ID,
+        }
+
+
+class _StoredSnapshot:
+    def __init__(self, mask_label=1, positions=((5.0, 7.0),), radii=(1.0,), t=0, mother_mask_label=None):
+        self.mask_label = mask_label
+        self.ID = mask_label
+        self.segment_positions = np.array(positions, dtype=np.float64)
+        self.segment_radii = np.array(radii, dtype=np.float64)
+        self.t = t
+        self.mother_mask_label = mother_mask_label
+
+    def to_segment_dict(self):
+        return {
+            "positions": self.segment_positions,
+            "radii": self.segment_radii,
+            "mask_label": self.mask_label,
+            "cell_id": self.ID,
+        }
+
+
+class _LegacyStoredCell:
+    def __init__(self, mask_label=1, t=0):
+        self.mask_label = mask_label
+        self.t = t
 
 
 class _DummyBody:
@@ -169,7 +203,7 @@ def test_load_sim_dir_missing_artifacts_error_names_expected_files(tmp_path):
 def test_load_sim_dir_reads_existing_artifacts(tmp_path):
     load_dir = tmp_path / "load_complete"
     load_dir.mkdir()
-    expected_cells = [["frame"]]
+    expected_cells = [[_StoredSnapshot(mask_label=3, t=0)]]
     expected_space = {"space": 1}
     with open(load_dir / "cell_timeseries.p", "wb") as handle:
         pickle.dump(expected_cells, handle)
@@ -181,34 +215,53 @@ def test_load_sim_dir_reads_existing_artifacts(tmp_path):
     kwargs["save_dir"] = str(tmp_path / "save_target")
 
     simulation = Simulation(**kwargs)
-    assert simulation.cell_timeseries == expected_cells
+    loaded_snapshot = simulation.cell_timeseries[0][0]
+    assert loaded_snapshot.mask_label == expected_cells[0][0].mask_label
+    assert np.array_equal(loaded_snapshot.segment_positions, expected_cells[0][0].segment_positions)
+    assert np.array_equal(loaded_snapshot.segment_radii, expected_cells[0][0].segment_radii)
     assert simulation.space == expected_space
 
 
-def test_cell_simulation_run_simulation_persists_required_pickles(tmp_path):
-    save_dir = tmp_path / "legacy_sim"
-    save_dir.mkdir()
-    result = cell_simulation_module.run_simulation(
-        trench_length=15,
-        trench_width=1.5,
-        cell_max_length=6.0,
-        cell_width=1.0,
-        sim_length=2,
-        pix_mic_conv=0.065,
-        gravity=0,
-        phys_iters=1,
-        max_length_std=0.2,
-        width_std=0.1,
-        save_dir=str(save_dir),
-        resize_amount=1,
-        lysis_p=0.0,
-        show_window=False,
-    )
+def test_load_sim_dir_rejects_legacy_artifacts(tmp_path):
+    load_dir = tmp_path / "load_legacy"
+    load_dir.mkdir()
+    with open(load_dir / "cell_timeseries.p", "wb") as handle:
+        pickle.dump([[_LegacyStoredCell(mask_label=2, t=0)]], handle)
+    with open(load_dir / "space_timeseries.p", "wb") as handle:
+        pickle.dump({"space": 1}, handle)
 
-    assert isinstance(result, tuple)
-    assert len(result) == 3
-    assert (save_dir / "cell_timeseries.p").exists()
-    assert (save_dir / "space_timeseries.p").exists()
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs["load_sim_dir"] = str(load_dir)
+    kwargs["save_dir"] = str(tmp_path / "save_target")
+
+    with pytest.raises(ValueError, match="Legacy simulation artifacts are no longer supported"):
+        Simulation(**kwargs)
+
+
+def test_draw_simulation_opl_renders_segment_snapshots_from_loaded_artifacts(tmp_path, monkeypatch):
+    load_dir = tmp_path / "load_segments"
+    load_dir.mkdir()
+    expected_cells = [[_StoredSnapshot(mask_label=5, positions=((4.0, 6.0),), radii=(1.25,), t=0)]]
+    with open(load_dir / "cell_timeseries.p", "wb") as handle:
+        pickle.dump(expected_cells, handle)
+    with open(load_dir / "space_timeseries.p", "wb") as handle:
+        pickle.dump({"space": 1}, handle)
+
+    monkeypatch.setattr(simulation_module, "get_trench_segments", lambda _space: "main_segments")
+
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs["load_sim_dir"] = str(load_dir)
+    kwargs["save_dir"] = str(tmp_path / "save_target")
+
+    simulation = Simulation(**kwargs)
+    scenes, masks = simulation.draw_simulation_OPL(label_masks=True, return_output=True)
+
+    assert simulation.main_segments == "main_segments"
+    assert len(simulation.cell_timeseries_segments) == 1
+    assert "cell_timeseries_properties" not in simulation.__dict__
+    assert len(scenes) == 1
+    assert len(masks) == 1
+    assert scenes[0].shape == masks[0].shape
 
 
 def test_run_simulation_applies_low_level_config_overrides(tmp_path, monkeypatch):
