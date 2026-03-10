@@ -6,7 +6,6 @@ from dataclasses import fields, is_dataclass
 from SyMBac._deprecation import _UNSET, _require_provided
 from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 from SyMBac.trench_geometry import  get_trench_segments
-import napari
 import os
 from tqdm.auto import tqdm
 from scipy.stats import norm
@@ -319,7 +318,7 @@ class Simulation:
         """
         Run the simulation using the segment-chain physics engine.
 
-        :param bool show_window: If True, opens a live Pyglet window with physics debug drawing while simulating.
+        :param bool show_window: If True, opens a live pyqtgraph preview window while simulating.
         """
         from SyMBac.physics.config import CellConfig, PhysicsConfig
         from SyMBac.physics.simulator import Simulator
@@ -760,19 +759,27 @@ class Simulation:
 
         if show_window:
             try:
-                import pyglet
-                from pymunk.pyglet_util import DrawOptions
+                import threading
+                import time
+                from SyMBac.live_viewer import (
+                    LiveSimulationViewer,
+                    build_live_frame_segments,
+                    render_live_frame_image,
+                )
             except ImportError as e:
                 raise ImportError(
-                    "show_window=True requires pyglet. Install it or rerun with show_window=False."
+                    "show_window=True requires pyqtgraph and a working Qt binding. "
+                    "Install them or rerun with show_window=False."
                 ) from e
 
-            import threading
-            import time
-
-            window = pyglet.window.Window(900, 900, "SyMBac", resizable=True)
-            draw_options = DrawOptions()
-            draw_options.shape_outline_color = (235, 235, 235, 255)
+            preview_margin = int(np.ceil(max(SEGMENT_RADIUS * 4.0, 24.0)))
+            preview_trench_center_x = 35.0
+            preview_trench_height = trench_width_px / 2.0 + trench_length_px
+            preview_shape = (
+                max(128, int(np.ceil(preview_trench_height + preview_margin))),
+                max(128, int(np.ceil(preview_trench_center_x + trench_width_px / 2.0 + preview_margin))),
+            )
+            viewer = LiveSimulationViewer(scene_shape=preview_shape, title="SyMBac Live")
             progress_bar = tqdm(total=total_frames, desc='Running simulation')
             state = {
                 "frame_idx": 0,
@@ -780,17 +787,37 @@ class Simulation:
                 "stopped": False,
                 "done": False,
                 "worker_error": None,
+                "latest_image": render_live_frame_image(
+                    build_live_frame_segments(sim.colony.cells),
+                    scene_shape=preview_shape,
+                    trench_center_x=preview_trench_center_x,
+                    trench_width=trench_width_px,
+                    trench_height=preview_trench_height,
+                ),
+                "latest_image_frame_idx": -1,
             }
-            sim_lock = threading.Lock()
+            state_lock = threading.Lock()
             stop_event = threading.Event()
+
+            def publish_live_frame(frame_idx):
+                image = render_live_frame_image(
+                    build_live_frame_segments(sim.colony.cells),
+                    scene_shape=preview_shape,
+                    trench_center_x=preview_trench_center_x,
+                    trench_width=trench_width_px,
+                    trench_height=preview_trench_height,
+                )
+                with state_lock:
+                    state["latest_image"] = image
+                    state["latest_image_frame_idx"] = frame_idx
 
             def simulation_worker():
                 try:
                     for frame_idx in range(total_frames):
                         if stop_event.is_set():
                             break
-                        with sim_lock:
-                            step_and_capture_frame(frame_idx)
+                        step_and_capture_frame(frame_idx)
+                        publish_live_frame(frame_idx)
                         state["frame_idx"] = frame_idx + 1
                         time.sleep(0)
                 except Exception as e:
@@ -801,46 +828,51 @@ class Simulation:
             worker_thread = threading.Thread(target=simulation_worker, daemon=True)
             worker_thread.start()
 
-            @window.event
-            def on_draw():
-                window.clear()
-                with sim_lock:
-                    sim.space.debug_draw(draw_options)
-
             def stop_loop():
                 if state["stopped"]:
                     return
                 state["stopped"] = True
                 stop_event.set()
-                pyglet.clock.unschedule(update_ui)
                 if state["frame_idx"] > state["progress_idx"]:
                     progress_bar.update(state["frame_idx"] - state["progress_idx"])
                     state["progress_idx"] = state["frame_idx"]
                 progress_bar.close()
                 if worker_thread.is_alive():
                     worker_thread.join(timeout=1.0)
-                if not window.has_exit:
-                    window.close()
-                pyglet.app.exit()
+                viewer.close()
 
-            @window.event
-            def on_key_press(symbol, modifier):
-                if symbol in (pyglet.window.key.E, pyglet.window.key.ESCAPE):
+            last_drawn_frame_idx = None
+            try:
+                while True:
+                    viewer.process_events()
+                    if viewer.closed:
+                        stop_loop()
+                        break
+
+                    with state_lock:
+                        latest_image = state["latest_image"]
+                        latest_image_frame_idx = state["latest_image_frame_idx"]
+
+                    if latest_image is not None and latest_image_frame_idx != last_drawn_frame_idx:
+                        viewer.update_image(
+                            latest_image,
+                            title=f"SyMBac Live ({min(state['frame_idx'], total_frames)}/{total_frames})",
+                        )
+                        last_drawn_frame_idx = latest_image_frame_idx
+
+                    if state["frame_idx"] > state["progress_idx"]:
+                        progress_bar.update(state["frame_idx"] - state["progress_idx"])
+                        state["progress_idx"] = state["frame_idx"]
+
+                    if state["done"]:
+                        stop_loop()
+                        break
+
+                    time.sleep(1 / 60.0)
+            finally:
+                if not state["stopped"]:
                     stop_loop()
 
-            @window.event
-            def on_close():
-                stop_loop()
-
-            def update_ui(_dt):
-                if state["frame_idx"] > state["progress_idx"]:
-                    progress_bar.update(state["frame_idx"] - state["progress_idx"])
-                    state["progress_idx"] = state["frame_idx"]
-                if state["done"]:
-                    stop_loop()
-
-            pyglet.clock.schedule_interval(update_ui, 1 / 60.0)
-            pyglet.app.run()
             if state["worker_error"] is not None:
                 raise RuntimeError("Simulation worker failed during show_window=True execution.") from state["worker_error"]
         else:
@@ -895,7 +927,8 @@ class Simulation:
         Opens a napari window allowing you to visualise the simulation, with both masks, OPL images, interactively.
         :return:
         """
-        
+        import napari
+
         viewer = napari.Viewer()
         viewer.add_image(np.array(self.OPL_scenes), name='OPL scenes')
         viewer.add_labels(np.array(self.masks), name='Synthetic masks')
