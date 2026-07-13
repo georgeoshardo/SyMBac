@@ -82,6 +82,26 @@ def _convolve_2d(image, kernel):
         return _fftconvolve(image, kernel, mode="same")
 
 
+def _relabel_instance_masks(mask, superres_mask, mask_dtype):
+    mask_dtype = np.dtype(mask_dtype)
+    labels = np.union1d(np.unique(mask), np.unique(superres_mask))
+    labels = labels[labels != 0]
+
+    if len(labels) > np.iinfo(mask_dtype).max:
+        raise ValueError(
+            f"{len(labels)} instances cannot be represented by {mask_dtype.name}"
+        )
+
+    relabeled_masks = []
+    for source_mask in (mask, superres_mask):
+        relabeled_mask = np.zeros(source_mask.shape, dtype=mask_dtype)
+        for new_label, old_label in enumerate(labels, start=1):
+            relabeled_mask[source_mask == old_label] = new_label
+        relabeled_masks.append(relabeled_mask)
+
+    return relabeled_masks
+
+
 def convolve_rescale(image, kernel, rescale_factor, rescale_int):
     """
     Convolves an image with a kernel, and rescales it to the correct size.
@@ -1155,10 +1175,15 @@ class Renderer:
                 superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
                 superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, str(z).zfill(5)))
             else:
-                mask = Image.fromarray(mask.astype(mask_dtype))
+                mask, superres_mask = _relabel_instance_masks(
+                    mask,
+                    superres_mask,
+                    mask_dtype,
+                )
+                mask = Image.fromarray(mask)
                 mask.save("{}/masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
-                superres_mask = Image.fromarray(superres_mask.astype(mask_dtype))
+                superres_mask = Image.fromarray(superres_mask)
                 superres_mask.save("{}/superres_masks/{}synth_{}.png".format(save_dir, prefix, str(z).zfill(5)))
 
 
