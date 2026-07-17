@@ -1,7 +1,6 @@
 import random
 from itertools import cycle, islice
 import os
-import ray
 import numpy as np
 import noise
 from PIL import Image
@@ -123,6 +122,13 @@ class ColonyRenderer:
         return convolved
 
     def generate_random_samples_ray(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, gpu_fraction=1, batch_size = 20):
+        try:
+            import ray
+        except ImportError as error:
+            raise ImportError(
+                "Ray is required for ColonyRenderer.generate_random_samples_ray"
+            ) from error
+
         n_GPUs = len(GPUs)
         #if n_GPUs > 1:
         #    n_jobs = n_GPUs

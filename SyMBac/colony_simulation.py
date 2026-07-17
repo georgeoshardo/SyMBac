@@ -1,6 +1,4 @@
-import CellModeller
 import noise
-from CellModeller.Simulator import Simulator
 import os
 import numpy as np
 from glob import glob
@@ -53,6 +51,13 @@ class ColonySimulation:
             pass
 
     def run_cellmodeller_sim(self, num_sim):
+        try:
+            from CellModeller.Simulator import Simulator
+        except ImportError as error:
+            raise ImportError(
+                "CellModeller is required for ColonySimulation.run_cellmodeller_sim"
+            ) from error
+
         for n in range(num_sim):
             try:
                 os.mkdir(f"data/{self.save_dir}")
@@ -249,4 +254,3 @@ class ColonySimulation:
         n_files = len(glob("data/scenes/*.png"))
         zero_pads = np.ceil(np.log10(len(self.pickles_flat))).astype(int) + 2
         Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1+n_files).zfill(zero_pads), False, FL, density, random_distribution, distribution_args, as_3D, crop, crop_pad) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
-
