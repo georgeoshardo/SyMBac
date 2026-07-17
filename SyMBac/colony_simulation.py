@@ -147,9 +147,12 @@ class ColonySimulation:
         fluorescence_space = np.zeros(self.scene_shape)
         #sample OPL cell
         if as_3D:
-            OPL_cell = raster_cell(cellmodeller_properties[0][0], cellmodeller_properties[0][1], separation=0)
-            OPL_cell_3D = convert_to_3D(OPL_cell)
-            n_layers = OPL_cell_3D.shape[0]
+            OPL_cells = [
+                raster_cell(properties[0], properties[1], separation=0)
+                for properties in cellmodeller_properties
+            ]
+            OPL_cells_3D = [convert_to_3D(cell) for cell in OPL_cells]
+            n_layers = max(cell.shape[0] for cell in OPL_cells_3D)
             space_3D = np.zeros((n_layers,) + self.scene_shape)
             fluorescence_space_3D = np.zeros((n_layers,) + self.scene_shape)
 
@@ -164,11 +167,12 @@ class ColonySimulation:
             position = cellmodeller_properties[c][3]
             x, y = _scene_position(position, self.scene_shape)
 
-
-            OPL_cell = raster_cell(cellmodeller_properties[c][0], cellmodeller_properties[c][1], separation=0)
             if as_3D:
-                OPL_cell_3D = convert_to_3D(OPL_cell)
+                OPL_cell = OPL_cells[c]
+                OPL_cell_3D = OPL_cells_3D[c]
                 OPL_cell_3D = np.array([rotate(x, - cellmodeller_properties[c][2], resize=True, clip=False, preserve_range=True) for x in OPL_cell_3D])
+            else:
+                OPL_cell = raster_cell(cellmodeller_properties[c][0], cellmodeller_properties[c][1], separation=0)
             rotated_OPL_cell = rotate(OPL_cell, - (cellmodeller_properties[c][2]), resize=True, clip=False,
                                       preserve_range=True, center=(x, y)).astype(int)
             cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
@@ -176,18 +180,18 @@ class ColonySimulation:
             offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
 
             if as_3D:
+                z_start = (n_layers - OPL_cell_3D.shape[0]) // 2
+                volume_slice = np.s_[
+                    z_start:z_start + OPL_cell_3D.shape[0],
+                    y - cell_y:y + cell_y + offset_y,
+                    x - cell_x:x + cell_x + offset_x,
+                ]
                 #OPL_cell_3D = convert_to_3D(rotated_OPL_cell)
                 if FL:
                     FL_cell_3D = np.array([OPL_to_FL(x, density = density*density_modifiers[c]) for x in OPL_cell_3D])
-                    fluorescence_space_3D[:,
-                        y - cell_y:y + cell_y + offset_y,
-                        x - cell_x:x + cell_x + offset_x
-                    ] += FL_cell_3D 
+                    fluorescence_space_3D[volume_slice] += FL_cell_3D
                 
-                space_3D[:,
-                    y - cell_y:y + cell_y + offset_y,
-                    x - cell_x:x + cell_x + offset_x
-                ] += OPL_cell_3D
+                space_3D[volume_slice] += OPL_cell_3D
 
             else:
                 if not as_3D:

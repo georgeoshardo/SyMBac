@@ -103,11 +103,8 @@ def test_serial_generation_uses_output_indices_and_writes_valid_pngs(
     assert np.asarray(Image.open(images[0])).dtype == np.uint16
 
 
-def test_draw_scene_returns_cropped_3d_volume_and_retains_thin_mask(
-    monkeypatch,
-):
-    cell = np.zeros((3, 3), dtype=float)
-    cell[1, 1] = 1
+def test_draw_scene_returns_complete_cropped_3d_volume(monkeypatch):
+    cell = np.ones((3, 3), dtype=float)
     volume = np.stack([cell, cell * 2])
     monkeypatch.setattr(colony_simulation, "raster_cell", lambda *args, **kwargs: cell)
     monkeypatch.setattr(
@@ -116,11 +113,6 @@ def test_draw_scene_returns_cropped_3d_volume_and_retains_thin_mask(
         lambda image, *args, **kwargs: image,
     )
     monkeypatch.setattr(colony_simulation, "convert_to_3D", lambda image: volume)
-    monkeypatch.setattr(
-        colony_simulation,
-        "get_crop_bounds_2D",
-        lambda mask: ((3, 6), (1, 4)),
-    )
     simulation = ColonySimulation.__new__(ColonySimulation)
     simulation.scene_shape = (7, 11)
 
@@ -134,6 +126,40 @@ def test_draw_scene_returns_cropped_3d_volume_and_retains_thin_mask(
     assert mask.shape == (3, 3)
     assert rendered[:, 1, 1].tolist() == [1, 2]
     assert mask[1, 1] == 1
+
+
+def test_draw_scene_centers_cells_with_different_3d_depths(monkeypatch):
+    small_cell = np.ones((3, 3), dtype=float)
+    large_cell = np.ones((5, 3), dtype=float)
+
+    def raster_cell(length, *args, **kwargs):
+        return small_cell if length == 3 else large_cell
+
+    def convert_to_3d(cell):
+        depth = 2 if cell.shape[0] == 3 else 4
+        return np.repeat(cell[None], depth, axis=0)
+
+    monkeypatch.setattr(colony_simulation, "raster_cell", raster_cell)
+    monkeypatch.setattr(
+        colony_simulation,
+        "rotate",
+        lambda image, *args, **kwargs: image,
+    )
+    monkeypatch.setattr(colony_simulation, "convert_to_3D", convert_to_3d)
+    simulation = ColonySimulation.__new__(ColonySimulation)
+    simulation.scene_shape = (9, 15)
+
+    rendered, _ = simulation.draw_scene(
+        [
+            [3, 3, 0, [-3, 0]],
+            [5, 3, 0, [3, 0]],
+        ],
+        as_3D=True,
+    )
+
+    assert rendered.shape == (4, 9, 15)
+    np.testing.assert_array_equal(rendered[:, 5, 5], [0, 1, 1, 0])
+    np.testing.assert_array_equal(rendered[:, 5, 11], [1, 1, 1, 1])
 
 
 def test_colony_3d_rendering_normalizes_the_whole_volume(monkeypatch):
