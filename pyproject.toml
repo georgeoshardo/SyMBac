@@ -43,6 +43,8 @@ dependencies = [
     "pyqtgraph>=0.13.0",
     "matplotlib-scalebar>=0.9.0",
     "psfmodels>=0.3.3",
+    "optuna>=4.0.0",
+    "cmaes>=0.10.0",
     "noise>=1.2.2",
 ]
 

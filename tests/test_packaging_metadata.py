@@ -33,8 +33,15 @@ def test_runtime_dependencies_are_declared_directly():
         for dependency in dependencies
     }
 
-    assert {"numpy", "numba", "pillow", "networkx"}.issubset(dependency_names)
+    assert {
+        "numpy",
+        "numba",
+        "pillow",
+        "networkx",
+        "optuna",
+        "cmaes",
+    }.issubset(dependency_names)
     assert not any(
-        dependency.startswith(("ipython", "zarr", "optuna", "cmaes"))
+        dependency.startswith(("ipython", "zarr"))
         for dependency in dependencies
     )
