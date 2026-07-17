@@ -3,7 +3,7 @@ from joblib import Parallel, delayed
 import pickle
 import tempfile
 from dataclasses import fields, is_dataclass
-from SyMBac._deprecation import _UNSET, _require_provided
+from SyMBac._deprecation import _UNSET, _require_provided, _resolve_deprecated_parameter
 from SyMBac.drawing import draw_scene_from_segments, get_space_size_from_segments
 from SyMBac.trench_geometry import  get_trench_segments
 import os
@@ -90,6 +90,8 @@ class Simulation:
         brownian_backoff_attempts=5,
         brownian_application_mode="teleport",
         brownian_projection_angular_damping=0.35,
+        max_length_var=_UNSET,
+        width_var=_UNSET,
     ):
         """
         Initialising a Simulation object
@@ -205,6 +207,23 @@ class Simulation:
         _require_provided(api_name, "resize_amount", resize_amount)
         _require_provided(api_name, "save_dir", save_dir)
 
+        max_length_std, _ = _resolve_deprecated_parameter(
+            api_name=api_name,
+            new_name="max_length_std",
+            new_value=max_length_std,
+            legacy_name="max_length_var",
+            legacy_value=max_length_var,
+            compatibility_note="`max_length_var` is interpreted as a standard deviation in this API.",
+        )
+        width_std, _ = _resolve_deprecated_parameter(
+            api_name=api_name,
+            new_name="width_std",
+            new_value=width_std,
+            legacy_name="width_var",
+            legacy_value=width_var,
+            compatibility_note="`width_var` is interpreted as a standard deviation in this API.",
+        )
+
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
             raise ValueError("substeps must be an integer greater than 0.")
         if cell_config_overrides is not None and not isinstance(cell_config_overrides, dict):
@@ -248,8 +267,10 @@ class Simulation:
         self.trench_width = trench_width
         self.cell_max_length = cell_max_length
         self.max_length_std = max_length_std
+        self.max_length_var = max_length_std
         self.cell_width = cell_width
         self.width_std = width_std
+        self.width_var = width_std
         self.lysis_p = lysis_p
         self.sim_length = sim_length
         self.pix_mic_conv = pix_mic_conv

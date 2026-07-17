@@ -1,9 +1,11 @@
+import importlib
 from types import MethodType, SimpleNamespace
 
 import numpy as np
 import pytest
 from PIL import Image
 
+from SyMBac import renderer as renderer_module
 from SyMBac.renderer import Renderer
 
 
@@ -110,3 +112,20 @@ def test_generate_training_data_rejects_more_instances_than_dtype_can_store(tmp_
                 mask_dtype=np.uint8,
                 render_sample_parameters=_render_parameters(),
             )
+
+
+def test_missing_gpu_backend_warning_names_supported_extras(monkeypatch):
+    real_find_spec = importlib.util.find_spec
+
+    def find_spec_without_gpu_backends(name, *args, **kwargs):
+        if name in {"cupy", "torch"}:
+            return None
+        return real_find_spec(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib.util, "find_spec", find_spec_without_gpu_backends)
+
+    with pytest.warns(
+        UserWarning,
+        match=r"SyMBac\[cupy\].*SyMBac\[torch\]",
+    ):
+        importlib.reload(renderer_module)

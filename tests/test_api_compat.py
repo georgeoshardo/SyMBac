@@ -53,13 +53,32 @@ def test_simulation_constructor_requires_keyword_arguments_after_cell_max_length
         )
 
 
-def test_simulation_rejects_removed_legacy_aliases(tmp_path):
+def test_simulation_legacy_aliases_are_supported_until_advertised_removal_date(tmp_path):
     kwargs = _simulation_kwargs(tmp_path)
-    with pytest.raises(TypeError, match="max_length_var"):
-        Simulation(**kwargs, max_length_var=0.3)
+    kwargs.pop("max_length_std")
+    kwargs.pop("width_std")
 
-    with pytest.raises(TypeError, match="width_var"):
-        Simulation(**kwargs, width_var=0.2)
+    with pytest.warns(FutureWarning, match="2026-09-01") as warnings:
+        simulation = Simulation(**kwargs, max_length_var=0.3, width_var=0.2)
+
+    assert len(warnings) == 2
+    assert simulation.max_length_std == pytest.approx(0.3)
+    assert simulation.width_std == pytest.approx(0.2)
+    assert simulation.max_length_var == simulation.max_length_std
+    assert simulation.width_var == simulation.width_std
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "legacy_value"),
+    [("max_length_var", 0.3), ("width_var", 0.2)],
+)
+def test_simulation_rejects_conflicting_alias_values(
+    tmp_path, legacy_name, legacy_value
+):
+    kwargs = _simulation_kwargs(tmp_path)
+
+    with pytest.raises(ValueError, match=legacy_name.replace("_var", "_std")):
+        Simulation(**kwargs, **{legacy_name: legacy_value})
 
 
 def test_draw_simulation_opl_rejects_removed_do_transformation_argument(tmp_path):
