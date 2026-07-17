@@ -35,12 +35,14 @@ class SegmentPrimitive:
     p1: tuple[float, float]
     p2: tuple[float, float]
     thickness: float
+    geometry_role: str | None = None
 
     def translated(self, dx: float, dy: float) -> "SegmentPrimitive":
         return SegmentPrimitive(
             p1=(self.p1[0] + dx, self.p1[1] + dy),
             p2=(self.p2[0] + dx, self.p2[1] + dy),
             thickness=self.thickness,
+            geometry_role=self.geometry_role,
         )
 
 
@@ -136,6 +138,8 @@ def segment_creator(local_xy1, local_xy2, global_xy, thickness):
 
 def _add_world_segment(space: pymunk.Space, primitive: SegmentPrimitive) -> None:
     body, shape = segment_creator(primitive.p1, primitive.p2, (0.0, 0.0), primitive.thickness)
+    if primitive.geometry_role is not None:
+        shape.geometry_role = primitive.geometry_role
     space.add(body, shape)
 
 
@@ -219,6 +223,7 @@ class TrenchGeometrySpec(GeometrySpec):
                     p1=(global_offset_x + x1, global_offset_y + y1),
                     p2=(global_offset_x + x2, global_offset_y + y2),
                     thickness=self.barrier_thickness,
+                    geometry_role="trench_cap",
                 )
             )
 
@@ -228,11 +233,13 @@ class TrenchGeometrySpec(GeometrySpec):
                     p1=(-self.width / 2.0 - self.barrier_thickness, self.width / 2.0),
                     p2=(-self.width / 2.0 - self.barrier_thickness, self.width / 2.0 + self.trench_length),
                     thickness=self.barrier_thickness,
+                    geometry_role="trench_wall",
                 ),
                 SegmentPrimitive(
                     p1=(self.width / 2.0 + self.barrier_thickness, self.width / 2.0),
                     p2=(self.width / 2.0 + self.barrier_thickness, self.width / 2.0 + self.trench_length),
                     thickness=self.barrier_thickness,
+                    geometry_role="trench_wall",
                 ),
             ]
         )
@@ -257,6 +264,10 @@ class TrenchGeometrySpec(GeometrySpec):
     def seed_cell_local_position(self, segment_radius: float) -> tuple[float, float]:
         return (0.0, self.width / 2.0 + segment_radius * 3.0)
 
+    def _minimum_center_y(self, x: float, radius: float) -> float:
+        usable_cap_radius = self.inner_half_width - radius
+        return self.inner_half_width - np.sqrt(max(usable_cap_radius**2 - x**2, 0.0))
+
     def positions_within_bounds(
         self,
         positions,
@@ -274,7 +285,7 @@ class TrenchGeometrySpec(GeometrySpec):
                 return False
             if x > (self.inner_half_width - radius):
                 return False
-            if y < (0.25 * radius):
+            if y < self._minimum_center_y(x, radius):
                 return False
             if enforce_open_end_cap and y > (self.open_end_y - 0.25 * radius):
                 return False
@@ -295,10 +306,9 @@ class TrenchGeometrySpec(GeometrySpec):
         local_position = layout.to_local_point((float(body.position[0]), float(body.position[1])))
         min_x = -self.inner_half_width + radius
         max_x = self.inner_half_width - radius
-        min_y = 0.25 * radius
 
         clamped_x = min(max(local_position[0], min_x), max_x)
-        clamped_y = max(local_position[1], min_y)
+        clamped_y = max(local_position[1], self._minimum_center_y(clamped_x, radius))
         changed_x = clamped_x != local_position[0]
         changed_y = clamped_y != local_position[1]
         projected = changed_x or changed_y
