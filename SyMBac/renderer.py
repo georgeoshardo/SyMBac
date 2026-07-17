@@ -54,7 +54,8 @@ if _CONV_BACKEND == "fftconvolve":
     from scipy.signal import fftconvolve as _fftconvolve
     warnings.warn(
         "No GPU backend (CuPy or PyTorch) found. "
-        "Install CuPy (NVIDIA) or PyTorch (`pip install SyMBac[gpu]`) "
+        "Install CuPy (`pip install SyMBac[cupy]`) or "
+        "PyTorch (`pip install SyMBac[torch]`) "
         "to use GPU-accelerated convolution. Falling back to CPU FFT convolution."
     )
 

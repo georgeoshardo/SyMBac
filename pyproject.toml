@@ -11,15 +11,13 @@ license = "GPL-2.0-only"
 authors = [
     { name = "Georgeos Hardo", email = "gh464@cam.ac.uk" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
@@ -27,13 +25,16 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
+    "numpy<2.5",
+    "numba",
+    "Pillow",
+    "networkx",
     "tifffile>=2026.2.24",
     "scikit-image>=0.26.0",
     "matplotlib>=3.10.8",
     "tqdm>=4.67.3",
     "pandas>=3.0.1",
     "natsort>=8.4.0",
-    "ipython>=9.10.0",
     "ipywidgets>=8.1.8",
     "joblib>=1.5.3",
     "scipy>=1.17.1",
@@ -42,9 +43,6 @@ dependencies = [
     "pyqtgraph>=0.13.0",
     "matplotlib-scalebar>=0.9.0",
     "psfmodels>=0.3.3",
-    "zarr>=3.1.5",
-    "optuna>=4.0.0",
-    "cmaes>=0.10.0",
     "noise>=1.2.2",
 ]
 
