@@ -104,6 +104,8 @@ class Lineage:
             if node[1] != first_time_by_label[node[0]]:
                 continue
             cell = self.temporal_lineage_graph.nodes[node]["cell"]
+            if hasattr(cell, "just_divided") and not bool(cell.just_divided):
+                continue
             mother_mask_label = getattr(cell, "mother_mask_label", None)
 
             if self._is_missing(mother_mask_label):
@@ -186,12 +188,12 @@ class Lineage:
         if resize_amount is None:
             resize_amount = getattr(self.simulation, "resize_amount", None)
 
-        if resize_amount in (None, 0):
+        if resize_amount in (None, 0) or pix_mic_conv is None:
             spatial_scale = 1.0
-        elif pix_mic_conv is None:
-            spatial_scale = 1.0
+            spatial_unit = "pixel"
         else:
             spatial_scale = float(pix_mic_conv) / float(resize_amount)
+            spatial_unit = "micrometer"
 
         start_frame = None
         end_frame = None
@@ -279,10 +281,10 @@ class Lineage:
                 }
                 for name, dtype, unit in (
                     ("t", "int64", "frame"),
-                    ("y", "float64", "micrometer"),
-                    ("x", "float64", "micrometer"),
-                    ("length", "float64", "micrometer"),
-                    ("width", "float64", "micrometer"),
+                    ("y", "float64", spatial_unit),
+                    ("x", "float64", spatial_unit),
+                    ("length", "float64", spatial_unit),
+                    ("width", "float64", spatial_unit),
                 )
             },
             edge_props_metadata={},
@@ -293,7 +295,7 @@ class Lineage:
             store,
             metadata=metadata,
             axis_names=["t", "y", "x"],
-            axis_units=["frame", "micrometer", "micrometer"],
+            axis_units=["frame", spatial_unit, spatial_unit],
             axis_types=["time", "space", "space"],
             zarr_format=zarr_format,
             overwrite=overwrite,

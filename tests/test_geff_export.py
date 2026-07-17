@@ -182,6 +182,22 @@ def test_generate_timeseries_training_data_rejects_insufficient_explicit_dtype(t
         )
 
 
+def test_generate_timeseries_training_data_rejects_uint32_png_masks(tmp_path):
+    renderer = _timeseries_renderer(65536)
+
+    with pytest.raises(ValueError, match="PNG.*uint16.*TIFF"):
+        renderer.generate_timeseries_training_data(
+            save_dir=str(tmp_path / "tracking_data"),
+            burn_in=1,
+            sample_amount=0.0,
+            n_series=1,
+            frames_per_series=1,
+            export_geff=False,
+            seed=7,
+            image_format="png",
+        )
+
+
 def test_lineage_to_geff_round_trips_standard_metadata(tmp_path):
     sim = _SimulationStub(
         [
@@ -218,3 +234,23 @@ def test_lineage_to_geff_round_trips_standard_metadata(tmp_path):
     assert metadata.node_props_metadata["y"].unit == "micrometer"
     assert metadata.node_props_metadata["length"].unit == "micrometer"
     assert metadata.node_props_metadata["width"].unit == "micrometer"
+
+
+def test_lineage_to_geff_uses_pixel_units_without_spatial_calibration(tmp_path):
+    sim = _SimulationStub(
+        [[_CellStub(mask_label=1, t=0, position=(10, 20), length=3, width=1)]],
+        pix_mic_conv=None,
+    )
+    store = tmp_path / "lineage.geff"
+
+    Lineage(sim).to_geff(store, overwrite=True)
+    graph, metadata = geff.read(store)
+
+    node = next(iter(graph.nodes.values()))
+    assert node["x"] == 10
+    assert node["y"] == 20
+    assert node["length"] == 3
+    assert node["width"] == 1
+    assert [axis.unit for axis in metadata.axes] == ["frame", "pixel", "pixel"]
+    assert metadata.node_props_metadata["length"].unit == "pixel"
+    assert metadata.node_props_metadata["width"].unit == "pixel"

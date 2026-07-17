@@ -61,6 +61,52 @@ def test_mask_is_binary_only_for_boolean_or_zero_one_labels(mask, expected):
     assert renderer_module._is_binary_mask(mask) is expected
 
 
+def test_generate_test_comparison_preserves_sparse_base_and_superres_labels(monkeypatch):
+    renderer = Renderer.__new__(Renderer)
+    renderer.simulation = SimpleNamespace(
+        OPL_scenes=[np.arange(16, dtype=float).reshape(4, 4)],
+        masks=[np.zeros((4, 4), dtype=np.uint16)],
+        resize_amount=1,
+        pix_mic_conv=0.1,
+    )
+    renderer.real_image = np.arange(4, dtype=float).reshape(2, 2)
+    renderer.PSF = SimpleNamespace(
+        mode="fluorescence",
+        kernel=np.ones((1, 1)),
+        radius=1,
+        scale=1,
+        NA=1,
+        n=1,
+        apo_sigma=1,
+        wavelength=1,
+    )
+    renderer.camera = None
+    renderer.image_params = (0, 0, 0, np.zeros(3), 0, 0, 0, np.zeros(3))
+    renderer.error_params = tuple([] for _ in range(8))
+    renderer.x_border_expansion_coefficient = 1
+    renderer.y_border_expansion_coefficient = 1
+
+    expanded_mask = np.zeros((4, 4), dtype=np.uint16)
+    expanded_mask[2:, :2] = np.array([[0, 300], [300, 0]], dtype=np.uint16)
+    renderer.generate_PC_OPL = MethodType(
+        lambda self, **kwargs: (
+            np.arange(16, dtype=float).reshape(4, 4),
+            np.ones((4, 4), dtype=float),
+            expanded_mask,
+        ),
+        renderer,
+    )
+    monkeypatch.setattr(renderer_module, "random_noise", lambda image, **kwargs: image)
+
+    _, mask, superres_mask = renderer.generate_test_comparison(
+        match_histogram=False,
+        match_noise=False,
+    )
+
+    assert set(np.unique(mask)) == {0, 300}
+    assert np.array_equal(mask, superres_mask)
+
+
 def test_generate_training_data_relabels_instances_before_uint8_export(tmp_path):
     mask = np.array(
         [

@@ -1453,6 +1453,14 @@ class Renderer:
                 image_path = os.path.join(images_dir, f"frame_{frame_idx:05d}.{image_ext}")
                 mask_path = os.path.join(masks_dir, f"frame_{frame_idx:05d}.{image_ext}")
                 frame_mask_dtype = _resolve_mask_export_dtype(mask, requested_mask_dtype)
+                if image_ext == "png" and frame_mask_dtype not in {
+                    np.dtype(np.uint8),
+                    np.dtype(np.uint16),
+                }:
+                    raise ValueError(
+                        f"PNG masks support at most uint16 without loss, got "
+                        f"{frame_mask_dtype.name}; use TIFF instead."
+                    )
 
                 if image_ext == "png":
                     Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image))).save(image_path)
