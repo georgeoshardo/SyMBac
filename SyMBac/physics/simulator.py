@@ -108,6 +108,7 @@ class Simulator:
         self.space: pymunk.Space = space
         self.space.threads = physics_config.THREADS
         self.space.iterations = physics_config.ITERATIONS
+        self._baseline_iterations = physics_config.ITERATIONS
         self.space.gravity = physics_config.GRAVITY
         self.space.damping = physics_config.DAMPING
         self.dt: float = physics_config.DT
@@ -322,7 +323,10 @@ class Simulator:
             hook(self)
 
         if self.adaptive_iterations:
-            self.space.iterations = max(10, int(self.space.iterations * 0.9))
+            self.space.iterations = max(
+                self._baseline_iterations,
+                int(self.space.iterations * 0.9),
+            )
             self.max_joint_impulse *= 0.9
 
         self.frame_count += 1

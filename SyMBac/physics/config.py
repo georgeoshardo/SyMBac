@@ -103,6 +103,23 @@ class CellConfig:
 
     def __post_init__(self):
 
+        if isinstance(self.GRANULARITY, bool) or not isinstance(self.GRANULARITY, int) or self.GRANULARITY <= 0:
+            raise ValueError("GRANULARITY must be an integer greater than 0.")
+        if not np.isfinite(self.SEPTUM_DURATION) or self.SEPTUM_DURATION <= 0:
+            raise ValueError("SEPTUM_DURATION must be finite and greater than 0.")
+        if (
+            isinstance(self.MIN_LENGTH_AFTER_DIVISION, bool)
+            or not isinstance(self.MIN_LENGTH_AFTER_DIVISION, int)
+            or self.MIN_LENGTH_AFTER_DIVISION < 2
+        ):
+            raise ValueError("MIN_LENGTH_AFTER_DIVISION must be an integer of at least 2.")
+        if (
+            isinstance(self.SEED_CELL_SEGMENTS, bool)
+            or not isinstance(self.SEED_CELL_SEGMENTS, int)
+            or self.SEED_CELL_SEGMENTS < 2
+        ):
+            raise ValueError("SEED_CELL_SEGMENTS must be an integer of at least 2.")
+
         if self.MAX_LENGTH_STD < 0:
             raise ValueError("MAX_LENGTH_STD must be non-negative.")
         if self.WIDTH_STD < 0:
@@ -162,13 +179,17 @@ class PhysicsConfig:
     COLLISION_SLOP: Optional[float] = None # Amount of overlap between shapes that is allowed. To improve stability, set this as high as you can without noticeable overlapping. It defaults to 0.1.
 
     def __post_init__(self):
+        if isinstance(self.ITERATIONS, bool) or not isinstance(self.ITERATIONS, int) or self.ITERATIONS <= 0:
+            raise ValueError("ITERATIONS must be an integer greater than 0.")
+        if not np.isfinite(self.DAMPING) or not 0.0 <= self.DAMPING <= 1.0:
+            raise ValueError("DAMPING must be finite and between 0 and 1.")
         if self.THREADS > 2:
             raise ValueError("THREADS cannot be greater than 2.")
         if not self.THREADED and self.THREADS != 1:
             raise ValueError("If THREADED is False, THREADS must be 1.")
         if self.THREADED and self.THREADS != 2:
             raise ValueError("If THREADED is True, THREADS must be 2.")
-        if self.DT <= 0:
-            raise ValueError("DT must be greater than 0.")
+        if not np.isfinite(self.DT) or self.DT <= 0:
+            raise ValueError("DT must be finite and greater than 0.")
         if self.COLLISION_SLOP is not None and self.COLLISION_SLOP < 0:
             raise ValueError("COLLISION_SLOP must be non-negative when provided.")
