@@ -81,14 +81,28 @@ class Lineage:
             t = getattr(cell, "t", None)
             if self._is_missing(mask_label) or self._is_missing(t):
                 continue
-            self.temporal_lineage_graph.add_node((mask_label, t), cell=cell)
+            node = (mask_label, t)
+            if node in self.temporal_lineage_graph:
+                raise ValueError(
+                    f"Duplicate detection for mask_label={mask_label} at time={t}."
+                )
+            self.temporal_lineage_graph.add_node(node, cell=cell)
 
         for node in list(self.temporal_lineage_graph.nodes):
             exp_node = (node[0], node[1]-1)
             if exp_node in self.temporal_lineage_graph.nodes:
                 self.temporal_lineage_graph.add_edge(exp_node, node)
 
+        first_time_by_label = {}
+        for mask_label, t in self.temporal_lineage_graph.nodes:
+            first_time_by_label[mask_label] = min(
+                t,
+                first_time_by_label.get(mask_label, t),
+            )
+
         for node in list(self.temporal_lineage_graph.nodes):
+            if node[1] != first_time_by_label[node[0]]:
+                continue
             cell = self.temporal_lineage_graph.nodes[node]["cell"]
             mother_mask_label = getattr(cell, "mother_mask_label", None)
 
@@ -241,8 +255,8 @@ class Lineage:
                 seg_id=int(mask_label),
                 tracklet_id=int(mask_label),
                 lineage_id=int(lineage_root) if not self._is_missing(lineage_root) else -1,
-                length=float(getattr(cell, "length", np.nan)),
-                width=float(getattr(cell, "width", np.nan)),
+                length=float(getattr(cell, "length", np.nan) * spatial_scale),
+                width=float(getattr(cell, "width", np.nan) * spatial_scale),
                 angle=float(getattr(cell, "angle", np.nan)),
                 generation=generation,
             )
@@ -252,26 +266,32 @@ class Lineage:
             if source in node_lookup and target in node_lookup:
                 geff_graph.add_edge(node_lookup[source], node_lookup[target])
 
-        # geff backend kwargs vary across versions; newer docs include
-        # track-node mapping kwargs that older versions reject.
-        try:
-            geff.write(
-                geff_graph,
-                store,
-                axis_names=["t", "y", "x"],
-                axis_types=["time", "space", "space"],
-                zarr_format=zarr_format,
-                overwrite=overwrite,
-                track_node_props={"tracklet": "tracklet_id", "lineage": "lineage_id"},
-            )
-        except TypeError as exc:
-            if "track_node_props" not in str(exc):
-                raise
-            geff.write(
-                geff_graph,
-                store,
-                axis_names=["t", "y", "x"],
-                axis_types=["time", "space", "space"],
-                zarr_format=zarr_format,
-                overwrite=overwrite,
-            )
+        metadata = geff.GeffMetadata(
+            directed=True,
+            node_props_metadata={
+                name: {
+                    "identifier": name,
+                    "dtype": dtype,
+                    "unit": unit,
+                }
+                for name, dtype, unit in (
+                    ("t", "int64", "frame"),
+                    ("y", "float64", "micrometer"),
+                    ("x", "float64", "micrometer"),
+                    ("length", "float64", "micrometer"),
+                    ("width", "float64", "micrometer"),
+                )
+            },
+            edge_props_metadata={},
+            track_node_props={"tracklet": "tracklet_id", "lineage": "lineage_id"},
+        )
+        geff.write(
+            geff_graph,
+            store,
+            metadata=metadata,
+            axis_names=["t", "y", "x"],
+            axis_units=["frame", "micrometer", "micrometer"],
+            axis_types=["time", "space", "space"],
+            zarr_format=zarr_format,
+            overwrite=overwrite,
+        )

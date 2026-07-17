@@ -102,6 +102,34 @@ def _relabel_instance_masks(mask, superres_mask, mask_dtype):
     return relabeled_masks
 
 
+def _is_binary_mask(mask):
+    mask = np.asarray(mask)
+    if mask.dtype == np.bool_:
+        return True
+    return bool(np.isin(np.unique(mask), (0, 1)).all())
+
+
+def _resolve_mask_export_dtype(mask, requested_dtype=None):
+    mask = np.asarray(mask)
+    min_label = int(mask.min())
+    max_label = int(mask.max())
+    if min_label < 0:
+        raise ValueError(f"Mask labels must be non-negative, got {min_label}.")
+
+    if requested_dtype is None:
+        return np.dtype(np.min_scalar_type(max_label))
+
+    mask_dtype = np.dtype(requested_dtype)
+    if mask_dtype.kind not in "iu":
+        raise TypeError(f"mask_dtype must be an integer dtype, got {mask_dtype.name}.")
+    limits = np.iinfo(mask_dtype)
+    if min_label < limits.min or max_label > limits.max:
+        raise ValueError(
+            f"Mask label range [{min_label}, {max_label}] cannot be represented by {mask_dtype.name}."
+        )
+    return mask_dtype
+
+
 def convolve_rescale(image, kernel, rescale_factor, rescale_int):
     """
     Convolves an image with a kernel, and rescales it to the correct size.
@@ -565,7 +593,7 @@ class Renderer:
             expanded_mask, 1 / self.simulation.resize_amount,
             anti_aliasing=False, preserve_range=True, order=0
         )
-        if len(np.unique(expanded_mask_resized)) > 2:
+        if not _is_binary_mask(expanded_mask_resized):
             _, mask = make_images_same_shape(
                 self.real_image, expanded_mask_resized, rescale_int=False
             )
@@ -792,7 +820,7 @@ class Renderer:
         expanded_mask_resized = rescale(expanded_mask, 1 / self.simulation.resize_amount, anti_aliasing=False,
                                         preserve_range=True,
                                         order=0)
-        if len(np.unique(expanded_mask_resized)) > 2:
+        if not _is_binary_mask(expanded_mask_resized):
             _, expanded_mask_resized_reshaped = make_images_same_shape(self.real_image, expanded_mask_resized,
                                                                        rescale_int=False)
         else:
@@ -870,7 +898,16 @@ class Renderer:
             plt.show()
             plt.close()
         else:
-            _, superres_mask = make_images_same_shape(np.zeros((self.real_image.shape[0]*self.simulation.resize_amount,self.real_image.shape[1]*self.simulation.resize_amount)), expanded_mask, rescale_int=False)
+            _, superres_mask = make_images_same_shape(
+                np.zeros(
+                    (
+                        self.real_image.shape[0] * self.simulation.resize_amount,
+                        self.real_image.shape[1] * self.simulation.resize_amount,
+                    )
+                ),
+                expanded_mask,
+                rescale_int=_is_binary_mask(expanded_mask),
+            )
             return noisy_img, expanded_mask_resized_reshaped.astype(int), superres_mask.astype(int)
             #return noisy_img, expanded_mask_resized_reshaped.astype(int)
 
@@ -1279,7 +1316,7 @@ class Renderer:
         sample_amount=0.02,
         n_series=1,
         frames_per_series=None,
-        mask_dtype=np.uint16,
+        mask_dtype=None,
         export_geff=True,
         seed=None,
         n_jobs=1,
@@ -1326,7 +1363,7 @@ class Renderer:
         if image_format not in {"tif", "tiff", "png"}:
             raise ValueError("image_format must be one of: 'tif', 'tiff', 'png'.")
         image_ext = "png" if image_format == "png" else "tiff"
-        mask_dtype = np.dtype(mask_dtype)
+        requested_mask_dtype = None if mask_dtype is None else np.dtype(mask_dtype)
 
         if seed is not None:
             random.seed(seed)
@@ -1373,7 +1410,9 @@ class Renderer:
             "simulation_frame_start": int(scene_nos[0]),
             "simulation_frame_end_exclusive": int(scene_nos[-1] + 1),
             "sample_amount": float(sample_amount),
-            "mask_dtype": str(mask_dtype),
+            "mask_dtype": (
+                "inferred" if requested_mask_dtype is None else str(requested_mask_dtype)
+            ),
             "image_format": image_ext,
             "series": [],
         }
@@ -1413,19 +1452,21 @@ class Renderer:
                 )
                 image_path = os.path.join(images_dir, f"frame_{frame_idx:05d}.{image_ext}")
                 mask_path = os.path.join(masks_dir, f"frame_{frame_idx:05d}.{image_ext}")
+                frame_mask_dtype = _resolve_mask_export_dtype(mask, requested_mask_dtype)
 
                 if image_ext == "png":
                     Image.fromarray(skimage.img_as_uint(rescale_intensity(syn_image))).save(image_path)
-                    Image.fromarray(mask.astype(mask_dtype, copy=False)).save(mask_path)
+                    Image.fromarray(mask.astype(frame_mask_dtype, copy=False)).save(mask_path)
                 else:
                     imwrite(image_path, skimage.img_as_uint(rescale_intensity(syn_image)))
-                    imwrite(mask_path, mask.astype(mask_dtype, copy=False))
+                    imwrite(mask_path, mask.astype(frame_mask_dtype, copy=False))
 
                 return {
                     "frame_idx": int(frame_idx),
                     "simulation_frame_idx": int(scene_no),
                     "image_path": os.path.relpath(image_path, series_dir),
                     "mask_path": os.path.relpath(mask_path, series_dir),
+                    "mask_dtype": frame_mask_dtype.name,
                 }
 
             if n_jobs == 1:

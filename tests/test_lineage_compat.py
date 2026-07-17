@@ -39,6 +39,36 @@ def test_lineage_handles_slot_only_cells():
     assert lineage.temporal_lineage_graph.has_edge((1, 1), (2, 1))
 
 
+def test_lineage_adds_persistent_mother_metadata_edge_only_at_division_frame():
+    sim = SimulationStub(
+        [
+            [SlotOnlyCell(mask_label=1, t=0)],
+            [
+                SlotOnlyCell(mask_label=1, t=1),
+                SlotOnlyCell(mask_label=2, t=1, mother_mask_label=1),
+            ],
+            [
+                SlotOnlyCell(mask_label=1, t=2),
+                SlotOnlyCell(mask_label=2, t=2, mother_mask_label=1),
+            ],
+        ]
+    )
+
+    lineage = Lineage(sim)
+
+    assert lineage.temporal_lineage_graph.has_edge((1, 1), (2, 1))
+    assert not lineage.temporal_lineage_graph.has_edge((1, 2), (2, 2))
+
+
+def test_lineage_rejects_duplicate_mask_label_and_time():
+    sim = SimulationStub(
+        [[SlotOnlyCell(mask_label=1, t=0), SlotOnlyCell(mask_label=1, t=0)]]
+    )
+
+    with pytest.raises(ValueError, match="Duplicate detection.*mask_label=1.*time=0"):
+        Lineage(sim)
+
+
 def test_lineage_handles_mixed_frames_and_missing_mother_node():
     sim = SimulationStub(
         [

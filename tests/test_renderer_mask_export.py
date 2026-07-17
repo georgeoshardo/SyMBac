@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+import SyMBac.renderer as renderer_module
 from SyMBac.renderer import Renderer
 
 
@@ -46,6 +47,18 @@ def _render_parameters():
         "noise_match_bools": [False],
         "fourier_match_bools": [False],
     }
+
+
+@pytest.mark.parametrize(
+    ("mask", "expected"),
+    [
+        (np.array([[False, True]], dtype=bool), True),
+        (np.array([[0, 1]], dtype=np.uint16), True),
+        (np.array([[0, 300]], dtype=np.uint16), False),
+    ],
+)
+def test_mask_is_binary_only_for_boolean_or_zero_one_labels(mask, expected):
+    assert renderer_module._is_binary_mask(mask) is expected
 
 
 def test_generate_training_data_relabels_instances_before_uint8_export(tmp_path):
