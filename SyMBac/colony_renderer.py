@@ -1,7 +1,6 @@
 import random
 from itertools import cycle, islice
 import os
-import ray
 import numpy as np
 import noise
 from PIL import Image
@@ -25,6 +24,15 @@ except ImportError:
     _HAS_CUPY = False
 from joblib import Parallel, delayed
 
+
+def _as_png_uint16(image):
+    scaled = rescale_intensity(
+        np.asarray(image, dtype=np.float32),
+        out_range=(0, 1),
+    )
+    return np.round(scaled * np.iinfo(np.uint16).max).astype(np.uint16)
+
+
 class ColonyRenderer:
     def __init__(self, simulation, PSF, camera = None, force_2D = False):
         self.simulation = simulation
@@ -43,6 +51,8 @@ class ColonyRenderer:
 
         if "3d" in self.PSF.mode.lower():
             self.OPL_dirs = sorted(glob(f"{simulation.fluorescent_projections_dir}/*.tif*"))
+        elif "fluo" in self.PSF.mode.lower():
+            self.OPL_dirs = sorted(glob(f"{simulation.fluorescence_dir}/*.png"))
 
     def perlin_generator(self, shape, scale = 5, octaves = 10, persistence = 1.9, lacunarity = 1.8):
 
@@ -93,7 +103,11 @@ class ColonyRenderer:
 
         if "3d" in self.PSF.mode.lower():
             self.PSF.z_height = scene.shape[0]
-            #self.PSF.calculate_PSF()
+            if kernel.shape[0] != scene.shape[0]:
+                self.PSF.calculate_PSF()
+                kernel = self.PSF.kernel
+            if kernel.shape[0] != scene.shape[0]:
+                raise ValueError("3D PSF and scene must have the same z dimension")
             kernel = self.PSF.kernel / np.sum(self.PSF.kernel)
 
             if self.force_2D:
@@ -103,7 +117,10 @@ class ColonyRenderer:
                 convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
             else:
                 convolved = np.array(
-                    [convolve_rescale(scene_slice, PSF_slice/np.sum(PSF_slice), 1/self.resize_amount, rescale_int=False) for scene_slice, PSF_slice in zip(scene, kernel)]
+                    [convolve_rescale(scene_slice, PSF_slice, 1/self.resize_amount, rescale_int=False) for scene_slice, PSF_slice in zip(scene, kernel)]
+                )
+                convolved = rescale_intensity(
+                    convolved.astype(np.float32), out_range=(0, 1)
                 )
         else:
             convolved = convolve_rescale(scene, kernel, 1/self.resize_amount, rescale_int=False)
@@ -123,6 +140,13 @@ class ColonyRenderer:
         return convolved
 
     def generate_random_samples_ray(self, n, roll_prob, savedir, GPUs = (0,) , n_jobs = 1, gpu_fraction=1, batch_size = 20):
+        try:
+            import ray
+        except ImportError as error:
+            raise ImportError(
+                "Ray is required for ColonyRenderer.generate_random_samples_ray"
+            ) from error
+
         n_GPUs = len(GPUs)
         #if n_GPUs > 1:
         #    n_jobs = n_GPUs
@@ -158,10 +182,10 @@ class ColonyRenderer:
                         rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
 
                     if "3d" in self.PSF.mode.lower():
-                        tifffile.imwrite(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
+                        tifffile.imwrite(f"{savedir}/synth_imgs/{str(j).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
                     else:
-                        Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
-                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+                        Image.fromarray(_as_png_uint16(sample)).save(f"{savedir}/synth_imgs/{str(j).zfill(zero_pads)}.png")
+                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(j).zfill(zero_pads)}.png")
 
             if _HAS_CUPY:
                 s = cp.cuda.Stream(non_blocking=True)
@@ -238,10 +262,10 @@ class ColonyRenderer:
                         rescaled_mask = np.roll(rescaled_mask, amount, axis=n_axis_to_roll)
 
                     if "3d" in self.PSF.mode.lower():
-                        tifffile.imwrite(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
+                        tifffile.imwrite(f"{savedir}/synth_imgs/{str(j).zfill(zero_pads)}.tif", sample, compression='zlib', compressionargs={'level': 8})
                     else:
-                        Image.fromarray(sample).save(f"{savedir}/synth_imgs/{str(i).zfill(zero_pads)}.png")
-                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(i).zfill(zero_pads)}.png")
+                        Image.fromarray(_as_png_uint16(sample)).save(f"{savedir}/synth_imgs/{str(j).zfill(zero_pads)}.png")
+                    Image.fromarray(rescaled_mask).save(f"{savedir}/masks/{str(j).zfill(zero_pads)}.png")
 
                     #if j > n:
                     #    break
