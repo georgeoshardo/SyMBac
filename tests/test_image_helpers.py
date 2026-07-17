@@ -1,5 +1,6 @@
 import numpy as np
 
+from SyMBac.misc import resize_mask, unet_weight_map
 from SyMBac.pySHINE import lumMatch, sfMatch
 
 
@@ -75,3 +76,21 @@ def test_sf_match_preserves_existing_nondegenerate_result():
     matched = sfMatch(images)
 
     np.testing.assert_allclose(matched, expected, rtol=1e-8, atol=1e-8)
+
+
+def test_resize_mask_preserves_touching_integer_labels():
+    mask = np.array([[1, 2], [1, 2]], dtype=np.uint16)
+
+    resized = resize_mask(mask, (4, 4), ret_label=True)
+
+    expected = np.repeat(np.repeat(mask, 2, axis=0), 2, axis=1)
+    np.testing.assert_array_equal(resized, expected)
+
+
+def test_unet_weight_map_preserves_fractional_class_weights():
+    mask = np.array([[0, 0, 1], [0, 1, 1]], dtype=np.uint8)
+
+    weights = unet_weight_map(mask, wc={0: 0.25, 1: 1.5})
+
+    assert np.issubdtype(weights.dtype, np.floating)
+    np.testing.assert_array_equal(weights, np.where(mask == 0, 0.25, 1.5))
