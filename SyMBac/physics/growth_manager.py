@@ -21,7 +21,11 @@ class GrowthManager:
             cell: The `SimCell` object to be grown.
             dt: The time step for the current simulation frame.
         """
-        if not cell.is_dividing and cell.length >= cell.max_length: #LENGTH_FIX # TODO: is this actually necessary?
+        enough_segments_to_divide = (
+            cell.physics_representation.num_segments
+            >= 2 * cell.config.MIN_LENGTH_AFTER_DIVISION
+        )
+        if not cell.is_dividing and cell.length >= cell.max_length and enough_segments_to_divide:
             return
 
         if cell.physics_representation.num_segments < 2:
@@ -34,28 +38,21 @@ class GrowthManager:
         cell.physics_representation.growth_accumulator_head += half_growth
         cell.physics_representation.growth_accumulator_tail += half_growth
 
-        # Stretch the head joint by adjusting the anchor on the first segment.
-        # This pushes the head segment outwards.
+        while cell.physics_representation.growth_accumulator_head >= cell.config.GROWTH_THRESHOLD:
+            cell.physics_representation.add_head_segment()
+            cell.physics_representation.growth_accumulator_head -= cell.config.GROWTH_THRESHOLD
+
+        while cell.physics_representation.growth_accumulator_tail >= cell.config.GROWTH_THRESHOLD:
+            cell.physics_representation.add_tail_segment()
+            cell.physics_representation.growth_accumulator_tail -= cell.config.GROWTH_THRESHOLD
+
         first_pivot_joint = cell.physics_representation.pivot_joints[0]
         first_pivot_joint.anchor_a = (
             cell.config.JOINT_DISTANCE / 2 + cell.physics_representation.growth_accumulator_head,
-            0
+            0,
         )
-
-        # Stretch the tail joint by adjusting the anchor on the last segment.
-        # This pushes the tail segment outwards.
         last_pivot_joint = cell.physics_representation.pivot_joints[-1]
         last_pivot_joint.anchor_b = (
             -cell.config.JOINT_DISTANCE / 2 - cell.physics_representation.growth_accumulator_tail,
             0,
         )
-
-        # If the head has grown enough, insert a new segment.
-        if cell.physics_representation.growth_accumulator_head >= cell.config.GROWTH_THRESHOLD:
-            cell.physics_representation.add_head_segment()
-            cell.physics_representation.growth_accumulator_head = 0.0
-
-        # If the tail has grown enough, insert a new segment.
-        if cell.physics_representation.growth_accumulator_tail >= cell.config.GROWTH_THRESHOLD:
-            cell.physics_representation.add_tail_segment()
-            cell.physics_representation.growth_accumulator_tail = 0.0

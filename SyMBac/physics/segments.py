@@ -106,10 +106,14 @@ class CellSegment:
     @radius.setter
     def radius(self, new_radius: float) -> None:
         if self.use_unsafe_radius_set:
-            self.shape.unsafe_set_radius(new_radius)  # More efficient but is it okay?
+            self.shape.unsafe_set_radius(new_radius)
         else:
             friction, filter = self.shape.friction, self.shape.filter
             self.space.remove(self.shape)
             self.shape = pymunk.Circle(self.body, new_radius)
             self.shape.friction, self.shape.filter = friction, filter
             self.space.add(self.shape)
+
+        self.body.moment = pymunk.moment_for_circle(self.body.mass, 0, new_radius)
+        if self.shape.space is not None:
+            self.shape.space.reindex_shape(self.shape)

@@ -24,6 +24,20 @@ def _atomic_pickle_dump(payload, output_path):
             os.remove(temp_path)
 
 
+def _handle_lysis(sim, lysis_p):
+    if lysis_p <= 0:
+        return
+
+    candidates = list(sim.colony.cells)
+    np.random.shuffle(candidates)
+    lysis_threshold = norm.ppf(lysis_p)
+    for cell in candidates:
+        if len(sim.colony.cells) <= 1:
+            break
+        if norm.rvs() <= lysis_threshold:
+            sim.colony.delete_cell(cell)
+
+
 class Simulation:
     
     """
@@ -207,6 +221,8 @@ class Simulation:
 
         if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps <= 0:
             raise ValueError("substeps must be an integer greater than 0.")
+        if isinstance(lysis_p, bool) or not 0.0 <= lysis_p <= 1.0:
+            raise ValueError("lysis_p must be in [0.0, 1.0].")
         if cell_config_overrides is not None and not isinstance(cell_config_overrides, dict):
             raise TypeError("cell_config_overrides must be a dict when provided.")
         if physics_config_overrides is not None and not isinstance(physics_config_overrides, dict):
@@ -459,13 +475,7 @@ class Simulation:
                     sim.colony.delete_cell(cell)
 
         def handle_lysis(sim):
-            if self.lysis_p <= 0:
-                return
-            for cell in sim.colony.cells[:]:
-                if len(sim.colony.cells) <= 1:
-                    break
-                if norm.rvs() <= norm.ppf(self.lysis_p):
-                    sim.colony.delete_cell(cell)
+            _handle_lysis(sim, self.lysis_p)
 
         def apply_rigid_body_brownian_jitter(sim):
             if (
