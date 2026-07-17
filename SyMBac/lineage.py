@@ -243,7 +243,6 @@ class Lineage:
                     x_px = np.nan
                     y_px = np.nan
 
-            lineage_root = self._resolve_lineage_root(mask_label)
             generation = getattr(cell, "generation", 0)
             generation = int(generation) if not self._is_missing(generation) else 0
 
@@ -254,7 +253,6 @@ class Lineage:
                 y=float(y_px * spatial_scale) if np.isfinite(y_px) else np.nan,
                 seg_id=int(mask_label),
                 tracklet_id=int(mask_label),
-                lineage_id=int(lineage_root) if not self._is_missing(lineage_root) else -1,
                 length=float(getattr(cell, "length", np.nan) * spatial_scale),
                 width=float(getattr(cell, "width", np.nan) * spatial_scale),
                 angle=float(getattr(cell, "angle", np.nan)),
@@ -265,6 +263,11 @@ class Lineage:
         for source, target in self.temporal_lineage_graph.edges:
             if source in node_lookup and target in node_lookup:
                 geff_graph.add_edge(node_lookup[source], node_lookup[target])
+
+        for component in nx.weakly_connected_components(geff_graph):
+            lineage_id = min(component)
+            for node_id in component:
+                geff_graph.nodes[node_id]["lineage_id"] = lineage_id
 
         metadata = geff.GeffMetadata(
             directed=True,

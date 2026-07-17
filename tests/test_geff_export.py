@@ -199,7 +199,7 @@ def test_lineage_to_geff_round_trips_standard_metadata(tmp_path):
     lineage = Lineage(sim)
 
     store = tmp_path / "lineage.geff"
-    lineage.to_geff(store, overwrite=True)
+    lineage.to_geff(store, frame_range=(2, 3), overwrite=True)
     _, metadata = geff.read(
         store,
         data_validation=ValidationConfig(graph=True, tracklet=True, lineage=True),
