@@ -53,19 +53,32 @@ def sfMatch(images, rescaling=0, tarmag=None):
         r = np.round(r) - 1
     else:
         r = np.round(r)
+    radial_bins = (r.T.ravel() + 1).astype(int)
+    _, radial_inverse = np.unique(radial_bins, return_inverse=True)
+    number_of_bins = radial_inverse.max() + 1
+    target_energy = np.bincount(
+        radial_inverse,
+        weights=tarmag.T.ravel(),
+        minlength=number_of_bins,
+    )
+    coefficient_indices = r.astype(int)
+    outside_radius = r > np.floor(np.max((xs, ys)) / 2)
     output_images = []
     for x in range(numin):
         fftim = mags[:, :, x]
-        a = fftim.T.ravel()
-        accmap = r.T.ravel() + 1
-        a2 = tarmag.T.ravel()
-        en_old = np.array(
-            [np.sum([a[x] for x in y]) for y in [list(np.where(accmap == z)) for z in np.unique(accmap).tolist()]])
-        en_new = np.array(
-            [np.sum([a2[x] for x in y]) for y in [list(np.where(accmap == z)) for z in np.unique(accmap).tolist()]])
-        coefficient = en_new / en_old
-        cmat = coefficient[(r).astype(int)]  # coefficient[r+1]
-        cmat[r > np.floor(np.max((xs, ys)) / 2)] = 0
+        source_energy = np.bincount(
+            radial_inverse,
+            weights=fftim.T.ravel(),
+            minlength=number_of_bins,
+        )
+        coefficient = np.divide(
+            target_energy,
+            source_energy,
+            out=np.zeros_like(target_energy),
+            where=source_energy != 0,
+        )
+        cmat = coefficient[coefficient_indices]
+        cmat[outside_radius] = 0
         newmag = fftim * cmat
         XX, YY = pol2cart(angs[:, :, x], newmag)
         new = XX + YY * complex(0, 1)
@@ -144,15 +157,11 @@ def lumMatch(images, mask=None, lum=None):
                 im1[:, :] = M
             output_images.append(im1)
     elif (mask is None) and (lum is not None):
-        M = 0
-        S = 0
         for im in range(numin):
             if len(images[im].shape) == 3:
                 images[im] = rgb2gray(images[im])
-            M = lum[0]
-            S = lum[1]
-        M = M / numin
-        S = S / numin
+        M = lum[0]
+        S = lum[1]
         output_images = []
         for im in range(numin):
             im1 = copy.deepcopy(images[im])
@@ -173,7 +182,7 @@ def lumMatch(images, mask=None, lum=None):
             assert m.size == images[im].size, "Image and mask are not the same size"
             assert np.sum(m == 1) > 0, 'The mask must contain some ones.'
             M = M + np.mean(im1[m == 1])
-            S = S + np.mean(im1[m == 1])
+            S = S + np.std(im1[m == 1])
         M = M / numin
         S = S / numin
         output_images = []
