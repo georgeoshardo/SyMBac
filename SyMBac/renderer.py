@@ -1042,12 +1042,12 @@ class Renderer:
         """
 
         :param bool manual_update: Whether to turn on manual updating. This is recommended if you have no/a slow GPU. Will display a button to allow manual updating of the image optimiser
-        :param dict initial_values: Optional dictionary of parameter names to initial slider values. Can be obtained from ``AutoOptimiser.best_params`` to use auto-optimised values as a starting point for manual fine-tuning.
+        :param dict initial_values: Optional dictionary of parameter names to initial slider values.
         :return: ipywidget object for optimisation of synthetic data
         """
 
-        # If image_params was already set (e.g. by AutoOptimiser.apply_to_renderer),
-        # skip the napari label computation which requires select_intensity_napari().
+        # If image_params was already set, skip the napari label computation
+        # which requires select_intensity_napari().
         if not hasattr(self, 'image_params') or self.image_params is None:
             self.real_media_mean = self.real_resize[np.where(self.media_label.data)].mean()
             self.real_cell_mean = self.real_resize[np.where(self.cell_label.data)].mean()
@@ -1089,7 +1089,7 @@ class Renderer:
             edge_floor_opl=edge_floor_range,
         )
 
-        # Apply initial values to sliders (e.g. from auto-optimisation)
+        # Apply initial values to sliders
         if initial_values is not None:
             for child in self.params.children:
                 name = getattr(child, 'description', None)
