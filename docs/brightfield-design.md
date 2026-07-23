@@ -1,106 +1,85 @@
-# Chromatix brightfield design
+## 1. One Production Model
+SyMBac will implement a single, vectorial Chromatix brightfield path for its production model. This is not a scalar approximation. Chromatix will perform the complete physical optical calculation from the illumination-field construction to the camera-plane intensity. It will not be used merely as an additive sensor noise step.
 
-## Goal
-
-Chromatix will perform the production optical calculation from illumination-field construction to camera-plane intensity.
-
-## Non-goals
-
-This task does not implement:
-
-* Production code.
-* A custom CTF/WOTF renderer.
-* BPM or multislice propagation.
-* Sensor noise.
-* Mother-machine device optics.
-* Parameter fitting.
-* Renderer integration.
-
-## Existing SyMBac input
-
-`OPL_scene` arrays are generated natively within the SyMBac drawing pipeline (e.g., via `draw_simulation_OPL` and `draw_scene_from_segments`). Physically, these values represent proportional cell heights or raw optical path lengths derived from the cell geometries before physical scaling is applied.
-
-To convert these raw array values into physical micrometres, they are multiplied by the spatial resolution `pix_mic_conv` and divided by the upscaling factor `resize_amount`.
-
-## Physical specimen model
+## 2. The Actual SyMBac Specimen Input
+Despite its legacy name, `OPL_scene` stores the projected geometric cell thickness in supersampled simulation pixels, not the optical path length. The conversion to physical thickness is defined as:
 
 ```python
-thickness_um =
-    OPL_scene * pix_mic_conv / resize_amount
-
-transmission =
-    exp(-absorption)
-    * exp(1j * 2*pi/wavelength_um
-          * refractive_index_difference
-          * thickness_um)
+thickness_um = OPL_scene * pix_mic_conv / resize_amount
 
 ```
 
-Term Definitions:
+* `OPL_scene`: 2D array, shape `[H, W]`, dimensionless. Overlapping projected cells are currently treated with a winner-takes-all depth projection; overlap pixels are not additive thickness.
+* `pix_mic_conv`: Scalar, physical size of a camera pixel in micrometres (um).
+* `resize_amount`: Scalar, dimensionless upscaling factor.
+* `thickness_um`: 2D array, shape `[H, W]`, physical thickness (um).
 
-* `thickness_um`: Physical thickness of the specimen. Unit: micrometres. Array shape: [H, W]
-* `OPL_scene`: Raw optical path length array. Unit: dimensionless. Array shape: [H, W]
-* `pix_mic_conv`: Spatial scale of a pixel. Unit: micrometres per pixel. Array shape: scalar
-* `resize_amount`: Interpolation scaling factor. Unit: dimensionless. Array shape: scalar
-* `transmission`: Complex transmitted optical field. Unit: dimensionless. Array shape: [H, W]
-* `absorption`: Absorption coefficient. Unit: dimensionless. Array shape: [H, W]
-* `wavelength_um`: Illumination wavelength. Unit: micrometres. Array shape: scalar
-* `refractive_index_difference`: Difference in index between cell and medium. Unit: dimensionless. Array shape: scalar
+For the initial model, we assume a thin, isotropic, non-birefringent specimen with unit amplitude transmittance and a phase shift defined by:
 
-## Chromatix optical path
+```python
+phase_rad = (
+    2 * np.pi / wavelength_vacuum_um
+    * refractive_index_difference
+    * thickness_um
+)
+transmission = np.exp(1j * phase_rad)
 
-* plane wave: Proposed function is `chromatix.elements.PlaneWave` (Documentation: [https://chromatix.readthedocs.io](https://chromatix.readthedocs.io)).
-* sample amplitude: Proposed function is `chromatix.elements.AmplitudeMask` (Documentation: [https://chromatix.readthedocs.io](https://chromatix.readthedocs.io)).
-* sample phase: Proposed function is `chromatix.elements.PhaseMask` (Documentation: [https://chromatix.readthedocs.io](https://chromatix.readthedocs.io)).
-* objective pupil and defocus: Proposed function is `chromatix.elements.MicroscopeObjective` (Documentation: [https://chromatix.readthedocs.io](https://chromatix.readthedocs.io)).
-* camera-plane field: The resulting complex field propagated to the sensor plane natively by the objective element.
-* intensity: Proposed function is `chromatix.elements.IntensitySensor` (Documentation: [https://chromatix.readthedocs.io](https://chromatix.readthedocs.io)).
+```
 
-Chromatix will perform the production optical propagation. It will not be used only for sensor noise.
+Because the specimen is strictly isotropic and non-birefringent, this single scalar `transmission` value can multiply every electric-field component. The propagation remains vectorial, but the physical specimen interaction delays all polarisation components equally without requiring an imaginary refractive index, birefringence, or 3D BPM parameters.
 
-## Partial-coherence model
+## 3. The Vector and Polarisation Reasoning
 
-One source point is propagated coherently because light originating from a single infinitesimal point on the condenser emits a deterministic plane wave with a constant phase relationship across the entire sample.
-Intensities rather than complex fields are summed across mutually incoherent source points because points on an extended source are statistically independent; their rapidly fluctuating cross-interference terms average to zero over the camera's integration time.
-Source weights are normalised such that their sum equals exactly 1 to ensure that the total incident energy is conserved regardless of the number of source points sampled.
-Source-sampling convergence will be checked by increasing the number of simulated condenser points and verifying that the maximum difference between the resulting intensity images falls below a predefined numerical tolerance threshold.
+Chromatix represents physical vector fields using the component order `[E_z, E_y, E_x]`. Physical direction coordinates will be defined as spatial frequencies `kykx = [k_y, k_x]` in rad/um.
 
-## Sensor model
+For each oblique source direction represented by wavevector $\vec{k}$, we construct two orthogonal transverse Jones states ($\vec{E}_1$ and $\vec{E}_2$), verifying transversality with $\vec{k} \cdot \vec{E} = 0$. To represent nominally unpolarised illumination, we propagate these orthogonal states separately through the entire system and average their intensities once at the detector:
 
-The sensor model will output the ideal continuous intensity mapped to a discrete pixel grid. It will not include physical read noise or shot noise, as sensor noise is explicitly defined as a non-goal for this task.
+```python
+intensity_q = 0.5 * intensity_q_1 + 0.5 * intensity_q_2
 
-## Physical parameters and units
+```
 
-| Physical quantity | Proposed code name | Value | Unit | Meaning | Source |
-| --- | --- | --- | --- | --- | --- |
-| Illumination wavelength | `wavelength_um` | TBD | micrometres | Wavelength of light | User input |
-| Focal plane offset | `defocus_um` | TBD | micrometres | Defocus distance | User input |
-| Numerical aperture | `objective_na` | TBD | N/A | NA of the objective | User input |
-| Background index | `sample_medium_refractive_index` | TBD | N/A | Medium refractive index | User input |
-| Specimen index | `cell_refractive_index` | TBD | N/A | Cell refractive index | User input |
+We do not add the two complex fields, nor do we halve both field amplitudes (which would quarter the power). Incident power is explicitly normalised so that changing the arbitrary stable input basis ($\vec{e}_1, \vec{e}_2$), the source angle, or array padding does not change the stated illumination power. The stable input basis is distinguished from the physical interface TE/TM (`s`/`p`) coordinates.
 
-## Validation tests
+## 4. An Honest Chromatix Optical Path
 
-* Zero refractive-index contrast: Expected result is a completely uniform, flat image. Failure would mean the model is injecting artifactual phase or amplitude changes.
-* A uniform sample: Expected result is flat, constant intensity across the field. Failure would mean propagation steps are introducing non-uniformities or boundary errors.
-* One on-axis source: Expected result is a standard coherent imaging response with prominent edge ringing. Failure would mean coherent limits are not accurately modeled.
-* Positive and negative defocus: Expected result is a physically accurate, asymmetric intensity change. Failure would mean the defocus phase operator has an incorrect sign or scaling.
-* Increasing condenser-source samples: Expected result is asymptotic convergence to a smooth, partially coherent image. Failure would mean incorrect incoherent summation or invalid weight normalisation.
-* Padding and cropping: Expected result is that the central region of interest remains invariant regardless of boundary size. Failure would mean edge artifacts or wrap-around errors are polluting the center.
-* Constant incident photon scaling: Expected result is total energy conservation across operations. Failure would mean scaling factors are lost during FFTs or discrete propagations.
+This design utilizes APIs from the pinned Chromatix 0.6.0 release. The operations will include verified vector sources and intensity averaging. We will investigate `chromatix.elements.high_na_ff_lens`; however, because its documented example is strictly pupil-to-focus, it is not a complete transmitted-light microscope path.
 
-## Proposed production files
+**Unresolved Items (Supervisor Gates):**
 
-* `SyMBac/brightfield.py`
-* `tests/test_brightfield.py`
-* `docs/brightfield.md`
+* **Object-to-Pupil and Objective Support:** How to handle physical collection and transversality after the spatially varying sample interface. *Proposal:* Benchmark against an established vectorial rigorous coupled-wave analysis (RCWA) reference.
+* **Sample/Coverslip/Immersion Interfaces:** Defining transmission Fresnel coefficients. *Proposal:* Validate against specific physical optics derivations (e.g., Novotny & Hecht) before implementation.
+* **Physical Defocus:** Applying `chromatix.functional.defocus` correctly to the high-NA vectorial field. *Proposal:* Validate against a low-NA paraxial limit benchmark.
 
-## Chromatix dependency strategy
+## 5. Parameters and Units
 
-We will pin an exact version or commit hash of chromatix in pixi.toml to guarantee identical environments. The module will target Python 3.12. Initially, Chromatix will be kept as an optional dependency so as not to disrupt existing CI pipelines. The dependency strategy must ensure that the Pixi lockfile resolves successfully across all supported platforms and correctly handles jax and jaxlib dependencies.
+| Code Name | Value | Unit | Physical Meaning | Source / Blocked Claim if unknown |
+| --- | --- | --- | --- | --- |
+| `wavelength_vacuum_um` | `unknown` | um | Vacuum wavelength | Blocks spectral weights / phase |
+| `na_objective` | `unknown` | dimensionless | Numerical aperture | Blocks high-NA collection limits |
+| `n_medium` | `unknown` | dimensionless | Refractive index of sample medium | Blocks phase and interface scaling |
+| `n_cell` | `unknown` | dimensionless | Refractive index of cell | Blocks phase difference |
+| `n_coverslip` | `unknown` | dimensionless | Refractive index of coverslip | Blocks interface calculations |
+| `n_immersion` | `unknown` | dimensionless | Refractive index of immersion | Blocks pupil mapping |
+| `pix_mic_conv` | `unknown` | um | Camera pixel size | Blocks physical scaling |
+| `resize_amount` | `unknown` | dimensionless | Simulation supersampling | Blocks physical scaling |
+| `defocus_um` | `unknown` | um | Physical defocus distance | Blocks 3D stack generation |
 
-## Known assumptions and limitations
+## 6. Validation Plan
 
-* Assumes scalar optics, completely ignoring polarization and vectorial diffraction effects.
-* Assumes the thin phase and amplitude object approximation, meaning diffraction within the cell volume itself is ignored.
-* Neglects multiple scattering events between densely packed specimens.
+Each claim must be verified against independent references. Benchmarks are marked as pending supervisor approval.
+
+* **Zero contrast and uniform-sample limits:** Flat phase fields must yield uniform intensity (Tolerance: $1 \times 10^{-6}$).
+* **Transverse and orthogonal polarisation states:** Must have equal incident power.
+* **Invariance to transverse polarisation basis:** Changing the arbitrary input basis must not alter the averaged unpolarised intensity.
+* **Vectorial propagation case:** Independent benchmark (pending supervisor approval).
+* **Convergence:** Array padding, cropping, and source/spectral sampling must converge asymptoticaly.
+* **Low-NA scalar comparison:** Test only; must match scalar FFT propagation strictly within its stated paraxial validity range.
+* **Consistent physical scaling:** Must be verified before detector noise is added.
+
+## 7. Staged Implementation Plan
+
+* **Vectorial Core:** Build the smallest test file to construct orthogonal Jones states and normalise power. (Independent vectorial benchmark).
+* **Optional Chromatix Dependency:** Wrap Chromatix imports in `try/except ImportError` so it remains optional in the default SyMBac environment.
+* **Specimen Integration:** Add the scaled `thickness_um` and thin-phase object operations.
+* **Microscope Assembly:** Integrate high-NA collection and interfaces only after supervisor gates on unresolved items are passed.
