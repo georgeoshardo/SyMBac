@@ -858,6 +858,30 @@ class Simulation:
         _atomic_pickle_dump(self.cell_timeseries, os.path.join(self.save_dir, "cell_timeseries.p"))
         _atomic_pickle_dump(self.space, os.path.join(self.save_dir, "space_timeseries.p"))
 
+    def ensure_geometry_layout(self):
+        """Return ``(geometry_spec, geometry_layout)`` for this simulation.
+
+        ``run_simulation`` records both. A simulation loaded from disk has neither, so
+        they are rebuilt here from the same parameters ``run_simulation`` would use.
+        The renderer needs them to draw the device in the same frame as the cells.
+        """
+        spec = getattr(self, "_geometry_spec", None)
+        layout = getattr(self, "_geometry_layout", None)
+        if spec is None or layout is None:
+            from SyMBac.physics.microfluidic_geometry import GeometryLayout, TrenchGeometrySpec
+
+            spec = self.geometry
+            if spec is None:
+                scale_factor = (1 / self.pix_mic_conv) * self.resize_amount
+                spec = TrenchGeometrySpec(
+                    width=self.trench_width * scale_factor,
+                    trench_length=self.trench_length * scale_factor,
+                )
+            layout = GeometryLayout(spec)
+            self._geometry_spec = spec
+            self._geometry_layout = layout
+        return spec, layout
+
     def draw_simulation_OPL(self, label_masks=True, return_output=False):
         """
         Draw the optical path length images from the simulation.
@@ -873,7 +897,10 @@ class Simulation:
                 "Legacy rigid-body data is no longer supported."
             )
 
+        # Kept for backward compatibility with user code that inspects it. The renderer
+        # no longer uses it: the device is drawn from the geometry spec and layout.
         self.main_segments = get_trench_segments(self.space)
+        self.ensure_geometry_layout()
 
         self.cell_timeseries_segments = []
         for frame_snapshots in self.cell_timeseries:

@@ -125,6 +125,23 @@ class GeometrySpec:
     def project_body_inside_bounds(self, body, radius: float, layout: GeometryLayout) -> tuple[bool, bool, bool]:
         raise NotImplementedError
 
+    def interior_mask(self, layout: GeometryLayout, shape: tuple[int, int], offset: float = 0.0) -> np.ndarray:
+        """Boolean raster of the fluid-filled interior, in scene pixel coordinates.
+
+        Pixel ``(row, col)`` corresponds to world point ``(col - offset, row - offset)``,
+        the same convention used by ``SyMBac.drawing.draw_scene_from_segments``, so the
+        interior drawn here is registered to the cells by construction.
+        """
+        raise NotImplementedError
+
+    def scene_window(self, layout: GeometryLayout, offset: float = 0.0) -> tuple[int, int, int, int]:
+        """``(row_start, row_stop, col_start, col_stop)`` of the device region in scene pixels.
+
+        Rows start at the closed end of the interior and extend to the outer edge of the
+        walls at the open end; columns span the full wall thickness on both sides.
+        """
+        raise NotImplementedError
+
 
 def segment_creator(local_xy1, local_xy2, global_xy, thickness):
     segment_body = pymunk.Body(body_type=pymunk.Body.STATIC)
@@ -290,6 +307,25 @@ class TrenchGeometrySpec(GeometrySpec):
             if y > (self.open_end_y + 0.25 * radius):
                 return True
         return False
+
+    def interior_mask(self, layout: GeometryLayout, shape: tuple[int, int], offset: float = 0.0) -> np.ndarray:
+        rows = np.arange(int(shape[0]), dtype=np.float64)
+        cols = np.arange(int(shape[1]), dtype=np.float64)
+        local_y = rows - float(offset) - layout.world_offset[1]
+        local_x = cols - float(offset) - layout.world_offset[0]
+        grid_x, grid_y = np.meshgrid(local_x, local_y)
+        r = self.inner_half_width
+        # Inner cap: semicircle of radius w/2 centred on (0, w/2); its apex is local y = 0.
+        cap_floor = r - np.sqrt(np.clip(r * r - grid_x * grid_x, 0.0, None))
+        return (np.abs(grid_x) <= r) & (grid_y >= cap_floor) & (grid_y <= self.open_end_y)
+
+    def scene_window(self, layout: GeometryLayout, offset: float = 0.0) -> tuple[int, int, int, int]:
+        apex_world_y = layout.world_offset[1]  # local y = 0 is the closed-end apex
+        row_start = int(round(apex_world_y + offset))
+        row_stop = int(round(layout.world_bounds.max_y + offset))
+        col_start = int(round(layout.world_bounds.min_x + offset))
+        col_stop = int(round(layout.world_bounds.max_x + offset))
+        return row_start, row_stop, col_start, col_stop
 
     def project_body_inside_bounds(self, body, radius: float, layout: GeometryLayout) -> tuple[bool, bool, bool]:
         local_position = layout.to_local_point((float(body.position[0]), float(body.position[1])))
