@@ -73,6 +73,17 @@ class Colony:
                         # If the daughter's head is overlapping with the mother
                         if info.shape in mother_shapes:
 
+                            mother_can_trim = (
+                                len(mother.physics_representation.segments)
+                                > mother.config.MIN_LENGTH_AFTER_DIVISION
+                            )
+                            daughter_can_trim = (
+                                len(daughter.physics_representation.segments)
+                                > daughter.config.MIN_LENGTH_AFTER_DIVISION
+                            )
+                            if not mother_can_trim or not daughter_can_trim:
+                                break
+
                             mother_removed_segment = mother.physics_representation.remove_tail_segment()
                             daughter_removed_segment = daughter.physics_representation.remove_head_segment()
                             if mother_removed_segment is None or daughter_removed_segment is None:

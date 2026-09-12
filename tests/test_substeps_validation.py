@@ -44,6 +44,14 @@ def test_substeps_validation_accepts_positive_int(tmp_path):
     assert simulation.substeps == 3
 
 
+@pytest.mark.parametrize("bad_lysis_p", [-0.1, 1.1, float("nan")])
+def test_lysis_probability_must_be_in_unit_interval(tmp_path, bad_lysis_p):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs["lysis_p"] = bad_lysis_p
+    with pytest.raises(ValueError, match="lysis_p"):
+        Simulation(**kwargs)
+
+
 @pytest.mark.parametrize(
     "field_name,bad_value",
     [
