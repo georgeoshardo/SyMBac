@@ -125,6 +125,9 @@ def convolve_rescale(image, kernel, rescale_factor, rescale_int):
     output : 2D numpy array
         The output of the convolution rescale operation
     """
+    if np.ndim(image) != 2 or np.ndim(kernel) != 2:
+        raise ValueError("convolve_rescale requires a 2-D image and kernel")
+
     output = _convolve_2d(image, kernel)
     output = rescale(output, rescale_factor, anti_aliasing=False)
 
@@ -714,7 +717,7 @@ class Renderer:
                                      pix_mic_conv=self.simulation.pix_mic_conv, apo_sigma=sigma, mode="phase contrast",
                                      condenser=self.PSF.condenser)
             self.PSF.calculate_PSF()
-        if self.PSF.mode.lower() == "3d fluo":  # Full 3D PSF model
+        if "3d fluo" in self.PSF.mode.lower():  # Full 3D PSF model
             def generate_deviation_from_CL(centreline, thickness):
                 return np.arange(thickness) + centreline - int(np.ceil(thickness / 2))
 
