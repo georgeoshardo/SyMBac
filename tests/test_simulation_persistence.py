@@ -2,6 +2,7 @@ import importlib.util
 import os
 import pickle
 import sys
+import threading
 import types
 
 import numpy as np
@@ -16,6 +17,7 @@ if importlib.util.find_spec("napari") is None:
 from SyMBac.simulation import Simulation
 import SyMBac.simulation as simulation_module
 import SyMBac.cell_snapshot as cell_snapshot_module
+import SyMBac.live_viewer as live_viewer_module
 import SyMBac.physics.simulator as physics_simulator_module
 from SyMBac.physics.microfluidic_geometry import (
     Bounds2D,
@@ -24,6 +26,7 @@ from SyMBac.physics.microfluidic_geometry import (
     SegmentPrimitive,
     TrenchGeometrySpec,
 )
+from SyMBac.physics.joints import CellDampedRotarySpring, CellJoint, CellRotaryLimitJoint
 from pymunk.vec2d import Vec2d
 
 
@@ -267,6 +270,106 @@ def test_run_simulation_persists_required_pickles(tmp_path, monkeypatch):
     assert str(cell_path) in replace_targets
     assert str(space_path) in replace_targets
     assert list(save_dir.glob(".tmp_*.p")) == []
+
+
+def test_real_simulation_save_reload(tmp_path):
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs["sim_length"] = 1
+    kwargs["cell_config_overrides"] = {
+        "DAMPED_ROTARY_SPRING": True,
+        "ROTARY_SPRING_STIFFNESS": 100.0,
+        "ROTARY_SPRING_DAMPING": 10.0,
+    }
+
+    simulation = Simulation(**kwargs)
+    simulation.run_simulation(show_window=False)
+
+    reload_kwargs = dict(kwargs)
+    reload_kwargs["save_dir"] = str(tmp_path / "reload_target")
+    reload_kwargs["load_sim_dir"] = kwargs["save_dir"]
+    reloaded = Simulation(**reload_kwargs)
+
+    assert len(reloaded.cell_timeseries) == 1
+    for constraint_type in (CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring):
+        saved_count = sum(
+            isinstance(constraint, constraint_type)
+            for constraint in simulation.space.constraints
+        )
+        reloaded_count = sum(
+            isinstance(constraint, constraint_type)
+            for constraint in reloaded.space.constraints
+        )
+        assert saved_count > 0
+        assert reloaded_count == saved_count
+
+
+def test_live_viewer_cancellation_joins_worker_without_saving_partial_artifacts(
+    tmp_path, monkeypatch
+):
+    real_thread = threading.Thread
+    worker_in_step = threading.Event()
+    release_worker = threading.Event()
+    worker_threads = []
+    join_timeouts = []
+    join_started_while_alive = []
+    step_count = 0
+
+    class _BlockingSimulator(_DummySimulator):
+        def step(self):
+            nonlocal step_count
+            step_count += 1
+            if step_count == 4:
+                worker_in_step.set()
+                if not release_worker.wait(timeout=5):
+                    raise TimeoutError("Test worker was not released")
+
+    class _ClosingViewer:
+        def __init__(self, **kwargs):
+            pass
+
+        def process_events(self):
+            if not worker_in_step.wait(timeout=5):
+                raise TimeoutError("Simulation worker did not reach the blocking frame")
+
+        @property
+        def closed(self):
+            return True
+
+        def close(self):
+            return None
+
+    class _TrackingThread(real_thread):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            worker_threads.append(self)
+
+        def join(self, timeout=None):
+            join_started_while_alive.append(self.is_alive())
+            join_timeouts.append(timeout)
+            release_worker.set()
+            super().join(timeout)
+
+    monkeypatch.setattr(physics_simulator_module, "Simulator", _BlockingSimulator)
+    monkeypatch.setattr(cell_snapshot_module, "CellSnapshot", _DummySnapshot)
+    monkeypatch.setattr(live_viewer_module, "LiveSimulationViewer", _ClosingViewer)
+    monkeypatch.setattr(threading, "Thread", _TrackingThread)
+
+    kwargs = _simulation_kwargs(tmp_path)
+    kwargs["sim_length"] = 3
+    simulation = Simulation(**kwargs)
+    try:
+        simulation.run_simulation(show_window=True)
+    finally:
+        release_worker.set()
+        for worker_thread in worker_threads:
+            real_thread.join(worker_thread, timeout=5)
+
+    assert step_count == 4
+    assert join_started_while_alive == [True]
+    assert join_timeouts == [None]
+    assert all(not worker_thread.is_alive() for worker_thread in worker_threads)
+    assert not (tmp_path / "sim" / "cell_timeseries.p").exists()
+    assert not (tmp_path / "sim" / "space_timeseries.p").exists()
 
 
 def test_load_sim_dir_missing_artifacts_error_names_expected_files(tmp_path):
