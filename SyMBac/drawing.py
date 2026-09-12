@@ -11,7 +11,6 @@ from skimage.exposure import rescale_intensity
 from skimage.segmentation import find_boundaries
 from PIL import Image
 
-div_odd = lambda n: (n // 2, n // 2 + 1)
 perc_diff = lambda a, b: (a - b) / b * 100
 
 
@@ -64,7 +63,8 @@ def apply_cell_texture(OPL_cell, cell_id, scale=70.0, octaves=3, persistence=0.5
 def get_crop_bounds_2D(img, tol=0):
     mask = img>tol
     x_idx = np.ix_(mask.any(1),mask.any(0))
-    start_row, stop_row, start_col, stop_col = x_idx[0][0][0], x_idx[0][-1][0], x_idx[1][0][0], x_idx[1][0][-1]
+    start_row, stop_row = x_idx[0][0][0], x_idx[0][-1][0] + 1
+    start_col, stop_col = x_idx[1][0][0], x_idx[1][0][-1] + 1
 
     return (start_row, stop_row), (start_col, stop_col)
 
@@ -334,34 +334,14 @@ def make_images_same_shape(real_image, synthetic_image, rescale_int=True):
         1], "Real image has a higher diemsion on axis 1, increase x_border_expansion_coefficient"
 
     x_diff = synthetic_image.shape[1] - real_image.shape[1]
-    remove_from_left, remove_from_right = div_odd(x_diff)
+    x_start = x_diff // 2
+    x_stop = x_start + real_image.shape[1]
     y_diff = synthetic_image.shape[0] - real_image.shape[0]
-    if real_image.shape[1] % 2 == 0:
-        if synthetic_image.shape[1] % 2 == 0:
-            if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:, remove_from_left - 1:-remove_from_right]
-            else:
-                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):, :]
-        elif synthetic_image.shape[1] % 2 == 1:
-            if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:, remove_from_left:-remove_from_right]
-            else:
-                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):, :]
-    elif real_image.shape[1] % 2 == 1:
-        if synthetic_image.shape[1] % 2 == 0:
-            if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:, remove_from_left:-remove_from_right]
-            else:
-                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):, :]
-        elif synthetic_image.shape[1] % 2 == 1:
-            if y_diff > 0:
-                synthetic_image = synthetic_image[y_diff:, remove_from_left - 1:-remove_from_right]
-            else:
-                synthetic_image = synthetic_image[:, remove_from_left:-remove_from_right]
-                real_image = real_image[abs(y_diff):, :]
+    if y_diff > 0:
+        synthetic_image = synthetic_image[y_diff:, x_start:x_stop]
+    else:
+        synthetic_image = synthetic_image[:, x_start:x_stop]
+        real_image = real_image[abs(y_diff):, :]
 
     if rescale_int:
         real_image = rescale_intensity(real_image.astype(np.float32), out_range=(0, 1))
