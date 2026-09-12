@@ -19,11 +19,16 @@ def resize_mask(mask, resize_shape, ret_label):
     :return: Resized mask
     :rtype: np.ndarray
     """
-    labeled_mask = label(mask > 0, connectivity=1)
+    preserve_labels = np.issubdtype(mask.dtype, np.integer) and np.any(mask > 1)
+    if preserve_labels:
+        labeled_mask = mask
+    else:
+        labeled_mask = label(mask > 0, connectivity=1)
     labeled_mask = resize(labeled_mask, resize_shape, order=0, mode='reflect', cval=0, clip=True, preserve_range=True,
                           anti_aliasing=False, anti_aliasing_sigma=None).astype(int)
-    mask_borders = find_boundaries(labeled_mask, mode="thick", connectivity=1)
-    labeled_mask = np.where(mask_borders, 0, labeled_mask)
+    if not preserve_labels:
+        mask_borders = find_boundaries(labeled_mask, mode="thick", connectivity=1)
+        labeled_mask = np.where(mask_borders, 0, labeled_mask)
     if ret_label:
         return labeled_mask
     else:
@@ -123,9 +128,9 @@ def unet_weight_map(y, wc=None, w0=10, sigma=5):
         d2 = distances[:, :, 1]
         w = w0 * np.exp(-1 / 2 * ((d1 + d2) / sigma) ** 2) * no_labels
     else:
-        w = np.zeros_like(y)
+        w = np.zeros(y.shape, dtype=float)
     if wc:
-        class_weights = np.zeros_like(y)
+        class_weights = np.zeros(y.shape, dtype=float)
         for k, v in wc.items():
             class_weights[y == k] = v
         w = w + class_weights
