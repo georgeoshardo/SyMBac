@@ -7,7 +7,42 @@ unlike cropped real images which routinely show a partial cell at the mouth.
 import numpy as np
 import pytest
 
-from SyMBac.physics.microfluidic_geometry import GeometryLayout, TrenchGeometrySpec
+from SyMBac.physics.microfluidic_geometry import (
+    Bounds2D,
+    GeometryLayout,
+    GeometrySpec,
+    TrenchGeometrySpec,
+)
+
+
+class SharedExitSpec(GeometrySpec):
+    def __init__(self):
+        super().__init__()
+        self.open_end_y = 60.0
+
+    @property
+    def local_bounds(self):
+        return Bounds2D(min_x=-10.0, min_y=0.0, max_x=10.0, max_y=70.0)
+
+    @property
+    def default_padding_x(self):
+        return 0.0
+
+    @property
+    def default_padding_y(self):
+        return 0.0
+
+    def cell_out_of_bounds(self, positions, radii, layout):
+        return (
+            self.exited_fraction(
+                positions,
+                radii,
+                layout,
+                open_end_y=self.open_end_y,
+                margin=0.25,
+            )
+            > self.exit_fraction
+        )
 
 
 def _cell_with_fraction_outside(spec, layout, fraction, n=10, radius=4.0):
@@ -26,6 +61,17 @@ def test_cell_removed_only_when_more_than_half_has_left(fraction, removed):
     spec = TrenchGeometrySpec(width=20.0, trench_length=60.0)
     layout = GeometryLayout(spec)
     positions, radii = _cell_with_fraction_outside(spec, layout, fraction)
+    assert spec.cell_out_of_bounds(positions, radii, layout) is removed
+
+
+@pytest.mark.parametrize("fraction, removed", [(0.4, False), (0.6, True)])
+def test_shared_exit_helper_uses_the_base_majority_rule(fraction, removed):
+    assert hasattr(GeometrySpec, "exited_fraction")
+    spec = SharedExitSpec()
+    layout = GeometryLayout(spec, min_preview_size=0)
+    positions, radii = _cell_with_fraction_outside(spec, layout, fraction)
+
+    assert spec.exit_fraction == 0.5
     assert spec.cell_out_of_bounds(positions, radii, layout) is removed
 
 
