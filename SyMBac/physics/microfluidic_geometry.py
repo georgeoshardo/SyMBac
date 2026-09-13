@@ -84,10 +84,41 @@ class GeometryLayout:
 
 
 class GeometrySpec:
-    def __init__(self, *, exit_fraction: float = 0.5):
-        if not 0.0 <= float(exit_fraction) < 1.0:
-            raise ValueError("exit_fraction must be in [0, 1).")
+    def __init__(self, *, exit_fraction: float = 1.0):
+        """
+        Parameters
+        ----------
+        exit_fraction : float
+            Fraction of a cell's segments that must lie beyond the open end before the
+            cell is removed from the simulation. The default, 1.0, removes a cell only
+            once every segment has left, so cells stay visible, cut off at the trench
+            mouth, until they are essentially gone. 0.5 removes a cell once more than
+            half of it is outside; 0.0 removes it as soon as any segment leaves.
+        """
+        if not 0.0 <= float(exit_fraction) <= 1.0:
+            raise ValueError("exit_fraction must be in [0, 1].")
         self.exit_fraction = float(exit_fraction)
+
+    def has_exited(
+        self,
+        positions,
+        radii,
+        layout: GeometryLayout,
+        *,
+        open_end_y: float,
+        margin: float,
+    ) -> bool:
+        """Whether a cell counts as having left through the open end.
+
+        With ``exit_fraction == 1.0`` every segment centre must be beyond the open end
+        (plus ``margin`` radii); otherwise more than ``exit_fraction`` of them must be.
+        Geometry specs should call this rather than compare ``exited_fraction``
+        themselves, so the threshold semantics live in one place.
+        """
+        exited = self.exited_fraction(positions, radii, layout, open_end_y=open_end_y, margin=margin)
+        if self.exit_fraction >= 1.0:
+            return exited >= 1.0
+        return exited > self.exit_fraction
 
     def exited_fraction(
         self,
@@ -211,17 +242,18 @@ class TrenchGeometrySpec(GeometrySpec):
         trench_length: float,
         barrier_thickness: float = 10.0,
         arc_samples: int = 50,
-        exit_fraction: float = 0.5,
+        exit_fraction: float = 1.0,
     ):
         """
         Parameters
         ----------
         exit_fraction : float
             Fraction of a cell's segments that must lie beyond the open end before the
-            cell is removed from the simulation. 0.5 removes a cell once more than half
-            of it has left the trench, so partially protruding cells remain and are
-            rendered cut off at the trench mouth, as in cropped real images. 0.0
-            removes a cell as soon as any segment leaves.
+            cell is removed from the simulation. The default, 1.0, keeps a cell until
+            every segment has left the trench, so cells are rendered cut off at the
+            trench mouth right up to the moment they are essentially gone, as in
+            cropped real images. 0.5 removes a cell once more than half is outside;
+            0.0 removes it as soon as any segment leaves.
         """
         super().__init__(exit_fraction=exit_fraction)
         self.width = float(width)
@@ -336,16 +368,8 @@ class TrenchGeometrySpec(GeometrySpec):
                 return False
             if y < (0.25 * radius):
                 return False
-        if (
-            enforce_open_end_cap
-            and self.exited_fraction(
-                positions,
-                radii,
-                layout,
-                open_end_y=self.open_end_y,
-                margin=-0.25,
-            )
-            > self.exit_fraction
+        if enforce_open_end_cap and self.has_exited(
+            positions, radii, layout, open_end_y=self.open_end_y, margin=-0.25
         ):
             # A jitter trial may move a protruding cell, but not to where it would be culled.
             return False
@@ -357,18 +381,10 @@ class TrenchGeometrySpec(GeometrySpec):
         # A segment above the closed-end cap is a physics failure: cull immediately.
         if np.any(local_positions[:, 1] < (-0.25 * radii)):
             return True
-        # At the open end, a cell leaves only once more than ``exit_fraction`` of it is
-        # outside; until then it protrudes and is rendered cut off at the trench mouth.
-        return (
-            self.exited_fraction(
-                positions,
-                radii,
-                layout,
-                open_end_y=self.open_end_y,
-                margin=0.25,
-            )
-            > self.exit_fraction
-        )
+        # At the open end a cell is removed only once it ``has_exited`` (by default when
+        # every segment is past the mouth); until then it protrudes and is rendered cut
+        # off at the trench mouth.
+        return self.has_exited(positions, radii, layout, open_end_y=self.open_end_y, margin=0.25)
 
     def interior_mask(self, layout: GeometryLayout, shape: tuple[int, int], offset: float = 0.0) -> np.ndarray:
         rows = np.arange(int(shape[0]), dtype=np.float64)

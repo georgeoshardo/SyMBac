@@ -1,4 +1,7 @@
-"""Cells leave the trench only once more than ``exit_fraction`` of them is outside.
+"""Cells leave the trench only once they have essentially left through the open end.
+
+By default (``exit_fraction == 1.0``) a cell is removed when every segment is past the
+mouth. Lower values remove it once more than that fraction is outside.
 
 Previously any single segment past the open end removed the whole cell, so the bottom
 of a synthetic trench was always empty and a full trench could not be simulated,
@@ -33,16 +36,7 @@ class SharedExitSpec(GeometrySpec):
         return 0.0
 
     def cell_out_of_bounds(self, positions, radii, layout):
-        return (
-            self.exited_fraction(
-                positions,
-                radii,
-                layout,
-                open_end_y=self.open_end_y,
-                margin=0.25,
-            )
-            > self.exit_fraction
-        )
+        return self.has_exited(positions, radii, layout, open_end_y=self.open_end_y, margin=0.25)
 
 
 def _cell_with_fraction_outside(spec, layout, fraction, n=10, radius=4.0):
@@ -56,22 +50,31 @@ def _cell_with_fraction_outside(spec, layout, fraction, n=10, radius=4.0):
     return layout.to_world_points(local), np.full(n, radius)
 
 
-@pytest.mark.parametrize("fraction, removed", [(0.0, False), (0.3, False), (0.5, False), (0.6, True), (1.0, True)])
-def test_cell_removed_only_when_more_than_half_has_left(fraction, removed):
+@pytest.mark.parametrize("fraction, removed", [(0.0, False), (0.5, False), (0.9, False), (1.0, True)])
+def test_default_keeps_cell_until_every_segment_has_left(fraction, removed):
     spec = TrenchGeometrySpec(width=20.0, trench_length=60.0)
+    assert spec.exit_fraction == 1.0
     layout = GeometryLayout(spec)
     positions, radii = _cell_with_fraction_outside(spec, layout, fraction)
     assert spec.cell_out_of_bounds(positions, radii, layout) is removed
 
 
-@pytest.mark.parametrize("fraction, removed", [(0.4, False), (0.6, True)])
-def test_shared_exit_helper_uses_the_base_majority_rule(fraction, removed):
-    assert hasattr(GeometrySpec, "exited_fraction")
+@pytest.mark.parametrize("fraction, removed", [(0.0, False), (0.3, False), (0.5, False), (0.6, True), (1.0, True)])
+def test_half_threshold_removes_once_more_than_half_has_left(fraction, removed):
+    spec = TrenchGeometrySpec(width=20.0, trench_length=60.0, exit_fraction=0.5)
+    layout = GeometryLayout(spec)
+    positions, radii = _cell_with_fraction_outside(spec, layout, fraction)
+    assert spec.cell_out_of_bounds(positions, radii, layout) is removed
+
+
+@pytest.mark.parametrize("fraction, removed", [(0.4, False), (0.9, False), (1.0, True)])
+def test_shared_exit_helper_uses_the_base_rule(fraction, removed):
+    assert hasattr(GeometrySpec, "has_exited")
     spec = SharedExitSpec()
     layout = GeometryLayout(spec, min_preview_size=0)
     positions, radii = _cell_with_fraction_outside(spec, layout, fraction)
 
-    assert spec.exit_fraction == 0.5
+    assert spec.exit_fraction == 1.0
     assert spec.cell_out_of_bounds(positions, radii, layout) is removed
 
 
@@ -92,13 +95,16 @@ def test_segment_above_closed_end_is_always_culled():
 def test_jitter_trials_allow_protrusion_but_not_culling():
     spec = TrenchGeometrySpec(width=20.0, trench_length=60.0)
     layout = GeometryLayout(spec)
-    protruding, radii = _cell_with_fraction_outside(spec, layout, 0.3)
+    protruding, radii = _cell_with_fraction_outside(spec, layout, 0.7)
     assert spec.positions_within_bounds(protruding, radii, layout, enforce_open_end_cap=True)
-    leaving, radii = _cell_with_fraction_outside(spec, layout, 0.7)
+    leaving, radii = _cell_with_fraction_outside(spec, layout, 1.0)
     assert not spec.positions_within_bounds(leaving, radii, layout, enforce_open_end_cap=True)
     assert spec.positions_within_bounds(leaving, radii, layout, enforce_open_end_cap=False)
 
 
 def test_exit_fraction_validation():
+    TrenchGeometrySpec(width=20.0, trench_length=60.0, exit_fraction=1.0)
     with pytest.raises(ValueError):
-        TrenchGeometrySpec(width=20.0, trench_length=60.0, exit_fraction=1.0)
+        TrenchGeometrySpec(width=20.0, trench_length=60.0, exit_fraction=1.5)
+    with pytest.raises(ValueError):
+        TrenchGeometrySpec(width=20.0, trench_length=60.0, exit_fraction=-0.1)
