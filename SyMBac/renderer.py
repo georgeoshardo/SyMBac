@@ -883,10 +883,6 @@ class Renderer:
 
         Parameters
         ----------
-        main_segments : list
-            A list of the trench segments, used for drawing the trench
-        offset : int
-            The same offset from the draw_scene function. Used to know the cell offset.
         scene : 2D numpy array
             A scene image
         mask : 2D numpy array
@@ -921,61 +917,33 @@ class Renderer:
 
         def get_OPL_image(scene, mask, media_multiplier, cell_multiplier, device_multiplier,
                           y_border_expansion_coefficient, x_border_expansion_coefficient, defocus):
-            segment_1_top_left = [
-                0 + self.simulation.offset, int(self.simulation.main_segments.iloc[0]["bb"][0] + self.simulation.offset)
-            ]
-
-            
-
-            segment_1_bottom_right = [
-                int(self.simulation.main_segments.iloc[0]["bb"][3] + self.simulation.offset),
-                int(self.simulation.main_segments.iloc[0]["bb"][2] + self.simulation.offset)
-            ]
-
-            segment_2_top_left = (
-            0 + self.simulation.offset, int(self.simulation.main_segments.iloc[1]["bb"][0] + self.simulation.offset))
-            segment_2_bottom_right = (
-                int(self.simulation.main_segments.iloc[1]["bb"][3] + self.simulation.offset),
-                int(self.simulation.main_segments.iloc[1]["bb"][2] + self.simulation.offset))
+            # The device is drawn from the same GeometrySpec/GeometryLayout that the physics
+            # engine and the live viewer use, in the same pixel frame as the cell scene
+            # (pixel (row, col) <-> world (col - offset, row - offset)). This replaces the old
+            # reconstruction from pymunk bounding boxes, which assumed the closed end sat at
+            # world y = 0 and so drew the trench cap above where the cells actually stop.
+            geometry_spec, geometry_layout = self.simulation.ensure_geometry_layout()
+            offset = self.simulation.offset
+            interior = geometry_spec.interior_mask(geometry_layout, scene.shape, offset)
+            row_start, row_stop, col_start, col_stop = geometry_spec.scene_window(geometry_layout, offset)
+            row_start = max(0, row_start)
+            col_start = max(0, col_start)
+            row_stop = min(scene.shape[0], row_stop)
+            col_stop = min(scene.shape[1], col_stop)
+            if row_stop <= row_start or col_stop <= col_start:
+                raise ValueError(
+                    "The device window lies outside the drawn cell scene; check the simulation "
+                    "geometry and Simulation.offset."
+                )
 
             if "fluo" in self.PSF.mode.lower():
                 test_scene = np.zeros(scene.shape)
                 media_multiplier = -1 * device_multiplier
             else:
-                test_scene = np.zeros(scene.shape) + device_multiplier
-
-                rr, cc = draw.rectangle(start=segment_1_top_left, end=segment_1_bottom_right, shape=test_scene.shape)
-                test_scene[rr, cc] = 1 * media_multiplier
-
-
-
-
-                rr, cc = draw.rectangle(start=segment_2_top_left, end=segment_2_bottom_right, shape=test_scene.shape)
-                test_scene[rr, cc] = 1 * media_multiplier
-
-
-                circ_midpoint_y = (segment_1_top_left[1] + segment_2_bottom_right[1]) / 2
-                radius = (segment_1_top_left[1] - self.simulation.offset - (
-                            segment_2_bottom_right[1] - self.simulation.offset)) / 2
-                circ_midpoint_x = (self.simulation.offset) + radius
-
-
-
-                rr, cc = draw.rectangle(start=segment_2_top_left, end=(circ_midpoint_x, segment_1_top_left[1]),
-                                        shape=test_scene.shape)
-                
-
-
-                test_scene[rr.astype(int), cc.astype(int)] = 1 * media_multiplier
-
-                
-                rr, cc = draw.disk(center=(circ_midpoint_x, circ_midpoint_y), radius=radius, shape=test_scene.shape)
-                rr_semi = rr[rr < (circ_midpoint_x + 1)]
-                cc_semi = cc[rr < (circ_midpoint_x + 1)]
-
-
-
-                test_scene[rr_semi, cc_semi] = device_multiplier
+                # Historical naming: ``device_multiplier`` colours the fluid-filled interior
+                # (where cells are composited) and ``media_multiplier`` everything else.
+                test_scene = np.zeros(scene.shape) + media_multiplier
+                test_scene[interior] = device_multiplier
             no_cells = copy.deepcopy(test_scene)
 
             test_scene += scene * cell_multiplier
@@ -983,15 +951,12 @@ class Renderer:
                 pass
             else:
                 test_scene = np.where(no_cells != media_multiplier, test_scene, media_multiplier)
-            test_scene = test_scene[segment_2_top_left[0]:segment_1_bottom_right[0],
-                         segment_2_top_left[1]:segment_1_bottom_right[1]]
+            test_scene = test_scene[row_start:row_stop, col_start:col_stop]
 
             mask = np.where(no_cells != media_multiplier, mask, 0)
-            mask_resized = mask[segment_2_top_left[0]:segment_1_bottom_right[0],
-                           segment_2_top_left[1]:segment_1_bottom_right[1]]
+            mask_resized = mask[row_start:row_stop, col_start:col_stop]
 
-            no_cells = no_cells[segment_2_top_left[0]:segment_1_bottom_right[0],
-                       segment_2_top_left[1]:segment_1_bottom_right[1]]
+            no_cells = no_cells[row_start:row_stop, col_start:col_stop]
             expanded_scene_no_cells = np.zeros((int(no_cells.shape[0] * y_border_expansion_coefficient),
                                                 int(no_cells.shape[
                                                         1] * x_border_expansion_coefficient))) + media_multiplier
@@ -1026,15 +991,6 @@ class Renderer:
                                                                                y_border_expansion_coefficient,
                                                                                x_border_expansion_coefficient,
                                                                                defocus)
-        if expanded_scene is None or expanded_scene.size == 0:
-            self.simulation.main_segments = self.simulation.main_segments.reindex(
-                index=self.simulation.main_segments.index[::-1])
-            expanded_scene, expanded_scene_no_cells, expanded_mask = get_OPL_image(scene, mask,
-                                                                                   media_multiplier, cell_multiplier,
-                                                                                   device_multiplier,
-                                                                                   y_border_expansion_coefficient,
-                                                                                   x_border_expansion_coefficient,
-                                                                                   defocus)
         return expanded_scene, expanded_scene_no_cells, expanded_mask
 
     def optimise_synth_image(self, manual_update, initial_values=None):
