@@ -1,3 +1,6 @@
+import math
+from functools import lru_cache
+
 import pymunk
 from pymunk import Vec2d
 import numpy as np
@@ -5,6 +8,19 @@ from SyMBac.physics.segments import CellSegment
 from SyMBac.physics.joints import CellJoint, CellRotaryLimitJoint, CellDampedRotarySpring
 from typing import cast, Optional
 from SyMBac.physics.config import CellConfig
+
+
+_BODY_FORCE = pymunk.Body.force
+_BODY_TORQUE = pymunk.Body.torque
+
+
+@lru_cache(maxsize=32)
+def _noise_bounds(noise_strength: float) -> tuple[np.ndarray, np.ndarray]:
+    """Per-column (force_x, force_y, torque) uniform bounds for `apply_noise`."""
+    return (
+        np.array([-noise_strength, -noise_strength, -noise_strength * 0.1]),
+        np.array([noise_strength, noise_strength, noise_strength * 0.1]),
+    )
 
 
 class PhysicsRepresentation:
@@ -37,6 +53,10 @@ class PhysicsRepresentation:
 
         self.growth_accumulator_head = 0
         self.growth_accumulator_tail = 0
+
+        # Per-step memo of the summed centre-to-centre distance (see `begin_step_cache`).
+        self._step_cache_active = False
+        self._chain_length_memo: Optional[float] = None
 
         if not _from_division:
             for i in range(self.config.SEED_CELL_SEGMENTS):
@@ -120,6 +140,7 @@ class PhysicsRepresentation:
 
         # Insert the new segment into the list at the correct position.
         self.segments.insert(1, new_segment)
+        self._chain_length_memo = None
 
         # --- Rewire the joints ---
         # 1. Remove the old, stretched joint between the original head and post-head segments.
@@ -181,6 +202,7 @@ class PhysicsRepresentation:
 
         # Insert the new segment into the list before the final tail segment.
         self.segments.insert(-1, new_segment)
+        self._chain_length_memo = None
 
         # --- Rewire the joints ---
         # 1. Remove the old, stretched joint between the pre-tail and final-tail segments.
@@ -226,6 +248,7 @@ class PhysicsRepresentation:
         else:
             assert len(self.limit_joints) == 0
         tail_segment = self.segments.pop()
+        self._chain_length_memo = None
 
         if self.pivot_joints:
             self.space.remove(self.pivot_joints.pop())
@@ -243,6 +266,7 @@ class PhysicsRepresentation:
             return None
 
         head_segment = self.segments.pop(0)
+        self._chain_length_memo = None
 
         if self.pivot_joints:
             self.space.remove(self.pivot_joints.pop(0))
@@ -254,13 +278,45 @@ class PhysicsRepresentation:
         self.space.remove(head_segment.body, head_segment.shape)
         return head_segment
 
+    def begin_step_cache(self) -> None:
+        """Start memoising the chain length until `end_step_cache` is called.
+
+        `Simulator.step` brackets each cell's growth/division block with this, because
+        the growth-rate hook, `GrowthManager.grow` and `DivisionManager.ready_to_divide`
+        all ask for the same length while the bodies have not moved. The memo is
+        dropped whenever the segment chain changes, and it is never active outside
+        that block, so snapshots and teleports applied between steps always read live
+        positions.
+        """
+        self._step_cache_active = True
+        self._chain_length_memo = None
+
+    def end_step_cache(self) -> None:
+        self._step_cache_active = False
+        self._chain_length_memo = None
+
+    def invalidate_length_cache(self) -> None:
+        """Forget the memoised chain length (call after rewiring `segments` by hand)."""
+        self._chain_length_memo = None
+
     def apply_noise(self, dt: float):
-        for segment in self.segments:
-            force_x = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
-            force_y = np.random.uniform(-self.config.NOISE_STRENGTH, self.config.NOISE_STRENGTH)
-            segment.body.force += Vec2d(force_x, force_y)
-            torque = np.random.uniform(-self.config.NOISE_STRENGTH * 0.1, self.config.NOISE_STRENGTH * 0.1)
-            segment.body.torque += torque
+        segments = self.segments
+        if not segments:
+            return
+        # One vectorised draw per call instead of three scalar draws per segment. The
+        # legacy global RNG hands out the same doubles in the same (fx, fy, torque)
+        # order, so seeded runs are unchanged.
+        low, high = _noise_bounds(float(self.config.NOISE_STRENGTH))
+        noise = np.random.uniform(low, high, size=(len(segments), 3)).tolist()
+        # Call the property setters directly: it skips pymunk's `__setattr__` wrapper,
+        # which costs about as much as the cffi call itself. Forces still accumulate (+=).
+        get_force, set_force = _BODY_FORCE.fget, _BODY_FORCE.fset
+        get_torque, set_torque = _BODY_TORQUE.fget, _BODY_TORQUE.fset
+        for segment, (force_x, force_y, torque) in zip(segments, noise):
+            body = segment.body
+            current = get_force(body)
+            set_force(body, (current.x + force_x, current.y + force_y))
+            set_torque(body, get_torque(body) + torque)
 
 
     def check_joint_integrity(self, failure_threshold: float = 0.25) -> None:
@@ -332,19 +388,30 @@ class PhysicsRepresentation:
 
     def get_continuous_length(self) -> float:
         """Calculates the continuous length of the cell from tip to tip."""
-        if not self.segments:
+        segments = self.segments
+        if not segments:
             return 0.0
 
-        if len(self.segments) == 1:
-            return self.segments[0].radius * 2
+        if len(segments) == 1:
+            return segments[0].radius * 2
 
-        total_length = 0.0
-        for i in range(1, len(self.segments)): # TODO use pymunk batching to get this data
-            segment_a = self.segments[i - 1]
-            segment_b = self.segments[i]
-            distance = segment_b.position - cast(tuple[float,float],segment_a.position)
-            total_length += distance.length
+        if self._step_cache_active and self._chain_length_memo is not None:
+            chain_length = self._chain_length_memo
+        else:
+            # Hot path (several calls per cell per sub-step): read body positions directly
+            # and do the arithmetic on floats. Same operations and order as Vec2d
+            # subtraction and `Vec2d.length`, so the result is bit-identical to summing
+            # `(b - a).length`.
+            chain_length = 0.0
+            prev_x, prev_y = segments[0].body.position
+            for segment in segments[1:]:
+                x, y = segment.body.position
+                dx = x - prev_x
+                dy = y - prev_y
+                chain_length += math.sqrt(dx ** 2 + dy ** 2)
+                prev_x, prev_y = x, y
+            if self._step_cache_active:
+                self._chain_length_memo = chain_length
 
-        # Add the radius of the first and last segments to get the tip-to-tip length
-        total_length += self.segments[0].radius + self.segments[-1].radius
-        return total_length
+        # Add the radii of the first and last segments to get the tip-to-tip length
+        return chain_length + (segments[0].radius + segments[-1].radius)

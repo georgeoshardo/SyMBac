@@ -73,6 +73,9 @@ class CellSegment:
         self.body = pymunk.Body(self.config.SEGMENT_MASS, moment)
 
         self.shape = pymunk.Circle(self.body, self.config.SEGMENT_RADIUS)
+        # Python-side mirror of shape.radius so redundant sets (the common case, every
+        # sub-step) skip the cffi call. Only ever written through the `radius` setter.
+        self._radius: float = self.config.SEGMENT_RADIUS
         self.shape.friction = 0. #TODO make it configurable
         self.shape.filter = pymunk.ShapeFilter(group=self.group_id)
         self.angle = angle
@@ -101,11 +104,13 @@ class CellSegment:
 
     @property
     def radius(self) -> float:
-        return self.shape.radius
+        return self._radius
 
     @radius.setter
     def radius(self, new_radius: float) -> None:
         if self.use_unsafe_radius_set:
+            if new_radius == self._radius:
+                return  # Setting an identical radius is a no-op; skip the cffi call.
             self.shape.unsafe_set_radius(new_radius)  # More efficient but is it okay?
         else:
             friction, filter = self.shape.friction, self.shape.filter
@@ -113,3 +118,4 @@ class CellSegment:
             self.shape = pymunk.Circle(self.body, new_radius)
             self.shape.friction, self.shape.filter = friction, filter
             self.space.add(self.shape)
+        self._radius = new_radius

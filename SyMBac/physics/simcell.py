@@ -1,10 +1,16 @@
 import typing
+from functools import lru_cache
 from pymunk.vec2d import Vec2d
 import numpy as np
 from SyMBac.physics.config import CellConfig
 from SyMBac.physics.physics_representation import PhysicsRepresentation
 if typing.TYPE_CHECKING:
     from pymunk.space import Space
+
+
+@lru_cache(maxsize=32)
+def _width_relaxation_alpha(dt: float, relaxation_time: float) -> float:
+    return 1.0 - np.exp(-dt / relaxation_time)
 
 
 # Note that length units here are the number of spheres in the cell, TODO: implement the continuous length measurement for rendering.
@@ -102,8 +108,10 @@ class SimCell:
     def apply_current_width_to_segments(self) -> None:
         if not self.physics_representation.segments:
             return
+        radius = self.current_segment_radius
         for segment in self.physics_representation.segments:
-            segment.radius = self.current_segment_radius
+            if segment._radius != radius:  # skip the (common) no-change case
+                segment.radius = radius
 
     def sync_width_from_segments(self) -> None:
         if not self.physics_representation.segments:
@@ -117,7 +125,7 @@ class SimCell:
             self.apply_current_width_to_segments()
             return
 
-        alpha = 1.0 - np.exp(-dt / self.config.WIDTH_RELAXATION_TIME)
+        alpha = _width_relaxation_alpha(dt, self.config.WIDTH_RELAXATION_TIME)
         self.current_segment_radius += (self.target_segment_radius - self.current_segment_radius) * alpha
         self.apply_current_width_to_segments()
 
