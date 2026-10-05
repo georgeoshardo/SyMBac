@@ -99,6 +99,11 @@ class PSF_generator:
         self.mode = mode
         self.condenser = condenser
         self.pz = pz
+        if "3d fluo" in self.mode.lower():
+            if working_distance is None:
+                working_distance = 150.0
+            if not np.isfinite(working_distance) or working_distance <= 0:
+                raise ValueError("working_distance must be a positive finite value")
         self.working_distance = working_distance
         if condenser:
             self.W, self.R, self.diameter = self.get_condensers()[condenser]

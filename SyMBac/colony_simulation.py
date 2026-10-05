@@ -1,6 +1,4 @@
-import CellModeller
 import noise
-from CellModeller.Simulator import Simulator
 import os
 import numpy as np
 from glob import glob
@@ -10,8 +8,21 @@ from joblib import Parallel, delayed
 from PIL import Image
 from skimage.transform import rotate
 from natsort import natsorted
-from SyMBac.drawing import raster_cell, OPL_to_FL, clean_up_mask, convert_to_3D, crop_image, get_crop_bounds_2D
+from SyMBac.drawing import raster_cell, OPL_to_FL, convert_to_3D, crop_image, get_crop_bounds_2D
 import tifffile
+
+
+def _compose_label_mask(mask, cell_pixels, cell_label):
+    composed = mask.copy()
+    composed[cell_pixels] = cell_label
+    return composed
+
+
+def _scene_position(position, scene_shape):
+    offset_y, offset_x = np.ceil(np.asarray(scene_shape) / 2).astype(int)
+    position_x, position_y = np.asarray(position).astype(int)
+    return position_x + offset_x, position_y + offset_y
+
 
 class ColonySimulation:
     def __init__(self, cellmodeller_model, max_cells, pix_mic_conv, resize_amount, save_dir):
@@ -53,6 +64,13 @@ class ColonySimulation:
             pass
 
     def run_cellmodeller_sim(self, num_sim):
+        try:
+            from CellModeller.Simulator import Simulator
+        except ImportError as error:
+            raise ImportError(
+                "CellModeller is required for ColonySimulation.run_cellmodeller_sim"
+            ) from error
+
         for n in range(num_sim):
             try:
                 os.mkdir(f"data/{self.save_dir}")
@@ -124,13 +142,17 @@ class ColonySimulation:
         return self.scene_shape
 
     def draw_scene(self, cellmodeller_properties, save = False, savename = False, return_save = False, FL = False, density = 1, random_distribution = "uniform", distribution_args = (1,1), as_3D = False, crop=False, crop_pad=0):
+        """Draw a colony scene, returning a 3-D OPL volume when ``as_3D`` is true."""
         space = np.zeros(self.scene_shape)
         fluorescence_space = np.zeros(self.scene_shape)
         #sample OPL cell
         if as_3D:
-            OPL_cell = raster_cell(cellmodeller_properties[0][0], cellmodeller_properties[0][1], separation=0)
-            OPL_cell_3D = convert_to_3D(OPL_cell)
-            n_layers = OPL_cell_3D.shape[0]
+            OPL_cells = [
+                raster_cell(properties[0], properties[1], separation=0)
+                for properties in cellmodeller_properties
+            ]
+            OPL_cells_3D = [convert_to_3D(cell) for cell in OPL_cells]
+            n_layers = max(cell.shape[0] for cell in OPL_cells_3D)
             space_3D = np.zeros((n_layers,) + self.scene_shape)
             fluorescence_space_3D = np.zeros((n_layers,) + self.scene_shape)
 
@@ -143,15 +165,14 @@ class ColonySimulation:
             density_modifiers = [x if x > 0 else np.mean(density_modifiers) for x in density_modifiers]
         for c in range(len(cellmodeller_properties)):
             position = cellmodeller_properties[c][3]
-            offset = np.ceil(np.mean(self.scene_shape) / 2).astype(int)
-            x = np.array(position).astype(int)[0] + offset
-            y = np.array(position).astype(int)[1] + offset
+            x, y = _scene_position(position, self.scene_shape)
 
-
-            OPL_cell = raster_cell(cellmodeller_properties[c][0], cellmodeller_properties[c][1], separation=0)
             if as_3D:
-                OPL_cell_3D = convert_to_3D(OPL_cell)
+                OPL_cell = OPL_cells[c]
+                OPL_cell_3D = OPL_cells_3D[c]
                 OPL_cell_3D = np.array([rotate(x, - cellmodeller_properties[c][2], resize=True, clip=False, preserve_range=True) for x in OPL_cell_3D])
+            else:
+                OPL_cell = raster_cell(cellmodeller_properties[c][0], cellmodeller_properties[c][1], separation=0)
             rotated_OPL_cell = rotate(OPL_cell, - (cellmodeller_properties[c][2]), resize=True, clip=False,
                                       preserve_range=True, center=(x, y)).astype(int)
             cell_y, cell_x = (np.array(rotated_OPL_cell.shape) / 2).astype(int)
@@ -159,18 +180,18 @@ class ColonySimulation:
             offset_x = rotated_OPL_cell.shape[1] - space[y - cell_y:y + cell_y, x - cell_x:x + cell_x].shape[1]
 
             if as_3D:
+                z_start = (n_layers - OPL_cell_3D.shape[0]) // 2
+                volume_slice = np.s_[
+                    z_start:z_start + OPL_cell_3D.shape[0],
+                    y - cell_y:y + cell_y + offset_y,
+                    x - cell_x:x + cell_x + offset_x,
+                ]
                 #OPL_cell_3D = convert_to_3D(rotated_OPL_cell)
                 if FL:
                     FL_cell_3D = np.array([OPL_to_FL(x, density = density*density_modifiers[c]) for x in OPL_cell_3D])
-                    fluorescence_space_3D[:,
-                        y - cell_y:y + cell_y + offset_y,
-                        x - cell_x:x + cell_x + offset_x
-                    ] += FL_cell_3D 
+                    fluorescence_space_3D[volume_slice] += FL_cell_3D
                 
-                space_3D[:,
-                    y - cell_y:y + cell_y + offset_y,
-                    x - cell_x:x + cell_x + offset_x
-                ] += OPL_cell_3D
+                space_3D[volume_slice] += OPL_cell_3D
 
             else:
                 if not as_3D:
@@ -184,30 +205,37 @@ class ColonySimulation:
                     y - cell_y:y + cell_y + offset_y,
                     x - cell_x:x + cell_x + offset_x
                 ] += (rotated_OPL_cell)
-            mask[
+            mask_slice = np.s_[
                 y - cell_y:y + cell_y + offset_y,
                 x - cell_x:x + cell_x + offset_x
-            ] += ((rotated_OPL_cell) > 1) * mask_counter
+            ]
+            mask[mask_slice] = _compose_label_mask(
+                mask[mask_slice], rotated_OPL_cell > 0, mask_counter
+            )
             mask_counter += 1
-        mask =  clean_up_mask(mask)
 
         if crop:
 
             (start_row, stop_row), (start_col, stop_col) = get_crop_bounds_2D(mask)
 
-            space = crop_image(space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
+            if as_3D:
+                space_3D = crop_image(space_3D, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
+            else:
+                space = crop_image(space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
             mask = crop_image(mask, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
             if FL:
-                fluorescence_space = crop_image(fluorescence_space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
                 if as_3D:
                     fluorescence_space_3D = crop_image(fluorescence_space_3D, (start_row, stop_row), (start_col, stop_col), pad = crop_pad)
-                    space_3D = crop_image(space_3D, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
+                else:
+                    fluorescence_space = crop_image(fluorescence_space, (start_row, stop_row), (start_col, stop_col), pad=crop_pad)
         
 
         if save and not savename:
             raise Exception("Add a savename if you wish to save")
         if save and savename:
-            im = Image.fromarray(space.astype(np.uint8))
+            rendered_space = space_3D if as_3D else space
+            preview = np.sum(space_3D, axis=0) if as_3D else space
+            im = Image.fromarray(preview.astype(np.uint8))
             im.save(f"data/scenes/{savename}.png")
             im = Image.fromarray(mask.astype(np.uint16))
             im.save(f"data/masks/{savename}.png")
@@ -225,11 +253,11 @@ class ColonySimulation:
 
 
             if return_save:
-                return space, mask
+                return rendered_space, mask
             else:
                 return None
         else:
-            return space, mask
+            return (space_3D if as_3D else space), mask
 
     def draw_OPL_from_idx(self,idx, FL = False, density = 1, random_distribution = "uniform", distribution_args = (0.99, 1.01)):
         cellmodeller_properties = self.get_cellmodeller_properties(
@@ -249,4 +277,3 @@ class ColonySimulation:
         n_files = len(glob("data/scenes/*.png"))
         zero_pads = np.ceil(np.log10(len(self.pickles_flat))).astype(int) + 2
         Parallel(n_jobs=n_jobs)(delayed(self.draw_scene)(_, True, str(i+1+n_files).zfill(zero_pads), False, FL, density, random_distribution, distribution_args, as_3D, crop, crop_pad) for i, _ in tqdm(enumerate(all_cellmodeller_properties), desc='Scene Draw:'))
-

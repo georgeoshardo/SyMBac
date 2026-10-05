@@ -64,7 +64,8 @@ def apply_cell_texture(OPL_cell, cell_id, scale=70.0, octaves=3, persistence=0.5
 def get_crop_bounds_2D(img, tol=0):
     mask = img>tol
     x_idx = np.ix_(mask.any(1),mask.any(0))
-    start_row, stop_row, start_col, stop_col = x_idx[0][0][0], x_idx[0][-1][0], x_idx[1][0][0], x_idx[1][0][-1]
+    start_row, stop_row = x_idx[0][0][0], x_idx[0][-1][0] + 1
+    start_col, stop_col = x_idx[1][0][0], x_idx[1][0][-1] + 1
 
     return (start_row, stop_row), (start_col, stop_col)
 
