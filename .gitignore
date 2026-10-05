@@ -162,3 +162,6 @@ scientific_data smallcells.ipynb
 scientific_data smallcells.ipynb
 docs/source/examples/simple_mother_machine.ipynb
 /drafts
+
+# Local run logs
+logs/
