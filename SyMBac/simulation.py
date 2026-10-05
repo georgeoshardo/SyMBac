@@ -771,6 +771,7 @@ class Simulation:
             }
             state_lock = threading.Lock()
             stop_event = threading.Event()
+            cancelled = False
 
             def publish_live_frame(frame_idx):
                 image = render_live_frame_image(
@@ -808,8 +809,7 @@ class Simulation:
                     progress_bar.update(state["frame_idx"] - state["progress_idx"])
                     state["progress_idx"] = state["frame_idx"]
                 progress_bar.close()
-                if worker_thread.is_alive():
-                    worker_thread.join(timeout=1.0)
+                worker_thread.join()
                 viewer.close()
 
             last_drawn_frame_idx = None
@@ -817,6 +817,7 @@ class Simulation:
                 while True:
                     viewer.process_events()
                     if viewer.closed:
+                        cancelled = not state["done"]
                         stop_loop()
                         break
 
@@ -846,6 +847,8 @@ class Simulation:
 
             if state["worker_error"] is not None:
                 raise RuntimeError("Simulation worker failed during show_window=True execution.") from state["worker_error"]
+            if cancelled:
+                return
         else:
             for frame_idx in tqdm(range(total_frames), desc='Running simulation'):
                 step_and_capture_frame(frame_idx)

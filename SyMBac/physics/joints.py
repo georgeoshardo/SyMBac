@@ -1,6 +1,4 @@
 import pymunk
-from SyMBac.physics.config import CellConfig
-from SyMBac.physics.segments import CellSegment
 
 class CellJoint(pymunk.PivotJoint):
     """Represents a custom PivotJoint connecting two CellSegments.
@@ -16,7 +14,7 @@ class CellJoint(pymunk.PivotJoint):
         max_force: The maximum force this pivot joint can exert,
             derived from `config.PIVOT_JOINT_STIFFNESS`.
     """
-    def __init__(self, segment_a: CellSegment, segment_b: CellSegment, config: CellConfig) -> None:
+    def __init__(self, segment_a, segment_b, config, anchor_b=None) -> None:
         """Initializes a CellJoint instance.
 
         This constructor sets up a `pymunk.PivotJoint` between two
@@ -28,6 +26,10 @@ class CellJoint(pymunk.PivotJoint):
             segment_b: The second CellSegment to connect.
             config: The CellConfig object providing joint parameters.
         """
+        if anchor_b is not None:
+            super().__init__(segment_a, segment_b, config, anchor_b)
+            return
+
         self.joint_distance: float = config.SEGMENT_RADIUS / config.GRANULARITY
         anchor_on_prev = (self.joint_distance / 2, 0)  # Local coordinates relative to the body for the pivot joint
         anchor_on_curr = (-self.joint_distance / 2, 0)
@@ -43,7 +45,11 @@ class CellRotaryLimitJoint(pymunk.RotaryLimitJoint):
     """
     A custom RotaryLimitJoint that uses the configuration from CellConfig.
     """
-    def __init__(self, segment_a: CellSegment, segment_b: CellSegment, config: CellConfig) -> None:
+    def __init__(self, segment_a, segment_b, config, max_angle=None) -> None:
+        if max_angle is not None:
+            super().__init__(segment_a, segment_b, config, max_angle)
+            return
+
         assert config.STIFFNESS is not None
         assert config.MAX_BEND_ANGLE is not None
         assert config.ROTARY_LIMIT_JOINT
@@ -58,7 +64,11 @@ class CellDampedRotarySpring(pymunk.DampedRotarySpring):
     """
     A custom DampedRotarySpring that uses the configuration from CellConfig.
     """
-    def __init__(self, segment_a: CellSegment, segment_b: CellSegment, config: CellConfig) -> None:
+    def __init__(self, segment_a, segment_b, config, stiffness=None, damping=None) -> None:
+        if damping is not None:
+            super().__init__(segment_a, segment_b, config, stiffness, damping)
+            return
+
         assert config.DAMPED_ROTARY_SPRING
         assert config.ROTARY_SPRING_STIFFNESS is not None
         assert config.ROTARY_SPRING_DAMPING is not None
