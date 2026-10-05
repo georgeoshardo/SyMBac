@@ -437,12 +437,10 @@ class Simulation:
             segments = getattr(physics_rep, "segments", None)
             if not segments:
                 return None, None
-            positions = np.array(
-                [[float(segment.position[0]), float(segment.position[1])] for segment in segments],
-                dtype=np.float64,
-            )
+            # Called for every cell on every sub-step, so keep it to one array build each.
+            positions = np.array([segment.body.position for segment in segments], dtype=np.float64)
             radii = np.array(
-                [float(getattr(segment, "radius", SEGMENT_RADIUS)) for segment in segments],
+                [getattr(segment, "radius", SEGMENT_RADIUS) for segment in segments],
                 dtype=np.float64,
             )
             return positions, radii

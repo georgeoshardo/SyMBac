@@ -281,25 +281,32 @@ class Simulator:
 
         # This is probably the best way to handle the simulation step without encapsulating and hiding too much logic into the Colony
         for cell in self.colony.cells[:]:
-            if cell.config.NOISE_STRENGTH > 0:
-                cell.physics_representation.apply_noise(self.dt)
+            physics_representation = cell.physics_representation
+            # Several steps below ask for the cell's length while its bodies are still;
+            # let the physics representation reuse one walk over the chain.
+            physics_representation.begin_step_cache()
+            try:
+                if cell.config.NOISE_STRENGTH > 0:
+                    cell.physics_representation.apply_noise(self.dt)
 
-            # --- Pre cell hook
-            for hook in self.pre_cell_grow_hooks:
-                hook(cell)
+                # --- Pre cell hook
+                for hook in self.pre_cell_grow_hooks:
+                    hook(cell)
 
-            self.growth_manager.grow(cell, self.dt)  # Grow the cell
+                self.growth_manager.grow(cell, self.dt)  # Grow the cell
 
-            for hook in self.post_cell_grow_hooks:
-                hook(cell)
-            new_cell: Optional['SimCell'] = self.division_manager.handle_division(cell, self.next_group_id,
-                                                                             self.dt)  # Handle the cell division
-            if new_cell is not None:  # If a new cell was created
-                newly_born_cells_map[new_cell] = cell  # Add the new cell to the map
-                self.next_group_id += 1  # and increment the group ID
-                # --- Post division hooks ---
-                for hook in self.post_division_hooks:
-                    hook(cell, new_cell)
+                for hook in self.post_cell_grow_hooks:
+                    hook(cell)
+                new_cell: Optional['SimCell'] = self.division_manager.handle_division(cell, self.next_group_id,
+                                                                                 self.dt)  # Handle the cell division
+                if new_cell is not None:  # If a new cell was created
+                    newly_born_cells_map[new_cell] = cell  # Add the new cell to the map
+                    self.next_group_id += 1  # and increment the group ID
+                    # --- Post division hooks ---
+                    for hook in self.post_division_hooks:
+                        hook(cell, new_cell)
+            finally:
+                physics_representation.end_step_cache()
 
         # --- Handle adding newly born cells to the colony ---
         if newly_born_cells_map:

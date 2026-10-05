@@ -59,7 +59,7 @@ class Colony:
             newly_born_cells_map: A dictionary which maps a mother cell to its daugher cell, created during the simulation loop
         """
         for daughter, mother in newly_born_cells_map.items():
-            mother_shapes = [s.shape for s in mother.physics_representation.segments]
+            mother_shapes = {s.shape for s in mother.physics_representation.segments}  # set: O(1) membership in the query loop
 
             # Symmetrical Overlap Removal Loop
             while True:
@@ -79,8 +79,7 @@ class Colony:
                                 # Stop trying to trim when either cell has reached minimum size.
                                 break
 
-                            if mother_removed_segment.shape in mother_shapes:
-                                mother_shapes.remove(mother_removed_segment.shape)
+                            mother_shapes.discard(mother_removed_segment.shape)
 
                             overlap_found = True
                             break  # Exit the inner query loop

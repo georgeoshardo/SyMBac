@@ -25,15 +25,16 @@ class DivisionManager:
         if cell.is_dividing:
             return False
 
-        if cell.length < cell.max_length: #LENGTH_FIX
-            return False
-
+        # Cheap segment-count test first: `cell.length` can be an O(n_segments) walk over
+        # the physics bodies, so only pay for it once the cell is big enough to split.
         split_index = self.get_split_index(cell)
         mother_segments = split_index
         daughter_segments = cell.physics_representation.num_segments - split_index
         if mother_segments < self.config.MIN_LENGTH_AFTER_DIVISION or \
                 daughter_segments < self.config.MIN_LENGTH_AFTER_DIVISION:
+            return False
 
+        if cell.length < cell.max_length: #LENGTH_FIX
             return False
         return True
 
@@ -177,6 +178,8 @@ class DivisionManager:
         if self.config.DAMPED_ROTARY_SPRING:
             cell.physics_representation.spring_joints = cell.physics_representation.spring_joints[:connecting_joint_idx]
 
+        cell.physics_representation.invalidate_length_cache()
+        daughter_cell.physics_representation.invalidate_length_cache()
         cell.physics_representation.growth_accumulator_head = 0.0
         cell.physics_representation.growth_accumulator_tail = 0.0
         daughter_cell.physics_representation.growth_accumulator_head = 0.0
